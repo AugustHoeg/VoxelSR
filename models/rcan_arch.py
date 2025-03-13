@@ -1,0 +1,223 @@
+import time
+import math
+import torch
+from torch import nn as nn
+
+from utils.utils_3D_image import ICNR, numel
+
+
+def make_layer(basic_block, num_basic_block, **kwarg):
+    """Make layers by stacking the same blocks.
+
+    Args:
+        basic_block (nn.module): nn.module class for basic block.
+        num_basic_block (int): number of blocks.
+
+    Returns:
+        nn.Sequential: Stacked blocks in nn.Sequential.
+    """
+    layers = []
+    for _ in range(num_basic_block):
+        layers.append(basic_block(**kwarg))
+    return nn.Sequential(*layers)
+
+class Upsample(nn.Sequential):
+    """Upsample module.
+
+    Args:
+        scale (int): Scale factor. Supported scales: 2^n and 3.
+        num_feat (int): Channel number of intermediate features.
+    """
+
+    def __init__(self, scale, num_feat):
+        m = []
+        if (scale & (scale - 1)) == 0:  # scale = 2^n
+            for _ in range(int(math.log(scale, 2))):
+                m.append(nn.Conv2d(num_feat, 4 * num_feat, 3, 1, 1))
+                m.append(nn.PixelShuffle(2))
+        elif scale == 3:
+            m.append(nn.Conv2d(num_feat, 9 * num_feat, 3, 1, 1))
+            m.append(nn.PixelShuffle(3))
+        else:
+            raise ValueError(f'scale {scale} is not supported. Supported scales: 2^n and 3.')
+        super(Upsample, self).__init__(*m)
+
+
+class ChannelAttention(nn.Module):
+    """Channel attention used in RCAN.
+
+    Args:
+        num_feat (int): Channel number of intermediate features.
+        squeeze_factor (int): Channel squeeze factor. Default: 16.
+    """
+
+    def __init__(self, num_feat, squeeze_factor=16):
+        super(ChannelAttention, self).__init__()
+        self.attention = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1), nn.Conv2d(num_feat, num_feat // squeeze_factor, 1, padding=0),
+            nn.ReLU(inplace=True), nn.Conv2d(num_feat // squeeze_factor, num_feat, 1, padding=0), nn.Sigmoid())
+
+    def forward(self, x):
+        y = self.attention(x)
+        return x * y
+
+
+class RCAB(nn.Module):
+    """Residual Channel Attention Block (RCAB) used in RCAN.
+
+    Args:
+        num_feat (int): Channel number of intermediate features.
+        squeeze_factor (int): Channel squeeze factor. Default: 16.
+        res_scale (float): Scale the residual. Default: 1.
+    """
+
+    def __init__(self, num_feat, squeeze_factor=16, res_scale=1):
+        super(RCAB, self).__init__()
+        self.res_scale = res_scale
+
+        self.rcab = nn.Sequential(
+            nn.Conv2d(num_feat, num_feat, 3, 1, 1), nn.ReLU(True), nn.Conv2d(num_feat, num_feat, 3, 1, 1),
+            ChannelAttention(num_feat, squeeze_factor))
+
+    def forward(self, x):
+        res = self.rcab(x) * self.res_scale
+        return res + x
+
+
+class ResidualGroup(nn.Module):
+    """Residual Group of RCAB.
+
+    Args:
+        num_feat (int): Channel number of intermediate features.
+        num_block (int): Block number in the body network.
+        squeeze_factor (int): Channel squeeze factor. Default: 16.
+        res_scale (float): Scale the residual. Default: 1.
+    """
+
+    def __init__(self, num_feat, num_block, squeeze_factor=16, res_scale=1):
+        super(ResidualGroup, self).__init__()
+
+        self.residual_group = make_layer(
+            RCAB, num_block, num_feat=num_feat, squeeze_factor=squeeze_factor, res_scale=res_scale)
+        self.conv = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
+
+    def forward(self, x):
+        res = self.conv(self.residual_group(x))
+        return res + x
+
+
+class RCAN(nn.Module):
+    """Residual Channel Attention Networks.
+
+    ``Paper: Image Super-Resolution Using Very Deep Residual Channel Attention Networks``
+
+    Reference: https://github.com/yulunzhang/RCAN
+
+    Args:
+        num_in_ch (int): Channel number of inputs.
+        num_out_ch (int): Channel number of outputs.
+        num_feat (int): Channel number of intermediate features.
+            Default: 64.
+        num_group (int): Number of ResidualGroup. Default: 10.
+        num_block (int): Number of RCAB in ResidualGroup. Default: 16.
+        squeeze_factor (int): Channel squeeze factor. Default: 16.
+        upscale (int): Upsampling factor. Support 2^n and 3.
+            Default: 4.
+        res_scale (float): Used to scale the residual in residual block.
+            Default: 1.
+        img_range (float): Image range. Default: 255.
+        rgb_mean (tuple[float]): Image mean in RGB orders.
+            Default: (0.4488, 0.4371, 0.4040), calculated from DIV2K dataset.
+    """
+
+    def __init__(self,
+                 num_in_ch,
+                 num_out_ch,
+                 num_feat=64,
+                 num_group=10,
+                 num_block=16,
+                 squeeze_factor=16,
+                 upscale=4,
+                 res_scale=1,
+                 img_range=255.,
+                 rgb_mean=(0.4488, 0.4371, 0.4040)):
+        super(RCAN, self).__init__()
+
+        self.img_range = img_range
+        # self.mean = torch.Tensor(rgb_mean).view(1, 3, 1, 1)
+
+        if num_in_ch == 3:
+            rgb_mean = (0.4488, 0.4371, 0.4040)
+            self.mean = torch.Tensor(rgb_mean).view(1, 3, 1, 1)
+        else:
+            self.mean = torch.zeros(1, 1, 1, 1)
+
+        self.conv_first = nn.Conv2d(num_in_ch, num_feat, 3, 1, 1)
+        self.body = make_layer(
+            ResidualGroup,
+            num_group,
+            num_feat=num_feat,
+            num_block=num_block,
+            squeeze_factor=squeeze_factor,
+            res_scale=res_scale)
+        self.conv_after_body = nn.Conv2d(num_feat, num_feat, 3, 1, 1)
+        self.upsample = Upsample(upscale, num_feat)
+        self.conv_last = nn.Conv2d(num_feat, num_out_ch, 3, 1, 1)
+
+    def forward(self, x):
+        self.mean = self.mean.type_as(x)
+
+        x = (x - self.mean) * self.img_range
+        x = self.conv_first(x)
+        res = self.conv_after_body(self.body(x))
+        res += x
+
+        x = self.conv_last(self.upsample(res))
+        x = x / self.img_range + self.mean
+
+        return x
+
+def test():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
+
+    up_factor = 4
+    patch_size = 32
+
+    print("Test HAT official")
+    generator = RCAN(num_in_ch=1,
+                     num_out_ch=1,
+                     num_feat=64,
+                     num_block=10,
+                     num_group=20,
+                     squeeze_factor=16,
+                     res_scale=1.0,
+                     rgb_mean=(0.4488, 0.4371, 0.4040),
+                     img_range=1.0).to(device)
+
+    print("Number of parameters, G", numel(generator, only_trainable=True))
+
+    patch_size_hr = patch_size * up_factor
+    x = torch.randn((1, 1, patch_size, patch_size)).to(device)
+
+    generator.train()
+
+    start = time.time()
+    # with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+    gen_out = generator(x)
+    stop = time.time()
+    print("Time elapsed:", stop - start)
+
+    x_hr = torch.randn((1, 1, patch_size_hr, patch_size_hr)).cuda()
+
+    loss_func = nn.MSELoss()
+    loss = loss_func(gen_out, x_hr)
+    loss.backward()
+
+    max_memory_reserved = torch.cuda.max_memory_reserved()
+    print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10 ** 9, total_gpu_mem))
+
+    print(gen_out.shape)
+
+if __name__ == "__main__":
+    test()

@@ -1,0 +1,50 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+
+# Training parameters
+iterations: 100000
+validation_iterations: 500
+epochs: 0
+
+mixed_precision: 'BF16'
+num_accum_steps_G: 1
+early_stop_patience: 100
+
+G_loss_weights:
+  MSE: 0
+  L1: 1.0
+  BCE_Logistic: 0
+  BCE: 0
+
+E_decay: 0
+G_optimizer_type: adam
+G_optimizer_lr: 1e-4
+G_optimizer_wd: 0
+G_optimizer_clipgrad: 15
+G_optimizer_reuse: true
+G_scheduler_type: MultiStepLR
+G_scheduler_milestones:
+  - 50000
+  - 70000
+  - 85000
+  - 95000
+G_scheduler_gamma: 0.5
+G_regularizer_orthstep: null
+G_regularizer_clipstep: null
+G_param_strict: true
+E_param_strict: true
+
+manual_seed: 8338
+
+checkpoint_test: 5000
+checkpoint_save: 1000000
+checkpoint_print: 5000
+checkpoint_save_visuals: 5000
+
+performance_metrics:
+  - psnr
+  - ssim
+  - nrmse
+
+upscaling_methods:
+  - tio_nearest
+  - tio_bspline

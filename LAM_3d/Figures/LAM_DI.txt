@@ -1,0 +1,48 @@
+Diffusion index for MFER: 7.927500308002955
+Diffusion index for EDDSR: 0.8759149255289644 
+Diffusion index for mDCSRN_GAN: 14.448064554639394
+Diffusion index for RRDBNet: 14.675716946513106
+Diffusion index for SuperFormer: 12.635666541099555
+Diffusion index for MTVNet: 0.9380549925435133
+[CORRECTED - slice] Diffusion index for EDDSR: 2.8792509469665384
+[CORRECTED - slice] Diffusion index for MTVNet: 8.258930953247656
+[CORRECTED - slice] Diffusion index for mDCSRN_GAN: 9.776822013905251
+[CORRECTED - slice] Diffusion index for MFER: 10.253063332003853
+[CORRECTED - slice] Diffusion index for RRDBNet: 10.248343081459188
+[CORRECTED - slice] Diffusion index for SuperFormer: 6.484179306358362
+Diffusion index for ArSSR: 4.667804128088027 (cube_006; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 4.667804128088027 (cube_006; selection: h70-w60-d60)
+Diffusion index for ArSSR: 4.667813113435615 (cube_006; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 4.667813113435615 (cube_006; selection: h70-w60-d60)
+Diffusion index for ArSSR: 2.9592764179160347 (cube_006; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 2.9592764179160347 (cube_006; selection: h70-w60-d60)
+Diffusion index for ArSSR: 2.9592739950876523 (cube_008; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 2.9592739950876523 (cube_008; selection: h70-w60-d60)
+Diffusion index for ArSSR: 4.667815485068538 (cube_003; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 4.667815485068538 (cube_003; selection: h70-w60-d60)
+Diffusion index for ArSSR: 4.667808312633759 (cube_003; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 4.667808312633759 (cube_003; selection: h70-w60-d60)
+Diffusion index for ArSSR: 4.667810250061577 (cube_005; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 4.667810250061577 (cube_005; selection: h70-w60-d60)
+Diffusion index for ArSSR: 7.018351053149563 (cube_005; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018351053149563 (cube_005; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.018342745761574 (cube_001; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018342745761574 (cube_001; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.018348758619974 (cube_002; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018348758619974 (cube_002; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.018342053035687 (cube_005; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018342053035687 (cube_005; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.018344622750905 (cube_005; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018344622750905 (cube_005; selection: h50-w40-d40)
+Diffusion index for ArSSR: 4.667808051078792 (cube_003; selection: h70-w60-d60)
+Diffusion index (MEAN) for ArSSR: 4.667808051078792 (cube_003; selection: h70-w60-d60)
+Diffusion index for ArSSR: 7.018342937421018 (cube_002; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018342937421018 (cube_002; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.018322455024595 (cube_003; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.018322455024595 (cube_003; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.343127784259085 (cube_003; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.343127784259085 (cube_003; selection: h50-w40-d40)
+Diffusion index for ArSSR: 3.2326724717178457 (cube_003; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 3.2326724717178457 (cube_003; selection: h50-w40-d40)
+Diffusion index for ArSSR: 7.343139921940223 (cube_002; selection: h50-w40-d40)
+Diffusion index (MEAN) for ArSSR: 7.343139921940223 (cube_002; selection: h50-w40-d40)

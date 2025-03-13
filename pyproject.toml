@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "VoxelSR"
+version = "0.0.1"
+description = "VoxelSR: A Deep Learning Framework for Super-Resolution of Volumetric Data"
+authors = [
+  { name = "August H\u00f8eg", email = "aulho@dtu.dk" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.11"
+dynamic = ["dependencies", "optional-dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+#[tool.setuptools.dynamic.optional-dependencies]
+#dev = {file = ['requirements_dev.txt']}
+
+[tool.ruff]
+line-length = 120
+select = ["I"]
+
+#[tool.coverage.run]
+#omit = ["tests/test_data.py"]
+
+[project.scripts]
+train = "train:main"

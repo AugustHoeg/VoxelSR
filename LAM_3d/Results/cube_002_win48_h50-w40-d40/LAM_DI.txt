@@ -1,0 +1,6 @@
+Diffusion index for EDDSR: 9.581938546240043 (002; selection: h50-w40-d40)
+Diffusion index (MEAN) for EDDSR: 14.643854747354744 (002; selection: h50-w40-d40)
+Diffusion index for MTVNet: 15.504405540782628 (002; selection: h50-w40-d40)
+Diffusion index (MEAN) for MTVNet: 29.699580855559915 (002; selection: h50-w40-d40)
+Diffusion index for mDCSRN: 18.38224956560802 (002; selection: h50-w40-d40)
+Diffusion index (MEAN) for mDCSRN: 32.8385772296694 (002; selection: h50-w40-d40)

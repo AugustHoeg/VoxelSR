@@ -1,0 +1,10 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: EDDSR
+netG:
+  net_type: EDDSR
+  description: "EDDSR model from paper: 3D dense convolutional neural network for fast and accurate single MR image super-resolution"
+  upsample_method: pixelshuffle3D
+  init_type: kaiming_normal
+  init_bn_type: uniform
+  init_gain: 0.2

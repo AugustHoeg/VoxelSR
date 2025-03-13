@@ -1,0 +1,16 @@
+.venv/
+.venv39/
+
+.idea/
+
+__pycache__/
+
+saved_models/
+
+LAM_3d/saved_image_cubes/
+LAM_3d/saved_models/
+
+**/*.h5
+*.h5
+
+logs/
