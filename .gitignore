@@ -7,19 +7,19 @@ __pycache__/
 
 saved_models/
 
-LAM_3d/saved_image_cubes/
-LAM_3d/saved_models/
-LAM_3d/Results/
-LAM_3d/Figures/
+LAM_3d/saved_image_cubes/**
+LAM_3d/saved_models/**
+LAM_3d/Results/**
+LAM_3d/Figures/**
 
 **/*.h5
 *.h5
 
 *.log
 
-logs/2022_QIM_52_Bone/
-logs/Synthetic_2022_QIM_52_Bone/
-logs/HCP_1200/
-logs/IXI/
-logs/BRATS2023/
-logs/KIRBY21/
+logs/2022_QIM_52_Bone/**
+logs/Synthetic_2022_QIM_52_Bone/**
+logs/HCP_1200/**
+logs/IXI/**
+logs/BRATS2023/**
+logs/KIRBY21/**
