@@ -1,2 +1,0 @@
-Diffusion index for RCAN: 3.5222545537169525 (001; selection: h24-w24-d24)
-Diffusion index (MEAN) for RCAN: 3.522076127720819 (001; selection: h24-w24-d24)
