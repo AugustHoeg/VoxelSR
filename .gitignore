@@ -6,6 +6,7 @@
 __pycache__/
 
 saved_models/
+figures/**
 
 LAM_3d/saved_image_cubes/**
 LAM_3d/saved_models/**

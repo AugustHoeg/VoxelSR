@@ -12,6 +12,7 @@ timm
 kornia
 opencv-python
 wandb
+qim3d
 hydra-core
 invoke
 scikit-learn

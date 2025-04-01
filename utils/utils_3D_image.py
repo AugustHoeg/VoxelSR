@@ -109,9 +109,7 @@ def process_hdf5(hdf5_path, data_name, crop_indices, output_path, rescale=True, 
         # Process each slice
         for i in range(data.shape[0]):
             print(f"Processing slice: {i+1}/{data.shape[0]}")
-            slice_ = data[i, :, :]
-            cropped_slice = slice_[start_row:-end_row, start_col:-end_col]
-            #cropped_slices.append(cropped_slice)
+            cropped_slice = data[i, start_row:-end_row, start_col:-end_col]
             cropped_array[:, :, i] = cropped_slice.astype(np.float32)
 
             # update min and max
@@ -121,7 +119,9 @@ def process_hdf5(hdf5_path, data_name, crop_indices, output_path, rescale=True, 
             max_val = max(slice_max, max_val)
 
             # Sample 1000 points randomly and append to list
-            samples.extend(np.random.choice(cropped_slice.flatten(), 1000, replace=False))
+            slice_area = cropped_slice.shape[0] * cropped_slice.shape[1]
+            num_sampels = int(0.2*slice_area)  # 20% of the slice area
+            samples.extend(np.random.choice(cropped_slice.flatten(), num_sampels, replace=False))
 
         # Stack the cropped slices back into a 3D array
         #cropped_array = np.stack(cropped_slices)

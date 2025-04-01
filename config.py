@@ -24,3 +24,5 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))  # This is the Project Roo
 # ----------------------------------------
 
 MODEL_ARCHITECTURE = "mDCSRN"  # Flag for selecting model architecture if configuration file is not provided
+
+# ----------------------------------------
