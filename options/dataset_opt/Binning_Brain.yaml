@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-name: Synthetic_2022_QIM_52_Bone
+name: Binning_Brain
 dataset_type: CacheDataset
 enable_femur_padding: false
 
@@ -8,7 +8,7 @@ n_channels: 1
 patch_size: 32
 channel_dim: no_channel
 norm_type: scale_intensity
-patch_crop_type: random_label
+patch_crop_type: random_spatial
 
 # Sample crop and padding
 sample_crop_pad_type : sample_divisible_padding # "sample_divisible_padding" "sample_crop_foreground"
@@ -19,7 +19,7 @@ trunc_factor: 3.0 # k-space truncation factor
 kspace_trunc_dim: 2 # k-space truncation dimension
 
 downsampling_method: linear
-blur_method: monai_gaussian_blur
+blur_method: 3d_gaussian_blur
 blur_sigma: 1.0
 
 # Dataset and dataloader parameters
@@ -32,7 +32,7 @@ train_dataset_params:
 
 train_dataloader_params:
   dataloader_shuffle: false
-  dataloader_batch_size: 5
+  dataloader_batch_size: 4
   num_load_workers: 2
   persist_workers: true
   pin_memory: false
@@ -46,7 +46,7 @@ test_dataset_params:
 
 test_dataloader_params:
   dataloader_shuffle: false
-  dataloader_batch_size: 5
+  dataloader_batch_size: 4
   num_load_workers: 0
   persist_workers: false
   pin_memory: false

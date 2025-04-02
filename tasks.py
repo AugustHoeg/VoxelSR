@@ -1,4 +1,13 @@
 from invoke import task
+from datetime import datetime
+@task
+def git(ctx, message=None):
+    """Run the testing script."""
+    ctx.run(f"git add .")
+    if message is None:
+        message = f"update"
+    ctx.run(f"git commit -m '{message}'")
+    ctx.run(f"git push origin main")
 
 @task
 def template(ctx):

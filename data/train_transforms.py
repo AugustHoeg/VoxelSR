@@ -422,7 +422,7 @@ class BasicSRTransforms:
         return transforms
 
 
-    def get_transforms_FACTS_Synth(self, baseline=False):
+    def get_transforms_FACTS_Synth(self, baseline=False):  # unused
 
         if baseline:
             self.random_crop_pair = mt.Identityd(keys=["H", "L"])
@@ -444,7 +444,7 @@ class BasicSRTransforms:
         return transforms
 
 
-    def get_transforms_FACTS_Real(self, baseline=False):
+    def get_transforms_FACTS_Real(self, baseline=False):  # unused
 
         if baseline:
             self.random_crop_pair = mt.Identityd(keys=["H", "L"])
@@ -466,6 +466,27 @@ class BasicSRTransforms:
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
                 self.sample_crop_pad_transform,
                 resize_transform, # Resize LR
+                self.pad_transform,  # pad LR
+                # Random transforms
+                self.random_crop_pair  # Random crop pair
+
+            ]
+        )
+
+        return transforms
+
+    def get_transforms_binning_brain(self, baseline=False):
+
+        if baseline:
+            self.random_crop_pair = mt.Identityd(keys=["H", "L"])
+
+        transforms = mt.Compose(
+            [
+                # Deterministic Transforms
+                mt.LoadImaged(keys=["H", "L"], dtype=None),
+                mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
+                mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
+                self.sample_crop_pad_transform,
                 self.pad_transform,  # pad LR
                 # Random transforms
                 self.random_crop_pair  # Random crop pair

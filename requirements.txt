@@ -20,11 +20,11 @@ scikit-image
 matplotlib
 napari
 pipreqs
-typer>=0.15.1
-fastapi>=0.115.6
-uvicorn>=0.34.0
-coverage>=6.0.2
-pytest>=6.2.4
+typer
+fastapi
+uvicorn
+coverage
+pytest
 ruff
 python-multipart
 httpx

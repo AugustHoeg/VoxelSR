@@ -29,7 +29,7 @@ def rescale_array_(arr, mina, maxa, new_min=0.0, new_max=1.0, dtype=np.float32):
     if maxa is None:
         maxa = arr.max()
 
-    print("Rescaling array...")
+    # print("Rescaling array...")
     # Normalize the array in-place
     arr -= mina  # Subtract min (in-place)
     arr /= (maxa - mina)  # Divide by range (in-place)
