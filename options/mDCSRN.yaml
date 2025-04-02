@@ -25,7 +25,7 @@ dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 input_type: 3D # Input type, 2D or 3D
-up_factor: 1  # upscaling factor
+up_factor: 2  # upscaling factor
 
 save_model: true  # flag to save model
 save_time: 36  # Backup save of model after 35 hours
@@ -37,8 +37,11 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100
-  checkpoint_save: 50
+  iterations: 1000
+  checkpoint_test: 100
+  checkpoint_save: 500
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0

@@ -711,8 +711,8 @@ class ModelPlain(ModelBase):
     def current_visuals(self, need_H=True):
         out_dict = OrderedDict()
 
-        lr_size = self.opt['patch_size_hr'] / self.opt['up_factor']
-        if lr_size < self.opt['patch_size_lr']:
+        lr_size = self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor']
+        if self.opt['dataset_opt']['patch_size'] > lr_size:
             out_dict['L'] = crop_center(self.L, center_size=lr_size).detach()[0].float().cpu()
         else:
             out_dict['L'] = self.L.detach()[0].float().cpu()
@@ -725,7 +725,7 @@ class ModelPlain(ModelBase):
     def log_comparison_image(self, img_dict, current_step):
 
         grid_image = self.comparison_tool.get_comparison_image(img_dict)
-        figure_string = "SR comparison: %s, step %d, %dx upscaling" % (self.opt['model_architecture'], current_step, self.opt['up_factor'])
+        figure_string = "SR comparison: %s, step %d, %dx upscaling" % (self.opt['model_opt']['model_architecture'], current_step, self.opt['up_factor'])
 
         if self.opt['run_type'] == "HOME PC":
             height, width = grid_image.shape[:2]

@@ -14,35 +14,93 @@ from utils.utils_3D_image import rescale_array_
 
 # TODO: Rewrite these functions to save the image in the order (slices, rows, cols) or (depth, height, width)
 
+def crop_slices(hdf5_path, idx, start_row, end_row, start_col, end_col, percentiles=None):
 
-def sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col):
-    print("Processing slice: {}/{}".format(idx+1, data.shape[0]), end="\r")
-    #crop_slice = data[idx, start_row:end_row, start_col:end_col] # Read data
-    #return np.random.choice(crop_slice.reshape(-1), N, replace=False)
-    crop_slice = data[idx, start_row:end_row, start_col:end_col]
-    flat_indices = np.random.choice(np.prod(crop_slice.shape), N, replace=False)
-    return crop_slice.ravel()[flat_indices]
+    print("Processing slice: {}".format(idx+1), end="\r")
 
+    """Each worker should open the HDF5 file separately."""
+    with h5py.File(hdf5_path, 'r') as f:
+        data = f['/exchange/data']  # Open the dataset inside the worker
+        crop_slice = data[idx, start_row:end_row, start_col:end_col]  # Read data
+        if percentiles is not None:
+            rescale_array_(crop_slice, mina=percentiles[0], maxa=percentiles[1], new_min=0.0, new_max=1.0)
+        return crop_slice
 
-def parallel_estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2, n_proc=8):
+def parallel_crop_slices(hdf5_path, start_depth, end_depth, start_row, end_row, start_col, end_col, n_proc=8, percentiles=None):
+    """Estimate percentiles using multiprocessing."""
 
     with h5py.File(hdf5_path, 'r') as f:
-        data = f['/exchange/data']
+        depth, height, width = f['/exchange/data'].shape
+        print("HDF5 shape: {}".format((depth, height, width)))
 
-        # Extract the shape of the dataset
-        depth, height, width = data.shape
-        print("HDF5 shape: {}".format(data.shape))
+    with multiprocessing.Pool(n_proc) as pool:
+        results_async = [
+            pool.apply_async(crop_slices, args=(hdf5_path, idx, start_row, end_row, start_col, end_col, percentiles))
+            for idx in range(start_depth, end_depth)
+        ]
 
-        N = int(sample_percent * (end_row - start_row) * (end_col - start_col))
+        crop_arr = np.stack([r.get() for r in results_async])  # Retrieve and concatenate results
 
-        pool = multiprocessing.Pool(n_proc)
-        results_async = [pool.apply_async(sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col)) for idx in range(depth)]
-        samples = [r.get() for r in results_async]
-        percentiles = np.percentile(samples, [5, 95])
-        return percentiles
+    return crop_arr
 
 
-def estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2):
+def sample_from_slice(hdf5_path, idx, N, start_row, end_row, start_col, end_col):
+    """Each worker should open the HDF5 file separately."""
+    with h5py.File(hdf5_path, 'r') as f:
+        data = f['/exchange/data']  # Open the dataset inside the worker
+        crop_slice = data[idx, start_row:end_row, start_col:end_col]  # Read data
+        flat_indices = np.random.choice(crop_slice.size, N, replace=False)
+        return crop_slice.ravel()[flat_indices]  # Return sampled values
+
+
+def parallel_estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2, n_proc=8, step=10):
+    """Estimate percentiles using multiprocessing."""
+
+    with h5py.File(hdf5_path, 'r') as f:
+        depth, height, width = f['/exchange/data'].shape
+        print("HDF5 shape: {}".format((depth, height, width)))
+
+    N = int(sample_percent * (end_row - start_row) * (end_col - start_col))
+
+    with multiprocessing.Pool(n_proc) as pool:
+        results_async = [
+            pool.apply_async(sample_from_slice, args=(hdf5_path, idx, N, start_row, end_row, start_col, end_col))
+            for idx in range(0, depth, step)
+        ]
+
+        samples = np.concatenate([r.get() for r in results_async])  # Retrieve and concatenate results
+
+    percentiles = np.percentile(samples, [5, 95])  # Compute percentiles
+    return percentiles
+
+# def sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col):
+#     print("Processing slice: {}/{}".format(idx+1, data.shape[0]), end="\r")
+#     #crop_slice = data[idx, start_row:end_row, start_col:end_col] # Read data
+#     #return np.random.choice(crop_slice.reshape(-1), N, replace=False)
+#     crop_slice = data[idx, start_row:end_row, start_col:end_col]
+#     flat_indices = np.random.choice(np.prod(crop_slice.shape), N, replace=False)
+#     return crop_slice.ravel()[flat_indices]
+
+# def parallel_estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2, n_proc=8, step=10):
+#
+#     with h5py.File(hdf5_path, 'r') as f:
+#         data = f['/exchange/data']
+#
+#         # Extract the shape of the dataset
+#         depth, height, width = data.shape
+#         print("HDF5 shape: {}".format(data.shape))
+#
+#         N = int(sample_percent * (end_row - start_row) * (end_col - start_col))
+#
+#         pool = multiprocessing.Pool(n_proc)
+#         results_async = [pool.apply_async(sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col)) for idx in range(0, depth, step)]
+#
+#         #samples = [r.get() for r in results_async]
+#         percentiles = np.percentile(np.array(results_async), [5, 95])
+#         return percentiles
+
+
+def estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2, step=10):
     """
     Estimates the 5th and 95th percentiles of the intensities in within cropped region of an HDF5 file.
 
@@ -70,14 +128,16 @@ def estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, samp
         print("HDF5 shape: {}".format(data.shape))
 
         N = int(sample_percent * (end_row - start_row) * (end_col - start_col))
-        samples = np.zeros((depth, N))
+        samples = np.zeros((depth//step, N))
 
         # Process each slice
-        for i in range(depth):  # depth
-            print(f"Processing slice: {i+1}/{data.shape[0]}")
-            crop_slice = data[i, start_row:end_row, start_col:end_col]
+        for i in range(depth//step):  # depth
+            print(f"Processing slice: {i*step + 1}/{data.shape[0]}")
+            crop_slice = data[i*step, start_row:end_row, start_col:end_col]
 
-            samples[i] = np.random.choice(crop_slice.reshape(-1), N, replace=False)  # .reshape(-1) should return a view and not a copy
+            flat_indices = np.random.choice(np.prod(crop_slice.shape), N, replace=False)
+            samples[i] = crop_slice.ravel()[flat_indices]
+            #samples[i] = np.random.choice(crop_slice.reshape(-1), N, replace=False)  # .reshape(-1) should return a view and not a copy
 
             # update min and max
             #slice_min = crop_slice.min()
@@ -169,61 +229,19 @@ def save_memmap(hdf5_path, start_row, end_row, start_col, end_col, start_depth, 
     return crop_arr
 
 
-def save_npy(hdf5_path, start_row, end_row, start_col, end_col, start_depth, end_depth, output_path, percentiles, rescale=True, order='DHW'):
-    """
-    Reads a 3D image from an HDF5 file slice-by-slice, crops each slice,
-    and saves the result as a .npy file
+def save_npy(hdf5_path, start_row, end_row, start_col, end_col, start_depth, end_depth, output_path, percentiles, order='DHW', n_proc=12):
 
-    Parameters:
-        hdf5_path (str): Path to the HDF5 file.
-        data_name (str): Name of the dataset in the HDF5 file.
-        start_row (int): Number of rows to crop from the top.
-        end_row (int): Number of rows to crop from the bottom.
-        start_col (int): Number of columns to crop from the left.
-        end_col (int): Number of columns to crop from the right.
-        output_path (str): Path to save the cropped array as a .npy file.
-        sample_percent (float): Percentage of the slice area to sample for intensity rescaling.
-        rescale (bool): Whether to rescale the intensities of the cropped data.
-        num_slices_plot (int): Number of slices to plot after cropping.
-    """
+    crop_arr = parallel_crop_slices(hdf5_path, start_depth, end_depth, start_row, end_row, start_col, end_col, n_proc, percentiles)
 
-    min_val = math.inf
-    max_val = -math.inf
+    if order == "HWD":
+        crop_arr = np.transpose(crop_arr, (1, 2, 0))
 
-    p_low, p_high = percentiles
-
-    with h5py.File(hdf5_path, 'r') as f:
-        data = f['/exchange/data']
-
-        # Extract the shape of the dataset
-        depth, height, width = data.shape
-        print("HDF5 shape: {}".format(data.shape))
-
-        # Create an empty array to hold the cropped data
-        if order == "DHW":
-            crop_shape = (end_depth - start_depth, end_row - start_row, end_col - start_col)
-        elif order == "HWD":
-            crop_shape = (end_row - start_row, end_col - start_col, end_depth - start_depth)
-        print("Shape of cropped_array:", crop_shape)
-
-        crop_arr = np.zeros(crop_shape, dtype=np.float32)
-
-        # Process each slice
-        for i in range(start_depth, end_depth):
-            print(f"Processing slice: {i+1}/{end_depth}")
-            crop_slice = data[i, start_row:end_row, start_col:end_col]
-
-            if rescale:
-                rescale_array_(crop_slice, mina=p_low, maxa=p_high, new_min=0.0, new_max=1.0)
-
-            if order == "HWD":
-                crop_arr[:, :, i-start_depth] = crop_slice.astype(np.float32)
-            elif order == "DHW":
-                crop_arr[i-start_depth, :, :] = crop_slice.astype(np.float32)
+    print("Cropped array shape:", crop_arr.shape)
 
     np.save(output_path, crop_arr)
 
     return crop_arr
+
 
 def match_slice_histograms(input, target, up_factor, target_percentiles=None, order='DHW'):
     # Match the histograms of the input slices to the target slices
