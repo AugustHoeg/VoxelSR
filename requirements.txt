@@ -2,6 +2,7 @@
 torch==2.5.1+cu124
 torchvision
 torchaudio
+zarr
 cupy-cuda12x
 structure-tensor
 monai

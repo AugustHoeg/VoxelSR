@@ -8,10 +8,38 @@ import matplotlib.pyplot as plt
 import os
 import skimage
 import zarr
+import multiprocessing
 
 from utils.utils_3D_image import rescale_array_
 
 # TODO: Rewrite these functions to save the image in the order (slices, rows, cols) or (depth, height, width)
+
+
+def sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col):
+    print("Processing slice: {}/{}".format(idx+1, data.shape[0]), end="\r")
+    #crop_slice = data[idx, start_row:end_row, start_col:end_col] # Read data
+    #return np.random.choice(crop_slice.reshape(-1), N, replace=False)
+    crop_slice = data[idx, start_row:end_row, start_col:end_col]
+    flat_indices = np.random.choice(np.prod(crop_slice.shape), N, replace=False)
+    return crop_slice.ravel()[flat_indices]
+
+
+def parallel_estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2, n_proc=8):
+
+    with h5py.File(hdf5_path, 'r') as f:
+        data = f['/exchange/data']
+
+        # Extract the shape of the dataset
+        depth, height, width = data.shape
+        print("HDF5 shape: {}".format(data.shape))
+
+        N = int(sample_percent * (end_row - start_row) * (end_col - start_col))
+
+        pool = multiprocessing.Pool(n_proc)
+        results_async = [pool.apply_async(sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col)) for idx in range(depth)]
+        samples = [r.get() for r in results_async]
+        percentiles = np.percentile(samples, [5, 95])
+        return percentiles
 
 
 def estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_col, sample_percent=0.2):
@@ -134,9 +162,9 @@ def save_memmap(hdf5_path, start_row, end_row, start_col, end_col, start_depth, 
                 rescale_array_(crop_slice, mina=p_low, maxa=p_high, new_min=0.0, new_max=1.0)
 
             if order == "HWD":
-                crop_arr[:, :, i] = crop_slice.astype(np.float32)
+                crop_arr[:, :, i-start_depth] = crop_slice.astype(np.float32)
             elif order == "DHW":
-                crop_arr[i, :, :] = crop_slice.astype(np.float32)
+                crop_arr[i-start_depth, :, :] = crop_slice.astype(np.float32)
 
     return crop_arr
 
@@ -189,9 +217,9 @@ def save_npy(hdf5_path, start_row, end_row, start_col, end_col, start_depth, end
                 rescale_array_(crop_slice, mina=p_low, maxa=p_high, new_min=0.0, new_max=1.0)
 
             if order == "HWD":
-                crop_arr[:, :, i] = crop_slice.astype(np.float32)
+                crop_arr[:, :, i-start_depth] = crop_slice.astype(np.float32)
             elif order == "DHW":
-                crop_arr[i, :, :] = crop_slice.astype(np.float32)
+                crop_arr[i-start_depth, :, :] = crop_slice.astype(np.float32)
 
     np.save(output_path, crop_arr)
 

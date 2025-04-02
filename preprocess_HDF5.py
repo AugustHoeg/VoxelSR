@@ -3,7 +3,7 @@ import h5py
 import math
 import matplotlib.pyplot as plt
 
-from utils.utils_HDF5 import save_npy, save_memmap, estimate_percentiles, match_slice_histograms, plot_slices
+from utils.utils_HDF5 import save_npy, save_memmap, estimate_percentiles, parallel_estimate_percentiles, match_slice_histograms, plot_slices
 
 if __name__ == "__main__":
 
@@ -24,8 +24,9 @@ if __name__ == "__main__":
 
 
     #perc_bin1x1 = estimate_percentiles(bin1x1_path, 10807, 13807, 10807, 13807, sample_percent=0.2)
-    perc_bin2x2 = estimate_percentiles(bin2x2_path, 5403, 6903, 5403, 6903, sample_percent=0.2)
-    perc_bin4x4 = estimate_percentiles(bin4x4_path, 2701, 3451, 2701, 3451, sample_percent=0.2)
+    perc_bin2x2 = parallel_estimate_percentiles(bin2x2_path, 5403, 6903, 5403, 6903, sample_percent=0.2, n_proc=24)
+    perc_bin4x4 = parallel_estimate_percentiles(bin4x4_path, 2701, 3451, 2701, 3451, sample_percent=0.2, n_proc=24)
+
 
     # Save the cropped images as .npy files
     out_name = dataset_path + "bin2x2/brain_1_train.npy"
