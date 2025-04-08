@@ -8,7 +8,7 @@ netG:
   num_channels: 64
   num_blocks: 12
   upsample_method: nearest
-  use_checkpoint: false
+  use_checkpoint: true
 
   init_type: kaiming_normal
   init_bn_type: uniform

@@ -23,6 +23,6 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))  # This is the Project Roo
 # "MTVNet"
 # ----------------------------------------
 
-MODEL_ARCHITECTURE = "EDDSR"  # Flag for selecting model architecture if configuration file is not provided
+MODEL_ARCHITECTURE = "MTVNet"  # Flag for selecting model architecture if configuration file is not provided
 
 # ----------------------------------------

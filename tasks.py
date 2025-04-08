@@ -23,7 +23,12 @@ def requirements(ctx):
 @task
 def train(ctx, model, dataset):
     """Run the training script."""
-    ctx.run(f"python train.py -cn {model} dataset_opt={dataset}")
+    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset}")
+
+@task
+def trainid(ctx, model, dataset, experiment_id):
+    """Run the training script."""
+    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id}")
 
 @task
 def test(ctx, experiment_id):

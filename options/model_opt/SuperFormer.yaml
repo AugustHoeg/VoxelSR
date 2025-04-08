@@ -20,7 +20,7 @@ netG:
   num_feat: 126           # Default is 126
   patch_size: 2  # 2
 
-  use_checkpoint: false
+  use_checkpoint: true
 
   init_type: default
   init_bn_type: null  # "uniform" | "constant"
