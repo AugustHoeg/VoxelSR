@@ -7,7 +7,7 @@ netG:
   description: "Mapping using Transformers for Volumes – Network for Super-Resolution with Long-Range Interactions"
 
   in_channels: 1
-  shallow_feats: [ 128, 128, 128 ]
+  shallow_feats: [ 32, 64, 128 ]
   pre_up_feats: [ 64, 64 ]
   num_levels: 3
   context_sizes: [ 128, 64, 32 ]

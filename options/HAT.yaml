@@ -1,21 +1,23 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: HCP_1200       # Default dataset config
+  - dataset_opt: CTSpine1K       # Default dataset config
   - model_opt: HAT              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
 task: superresolution
+input_type: 2D # Input type, 2D or 3D
+up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: aulho
-wandb_project: HCP_1200  # <--- change project
-experiment_id: HAT_ID000000
-run_name: HAT_000
+wandb_project: ${dataset_opt.name}_ # <--- change project
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -23,9 +25,6 @@ train_mode: "scratch"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
-
-input_type: 2D # Input type, 2D or 3D
-up_factor: 1  # upscaling factor
 
 save_model: true  # flag to save model
 save_time: 36  # Backup save of model after 35 hours

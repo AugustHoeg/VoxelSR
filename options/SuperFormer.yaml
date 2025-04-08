@@ -1,11 +1,13 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: Binning_Brain       # Default dataset config
+  - dataset_opt: CTSpine1K       # Default dataset config
   - model_opt: SuperFormer              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
 task: superresolution
+input_type: 3D # Input type, 2D or 3D
+up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
@@ -13,9 +15,9 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: aulho
-wandb_project: Binning_Brain  # <--- change project
-experiment_id: SuperFormer_Binning_Brain_ID000001
-run_name: SuperFormer_000
+wandb_project: ${dataset_opt.name}_ # <--- change project
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -23,9 +25,6 @@ train_mode: "scratch"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
-
-input_type: 3D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
 
 save_model: true  # flag to save model
 save_time: 36  # Backup save of model after 35 hours
@@ -38,7 +37,7 @@ path:
 # Overwrite default training parameters
 train_opt:
   iterations: 100000
-  validation_iterations: 250
+  validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 10000
   checkpoint_print: 2500
@@ -54,7 +53,7 @@ dataset_opt:
 
   train_dataloader_params:
     dataloader_batch_size: 8
-    num_load_workers: 1
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
