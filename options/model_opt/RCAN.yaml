@@ -3,7 +3,7 @@ model: plain
 model_architecture: RCAN
 netG:
   net_type: RCAN
-  description: RCAN
+  description: "RCAN"
   in_channels: 1
 
   num_feat: 64
@@ -14,7 +14,7 @@ netG:
   img_range: 1.0
   rgb_mean: [ 0.4488, 0.4371, 0.4040 ]
 
-  upsample_method: pixelshuffle # only supports "pixelshuffle"
+  upsample_method: pixelshuffle  # only supports "pixelshuffle"
   use_checkpoint: false
 
   init_type: default

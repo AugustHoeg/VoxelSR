@@ -16,11 +16,11 @@ netG:
   embed_dim: 180
   num_heads: [6, 6, 6, 6, 6, 6]
   mlp_ratio: 2
-  resi_connection: "1conv"
+  resi_connection: 1conv
 
-  upsample_method: "pixelshuffle" # only supports "pixelshuffle"
+  upsample_method: pixelshuffle # only supports "pixelshuffle"
   use_checkpoint: false
 
-  init_type: "default"
-  init_bn_type: "uniform"      # "uniform" | "constant"
+  init_type: default
+  init_bn_type: uniform   # "uniform" | "constant"
   init_gain: 0.2
