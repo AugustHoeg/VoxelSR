@@ -14,8 +14,8 @@ run_profile: false
 wandb_mode: offline
 wandb_entity: aulho
 wandb_project: HCP_1200  # <--- change project
-experiment_id: EDDSR_ID000000
-run_name: EDDSR_000
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration

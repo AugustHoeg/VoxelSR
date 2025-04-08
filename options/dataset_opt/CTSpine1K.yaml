@@ -16,7 +16,7 @@ sample_crop_pad_type : sample_crop_foreground # "sample_divisible_padding" "samp
 # Data augmentation
 degradation_type: resize # "resize" "kspace_trunc"
 trunc_factor: 3.0 # k-space truncation factor
-kspace_trunc_dim: 2 # k-space truncation dimension
+kspace_trunc_dim: 3 # k-space truncation dimension
 
 downsampling_method: linear
 blur_method: 3d_gaussian_blur
