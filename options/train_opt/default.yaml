@@ -2,7 +2,7 @@
 
 # Training parameters
 iterations: 100000
-validation_iterations: 500
+validation_iterations: 250
 epochs: 0
 
 mixed_precision: 'BF16'
@@ -36,7 +36,7 @@ E_param_strict: true
 manual_seed: 8338
 
 checkpoint_test: 5000
-checkpoint_save: 1000000
+checkpoint_save: 10000
 checkpoint_print: 5000
 checkpoint_save_visuals: 5000
 

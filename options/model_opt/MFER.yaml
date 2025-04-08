@@ -1,0 +1,10 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: MFER
+netG:
+  net_type: MFER
+  description: "MFER model from paper: Multi-level feature extraction and reconstruction for 3D MRI image super-resolution"
+
+  init_type: default
+  init_bn_type: uniform
+  init_gain: 0.2

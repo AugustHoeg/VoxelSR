@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: Binning_Brain       # Default dataset config
+  - dataset_opt: LITS       # Default dataset config
   - model_opt: mDCSRN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
@@ -12,8 +12,8 @@ run_profile: false
 
 # WandB parameters
 wandb_mode: offline
-wandb_entity: your_wandb_entity
-wandb_project: HCP_1200  # <--- change project
+wandb_entity: aulho
+wandb_project: CTSpine1K  # <--- change project
 experiment_id: mDCSRN_ID000000
 run_name: mDCSRN_000
 note: Note
@@ -25,7 +25,7 @@ dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 input_type: 3D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
+up_factor: 4  # upscaling factor
 
 save_model: true  # flag to save model
 save_time: 36  # Backup save of model after 35 hours
@@ -38,6 +38,7 @@ path:
 # Overwrite default training parameters
 train_opt:
   iterations: 1000
+  validation_iterations: 100
   checkpoint_test: 100
   checkpoint_save: 500
   checkpoint_print: 100
@@ -49,6 +50,8 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
+  patch_size: 32
+
   train_dataloader_params:
     dataloader_batch_size: 1
     num_load_workers: 1

@@ -12,7 +12,7 @@ run_profile: false
 
 # WandB parameters
 wandb_mode: offline
-wandb_entity: your_wandb_entity
+wandb_entity: aulho
 wandb_project: HCP_1200  # <--- change project
 experiment_id: EDDSR_ID000000
 run_name: EDDSR_000
@@ -37,6 +37,8 @@ path:
 
 # Overwrite default training parameters
 train_opt:
+  patch_size: 32
+
   iterations: 100
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4

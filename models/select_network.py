@@ -185,7 +185,7 @@ def define_G(opt):
 
     elif model_architecture == 'MTVNet':
 
-        if opt['netG']['ct_size'] == 0:
+        if opt['model_opt']['netG']['ct_size'] == 0:
             print("Using MTVNet without Carrier tokens!")
             from models.MTVNet_no_CT import MTVNet_no_CT as net
         else:

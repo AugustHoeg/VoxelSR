@@ -22,7 +22,7 @@ class Dataset_Binning_Brain():
             raise Exception(f"Dataset Binning Bone not supported for run type: {opt['run_type']}")
 
         else:  # Default is opt['cluster'] = DTU_HPC
-            self.data_path = "../3D_datasets/datasets/danmax/binning_bone" # Use this path to read from personal scratch space
+            self.data_path = "../3D_datasets/datasets/danmax/binning_brain" # Use this path to read from personal scratch space
             test_paths = ["brain_1_test.npy"]
 
         images_HR = sorted(glob.glob(os.path.join(self.data_path, "bin2x2/", "brain_*", "brain_*.npy")))

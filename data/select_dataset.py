@@ -85,6 +85,33 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         baseline_transforms = dataset.get_baseline_transforms(mode="test")
         data_path = dataset.data_path
 
+    elif dataset_name == "CTSpine1K":
+        from data.Dataset_CTSpine1K import Dataset_CTSpine1K as D
+        dataset = D(opt)
+        train_files, test_files = dataset.get_file_paths()
+        transforms = dataset.get_transforms(mode="train")
+        test_transforms = dataset.get_transforms(mode="test")
+        baseline_transforms = dataset.get_baseline_transforms(mode="test")
+        data_path = dataset.data_path
+
+    elif dataset_name == "LITS":
+        from data.Dataset_LITS import Dataset_LITS as D
+        dataset = D(opt)
+        train_files, test_files = dataset.get_file_paths()
+        transforms = dataset.get_transforms(mode="train")
+        test_transforms = dataset.get_transforms(mode="test")
+        baseline_transforms = dataset.get_baseline_transforms(mode="test")
+        data_path = dataset.data_path
+
+    elif dataset_name == "LIDC_IDRI":
+        from data.Dataset_LIDC_IDRI import Dataset_LIDC_IDRI as D
+        dataset = D(opt)
+        train_files, test_files = dataset.get_file_paths()
+        transforms = dataset.get_transforms(mode="train")
+        test_transforms = dataset.get_transforms(mode="test")
+        baseline_transforms = dataset.get_baseline_transforms(mode="test")
+        data_path = dataset.data_path
+
     else:
         raise NotImplementedError('Dataset %s not implemented.' % dataset_name)
 

@@ -1,0 +1,79 @@
+defaults:
+  - train_opt: default          # Default training config
+  - dataset_opt: HCP_1200       # Default dataset config
+  - model_opt: HAT              # Default model config
+  - _self_  # Ensure compliance with Hydra 1.1
+
+# Main configuration
+task: superresolution
+
+# Profile
+run_profile: false
+
+# WandB parameters
+wandb_mode: offline
+wandb_entity: aulho
+wandb_project: HCP_1200  # <--- change project
+experiment_id: HAT_ID000000
+run_name: HAT_000
+note: Note
+
+# GPU configuration
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
+gpu_ids: [0]
+dist: false
+cluster: DTU_HPC # DTU_HPC or TITANS
+
+input_type: 2D # Input type, 2D or 3D
+up_factor: 1  # upscaling factor
+
+save_model: true  # flag to save model
+save_time: 36  # Backup save of model after 35 hours
+
+path:
+  root: superresolution
+  pretrained_experiment_id: null  # "RCAN_ID000000"
+  pretrained_netE: null
+
+# Overwrite default training parameters
+train_opt:
+  iterations: 100000
+  validation_iterations: 250
+  checkpoint_test: 2500
+  checkpoint_save: 10000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
+  num_accum_steps_G: 1
+  G_optimizer_lr: 2e-4
+  G_optimizer_wd: 0
+  G_optimizer_clipgrad: 10
+
+# Overwrite default dataset parameters
+dataset_opt:
+  patch_size: 32
+
+  train_dataloader_params:
+    dataloader_batch_size: 4
+    num_load_workers: 5
+    persist_workers: true
+    pin_memory: false
+
+  test_dataloader_params:
+    dataloader_batch_size: 4
+    num_load_workers: 0
+    persist_workers: false
+    pin_memory: false
+
+# Hydra configuration
+hydra:
+  run:
+    dir: .  # Prevents Hydra from changing the working directory
+  job:
+    chdir: False  # Prevents changing working directory
+  output_subdir: null  # Prevents automatic output directory creation
+  sweep:
+    dir: .  # Keeps sweep results in the current directory
+  job_logging:
+    disable_existing_loggers: False  # Allows you to control logging manually
+
+#config_path: ${hydra:runtime.config_sources}

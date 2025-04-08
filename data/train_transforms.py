@@ -329,7 +329,7 @@ class BasicSRTransforms:
         self.pad_transform = mt.Identityd(keys=['H'])
         self.pad_size = 0
         if opt['model_opt']['model_architecture'] == "MTVNet":
-            center_size = opt['netG']['context_sizes'][-1]  # fixed assumption of level_ratio = 2
+            center_size = opt['model_opt']['netG']['context_sizes'][-1]  # fixed assumption of level_ratio = 2
             self.pad_size = (self.size_lr - center_size) // 2  # pad half of the context on all sides
             if self.pad_size > 0:
                 self.pad_transform = mt.BorderPadd(keys=["L"], spatial_border=[self.pad_size, self.pad_size, self.pad_size], mode='constant')  # Pad here if net is MTVNet

@@ -12,14 +12,14 @@ run_profile: false
 
 # WandB parameters
 wandb_mode: offline
-wandb_entity: your_wandb_entity
+wandb_entity: aulho
 wandb_project: HCP_1200  # <--- change project
 experiment_id: RCAN_ID000000
 run_name: RCAN_000
 note: Note
 
 # GPU configuration
-train_mode: true
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -37,14 +37,21 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100
+  iterations: 100000
+  validation_iterations: 250
+  checkpoint_test: 2500
+  checkpoint_save: 10000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
-  G_optimizer_lr: 1e-4
+  G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
 
 # Overwrite default dataset parameters
 dataset_opt:
+  patch_size: 32
+
   train_dataloader_params:
     dataloader_batch_size: 4
     num_load_workers: 5

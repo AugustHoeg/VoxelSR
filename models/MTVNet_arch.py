@@ -1924,7 +1924,7 @@ class MTVNet(nn.Module):
         for level in range(num_levels):
             self.blocks = nn.ModuleList()
             for i in range(num_blks[level]):
-                depths = self.blk_layers*num_blks[level]
+                depths = list(self.blk_layers)*num_blks[level]
                 dpr = [x.item() for x in torch.linspace(0, drop_path, sum(depths))]
                 self.blocks.append(
                     DCHAT(self.blk_layers, level, self.embed_dims, self.ct_embed_dims, ct_size, self.context_sizes, self.patch_sizes,
