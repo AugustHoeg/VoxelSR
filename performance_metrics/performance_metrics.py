@@ -34,6 +34,28 @@ def calculate_metric_3D(img_H, img_E, border=0, metric_fn=None):
 
     return metric
 
+def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
+
+    num_patches = len(real_hi_res)
+
+    # Rescale images if needed
+    if rescale_images:
+        rescale = tio.transforms.RescaleIntensity((0.0, 1.0))
+        img1 = torch.zeros_like(real_hi_res)
+        img2 = torch.zeros_like(fake_hi_res)
+        for patch_idx in range(num_patches):
+             img1[patch_idx] = rescale(real_hi_res[patch_idx].cpu())
+             img2[patch_idx] = rescale(fake_hi_res[patch_idx].cpu())
+    else:
+        img1 = real_hi_res
+        img2 = fake_hi_res
+
+    for key in metric_fn_dict:
+        metric_val_dict[key] += metric_fn_dict[key](img1, img2)
+
+    return metric_val_dict
+
+
 def compute_performance_metrics_2D(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
 
     num_patches = len(real_hi_res)

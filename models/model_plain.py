@@ -17,7 +17,7 @@ from models.model_base import ModelBase
 from models.select_network import define_G
 from utils import utils_3D_image
 
-from performance_metrics.performance_metrics import compute_performance_metrics_2D, compute_performance_metrics_3D
+from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D
 
 class ModelPlain(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -288,24 +288,15 @@ class ModelPlain(ModelBase):
         self.metric_fn_dict = {}
         self.metric_val_dict = {}
 
-        if self.opt['input_type'] == '2D':
-            from utils.utils_image import calculate_psnr_2D as calc_psnr
-            from utils.utils_image import calculate_ssim_2D as calc_ssim
-            from utils.utils_image import calculate_nrmse_2D as calc_nrmse
-        elif self.opt['input_type'] == '3D':
-            from utils.utils_image import calculate_psnr_3D as calc_psnr
-            from utils.utils_image import calculate_ssim_3D as calc_ssim
-            from utils.utils_image import calculate_nrmse_3D as calc_nrmse
-
         if "psnr" in self.opt_train['performance_metrics']:
             self.metric_val_dict["psnr"] = 0.0
-            self.metric_fn_dict["psnr"] = calc_psnr
+            self.metric_fn_dict["psnr"] = PSNR_3D()
         if "ssim" in self.opt_train['performance_metrics']:
             self.metric_val_dict["ssim"] = 0.0
-            self.metric_fn_dict["ssim"] = calc_ssim
+            self.metric_fn_dict["ssim"] = SSIM_3D()
         if "nrmse" in self.opt_train['performance_metrics']:
             self.metric_val_dict["nrmse"] = 0.0
-            self.metric_fn_dict["nrmse"] = calc_nrmse
+            self.metric_fn_dict["nrmse"] = NRMSE_3D()
 
 
     # ----------------------------------------
@@ -629,13 +620,16 @@ class ModelPlain(ModelBase):
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
-        # Compute performance metrics
-        rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        if self.opt['input_type'] == '2D':
-            compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-        elif self.opt['input_type'] == '3D':
-            compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-
+        if False:
+            # Compute performance metrics
+            rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+            if self.opt['input_type'] == '2D':
+                compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+            elif self.opt['input_type'] == '3D':
+                compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        else:
+            rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+            compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
         # self.netG.eval()

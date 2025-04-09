@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: CTSpine1K       # Default dataset config
+  - dataset_opt: HCP_1200       # Default dataset config
   - model_opt: mDCSRN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
@@ -39,7 +39,7 @@ train_opt:
   iterations: 1000
   validation_iterations: 100
   checkpoint_test: 100
-  checkpoint_save: 500
+  checkpoint_save: 10000
   checkpoint_print: 100
   checkpoint_save_visuals: 100
   num_accum_steps_G: 1
