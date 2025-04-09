@@ -24,4 +24,7 @@ logs/HCP_1200/**
 logs/IXI/**
 logs/BRATS2023/**
 logs/KIRBY21/**
+logs/CTSpine1K/**
+logs/LITS/**
+logs/LIDC_IDRI/**
 !*.gitkeep

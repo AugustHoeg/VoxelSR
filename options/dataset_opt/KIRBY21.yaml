@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-name: IXI
+name: KIRBY21
 dataset_type: CacheDataset
 enable_femur_padding: false
 

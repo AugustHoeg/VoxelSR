@@ -15,9 +15,9 @@ import config
 from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
 from models.select_network import define_G
-from performance_metrics.performance_metrics import PSNR_3D, SSIM_3D, NRMSE_3D, compute_performance_metrics
 from utils import utils_3D_image
 
+from performance_metrics.performance_metrics import compute_performance_metrics_2D, compute_performance_metrics_3D
 
 class ModelPlain(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -288,17 +288,24 @@ class ModelPlain(ModelBase):
         self.metric_fn_dict = {}
         self.metric_val_dict = {}
 
-        from utils.utils_image import calculate_ssim_2D, calculate_nrmse_2D, calculate_psnr_2D
+        if self.opt['input_type'] == '2D':
+            from utils.utils_image import calculate_psnr_2D as calc_psnr
+            from utils.utils_image import calculate_ssim_2D as calc_ssim
+            from utils.utils_image import calculate_nrmse_2D as calc_nrmse
+        elif self.opt['input_type'] == '3D':
+            from utils.utils_image import calculate_psnr_3D as calc_psnr
+            from utils.utils_image import calculate_ssim_3D as calc_ssim
+            from utils.utils_image import calculate_nrmse_3D as calc_nrmse
 
         if "psnr" in self.opt_train['performance_metrics']:
             self.metric_val_dict["psnr"] = 0.0
-            self.metric_fn_dict["psnr"] = calculate_psnr_2D
+            self.metric_fn_dict["psnr"] = calc_psnr
         if "ssim" in self.opt_train['performance_metrics']:
             self.metric_val_dict["ssim"] = 0.0
-            self.metric_fn_dict["ssim"] = calculate_ssim_2D
+            self.metric_fn_dict["ssim"] = calc_ssim
         if "nrmse" in self.opt_train['performance_metrics']:
             self.metric_val_dict["nrmse"] = 0.0
-            self.metric_fn_dict["nrmse"] = calculate_nrmse_2D
+            self.metric_fn_dict["nrmse"] = calc_nrmse
 
 
     # ----------------------------------------
@@ -355,18 +362,13 @@ class ModelPlain(ModelBase):
 
     def define_visual_eval(self):
 
-        patch_size_hr = self.opt['dataset_opt']['patch_size_hr']
-
         if self.opt['input_type'] == '2D':
             from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
 
         elif self.opt['input_type'] == '3D':
             from utils.utils_3D_image import ImageComparisonTool3D as comparison_tool
 
-            if self.opt['model_opt']['model_architecture'] == 'MTVNet':
-                patch_size_hr = int(self.opt['model_opt']['netG']['context_sizes'][-1]*self.opt['up_factor'])
-
-        self.comparison_tool = comparison_tool(patch_size_hr=patch_size_hr,
+        self.comparison_tool = comparison_tool(patch_size_hr=self.opt['dataset_opt']['patch_size_hr'],
                                                upscaling_methods=["tio_nearest", "tio_linear"],
                                                unnorm=self.opt['dataset_opt']['norm_type'] == 'znormalization',
                                                div_max=self.opt['dataset_opt']['norm_type'] == 'znormalization',
@@ -598,11 +600,8 @@ class ModelPlain(ModelBase):
 
     def validation(self):
 
-        #self.netG.eval()
-
         # Forward G
-        with torch.inference_mode():
-            self.netG_forward()
+        self.netG_forward()
 
         # Compute loss for G
         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
@@ -612,17 +611,18 @@ class ModelPlain(ModelBase):
 
         # Compute performance metrics
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        if self.opt['input_type'] == '2D':
+            compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        elif self.opt['input_type'] == '3D':
+            compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
     def validation_amp(self):
 
-        #self.netG.eval()
+        # Forward G
+        self.netG_forward()
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            # Forward G
-            self.netG_forward()
-
             # Compute loss for G
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
 
@@ -631,7 +631,10 @@ class ModelPlain(ModelBase):
 
         # Compute performance metrics
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        if self.opt['input_type'] == '2D':
+            compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        elif self.opt['input_type'] == '3D':
+            compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
 
@@ -711,9 +714,9 @@ class ModelPlain(ModelBase):
     def current_visuals(self, need_H=True):
         out_dict = OrderedDict()
 
-        lr_size = self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor']
-        if self.opt['dataset_opt']['patch_size'] > lr_size:
-            out_dict['L'] = crop_center(self.L, center_size=lr_size).detach()[0].float().cpu()
+        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
+        if self.opt['dataset_opt']['patch_size'] > roi:
+            out_dict['L'] = crop_center(self.L, center_size=roi).detach()[0].float().cpu()
         else:
             out_dict['L'] = self.L.detach()[0].float().cpu()
 

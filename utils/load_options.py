@@ -112,7 +112,10 @@ def init_options(opt, opt_path):
     opt['opt_path'] = opt_path
 
     # Calculate high-resolution patch size
-    opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['up_factor']
+    if opt['model_opt']['model_architecture'] == 'MTVNet':
+        opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['context_sizes'][-1] * opt['up_factor'])
+    else:
+        opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['up_factor']
 
     # ----------------------------------------
     # distributed settings

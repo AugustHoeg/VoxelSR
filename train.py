@@ -104,6 +104,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
 
                 torch.cuda.empty_cache()
                 idx_test = 0
+                start_time = time.time()
                 with torch.inference_mode():
                     while idx_test < validation_iterations:
                         for batch_idx, test_batch in enumerate(test_loader):
@@ -125,7 +126,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
                                 model.validation_amp()
                             else:
                                 model.validation()
-
+                    print(f"Validation took {time.time() - start_time} sec")
                     # -------------------------------
                     # 12) Record early stopping
                     # -------------------------------

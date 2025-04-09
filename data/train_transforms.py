@@ -12,7 +12,7 @@ from utils.utils_ARSSR import make_coord
 from data.train_transforms_implicit import RandomCropPairImplicitd
 
 
-class RandomCropUniform(Randomizable):
+class RandomCropOld(Randomizable):
     """ Randomly crops a uniform region from both LR and HR images (supports 2D & 3D). """
 
     def __init__(self, patch_size_lr, up_factor, pad_size=0, input_type="3D"):
@@ -52,8 +52,8 @@ class RandomCropUniform(Randomizable):
         valid_range_lr = torch.tensor(img_L.shape[1:]) - self.size_lr
 
         # Sample a random crop position
-        crop_start_lr = np.random.randint(0, valid_range_lr[:self.spatial_dims] + 1, (self.spatial_dims,)).tolist()
-        crop_start_hr = [x * self.up_factor for x in crop_start_lr]
+        crop_start_lr = np.random.randint(0, valid_range_lr[:self.spatial_dims] + 1, (self.spatial_dims,))
+        crop_start_hr = crop_start_lr * self.up_factor
 
         # Extract patches
         if self.spatial_dims == 2:  # 2D (H, W)
@@ -79,7 +79,7 @@ class RandomCropUniform(Randomizable):
         return {'H': H.float(), 'L': L.float()}
 
 
-class RandomCropUniformPadding(Randomizable):
+class RandomCropUniform(Randomizable):
     """ Randomly crops a uniform region from both LR and HR images (supports 2D & 3D). """
 
     def __init__(self, patch_size_lr, up_factor, pad_size=0, input_type="3D"):
@@ -98,17 +98,14 @@ class RandomCropUniformPadding(Randomizable):
         return self.crop(img_dict)
 
     def crop(self, img_dict):
-        img_L = img_dict['L']
-        img_H = img_dict['H']
-
         # Compute valid cropping range
-        valid_range_lr = torch.tensor(img_L.shape[1:]) - self.size_lr
+        valid_range_lr = torch.tensor(img_dict['L'].shape[1:]) - self.size_lr
 
         # Sample a random crop position
         crop_start_lr = np.random.randint(0, valid_range_lr[:self.spatial_dims] + 1, (self.spatial_dims,))
+        crop_start_hr = crop_start_lr * self.up_factor
 
         # Get corresponding HR crop position
-        crop_start_hr = crop_start_lr * self.up_factor
         crop_center_lr = crop_start_lr + self.size_lr // 2
         crop_center_hr = crop_start_hr + self.size_hr // 2
 
@@ -116,20 +113,20 @@ class RandomCropUniformPadding(Randomizable):
         if self.spatial_dims == 2:  # 2D (H, W)
             slice_idx_lr = np.random.randint(crop_center_lr[2] - self.size_lr // 2,
                                              crop_center_lr[2] + self.size_lr // 2)  # Random slice index within lr cube
-            L = img_L[:, crop_center_lr[0] - self.size_lr // 2:crop_center_lr[0] + self.size_lr // 2,
+            L = img_dict['L'][:, crop_center_lr[0] - self.size_lr // 2:crop_center_lr[0] + self.size_lr // 2,
                          crop_center_lr[1] - self.size_lr // 2:crop_center_lr[1] + self.size_lr // 2,
                          slice_idx_lr]
 
             slice_idx_hr = slice_idx_lr * self.up_factor
-            H = img_H[:, crop_center_hr[0] - self.size_hr // 2:crop_center_hr[0] + self.size_hr // 2,
+            H = img_dict['H'][:, crop_center_hr[0] - self.size_hr // 2:crop_center_hr[0] + self.size_hr // 2,
                          crop_center_hr[1] - self.size_hr // 2:crop_center_hr[1] + self.size_hr // 2,
                          slice_idx_hr]
         else:  # 3D (H, W, D)
-            L = img_L[:, crop_center_lr[0] - self.size_lr // 2:crop_center_lr[0] + self.size_lr // 2,
+            L = img_dict['L'][:, crop_center_lr[0] - self.size_lr // 2:crop_center_lr[0] + self.size_lr // 2,
                          crop_center_lr[1] - self.size_lr // 2:crop_center_lr[1] + self.size_lr // 2,
                          crop_center_lr[2] - self.size_lr // 2:crop_center_lr[2] + self.size_lr // 2]
 
-            H = img_H[:, crop_center_hr[0] - self.size_hr // 2:crop_center_hr[0] + self.size_hr // 2,
+            H = img_dict['H'][:, crop_center_hr[0] - self.size_hr // 2:crop_center_hr[0] + self.size_hr // 2,
                          crop_center_hr[1] - self.size_hr // 2:crop_center_hr[1] + self.size_hr // 2,
                          crop_center_hr[2] - self.size_hr // 2:crop_center_hr[2] + self.size_hr // 2]
 
@@ -319,6 +316,9 @@ class BasicSRTransforms:
             self.sample_crop_pad_transform = mt.DivisiblePadd(keys=["H"], k=4, mode="constant")  # Ensure HR and LR scans have even dimensions
         # self.border_crop = CropBorderd(self.lr_foreground_threshold)
 
+        # Ensure the HR image is padded to a minimum of the patch size
+        self.min_padding = mt.SpatialPadd(keys=["H"], spatial_size=[self.size_hr, self.size_hr, self.size_hr], mode="constant", value=0)
+
         # Normalization and scaling
         if opt['dataset_opt']['norm_type'] == "scale_intensity":
             self.norm_transform = mt.ScaleIntensityd(keys=["H"], minv=0.0, maxv=1.0)
@@ -364,9 +364,7 @@ class BasicSRTransforms:
         if self.implicit:
             self.random_crop_pair = RandomCropPairImplicitd(self.size_lr, self.up_factor, self.foreground_thresh, mode)
         else:
-            if self.pad_size > 0 and self.patch_crop_type == "random_spatial":
-                self.random_crop_pair = RandomCropUniformPadding(self.size_lr, self.up_factor, self.pad_size, self.input_type)
-            elif self.patch_crop_type == "random_spatial":
+            if self.patch_crop_type == "random_spatial":
                 self.random_crop_pair = RandomCropUniform(self.size_lr, self.up_factor, self.pad_size, self.input_type)
             elif self.patch_crop_type == "random_foreground":
                 self.random_crop_pair = RandomCropForeground(self.size_lr, self.up_factor, self.foreground_thresh,
@@ -406,6 +404,7 @@ class BasicSRTransforms:
                 mt.SignalFillEmptyd(keys=["H"], replacement=0),  # Remove any NaNs
                 self.norm_transform,
                 self.sample_crop_pad_transform,
+                self.min_padding,
                 self.orientation_transform,
                 #self.pad_transform,  # pad HR
                 mt.CopyItemsd(keys=["H"], times=1, names=["L"]),

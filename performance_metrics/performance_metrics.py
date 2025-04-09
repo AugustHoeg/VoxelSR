@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchio as tio
 from monai.metrics.regression import SSIMMetric, PSNRMetric, RMSEMetric
 
-def calculate_metric(img_H, img_E, border=0, metric_fn=None):
+def calculate_metric_2D(img_H, img_E, border=0, metric_fn=None):
     metric = 0
     metric_slice_list = []
 
@@ -26,8 +26,15 @@ def calculate_metric(img_H, img_E, border=0, metric_fn=None):
 
     return metric
 
+def calculate_metric_3D(img_H, img_E, border=0, metric_fn=None):
 
-def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
+    H = img_H.float().squeeze().clamp(min=0.0, max=1.0).cpu().numpy()
+    L = img_E.float().squeeze().clamp(min=0.0, max=1.0).cpu().numpy()
+    metric = metric_fn(H, L, border=border)
+
+    return metric
+
+def compute_performance_metrics_2D(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
 
     num_patches = len(real_hi_res)
 
@@ -46,10 +53,33 @@ def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric
     # Calculate metrics for each patch
     for patch_hr, patch_lr in zip(img1, img2):
         for key in metric_fn_dict:
-            metric_val_dict[key] += calculate_metric(patch_hr, patch_lr, border=0, metric_fn=metric_fn_dict[key]) / num_patches
+            metric_val_dict[key] += calculate_metric_2D(patch_hr, patch_lr, border=0, metric_fn=metric_fn_dict[key]) / num_patches
 
     return metric_val_dict
 
+
+def compute_performance_metrics_3D(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
+
+    num_patches = len(real_hi_res)
+
+    # Rescale images if needed
+    if rescale_images:
+        rescale = tio.transforms.RescaleIntensity((0.0, 1.0))
+        img1 = torch.zeros_like(real_hi_res)
+        img2 = torch.zeros_like(fake_hi_res)
+        for patch_idx in range(num_patches):
+             img1[patch_idx] = rescale(real_hi_res[patch_idx].cpu())
+             img2[patch_idx] = rescale(fake_hi_res[patch_idx].cpu())
+    else:
+        img1 = real_hi_res
+        img2 = fake_hi_res
+
+    # Calculate metrics for each patch
+    for patch_hr, patch_lr in zip(img1, img2):
+        for key in metric_fn_dict:
+            metric_val_dict[key] += calculate_metric_3D(patch_hr, patch_lr, border=0, metric_fn=metric_fn_dict[key]) / num_patches
+
+    return metric_val_dict
 
 class PSNR_3D(nn.Module):
     def __init__(self, border=1):
