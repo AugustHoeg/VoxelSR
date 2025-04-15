@@ -102,7 +102,8 @@ class RandomCropUniform(Randomizable):
         valid_range_lr = torch.tensor(img_dict['L'].shape[1:]) - self.size_lr
 
         # Sample a random crop position
-        crop_start_lr = np.random.randint(0, valid_range_lr[:self.spatial_dims] + 1, (self.spatial_dims,))
+        #crop_start_lr = np.random.randint(0, valid_range_lr[:self.spatial_dims] + 1, (self.spatial_dims,))
+        crop_start_lr = np.random.randint(0, valid_range_lr + 1)
         crop_start_hr = crop_start_lr * self.up_factor
 
         # Get corresponding HR crop position
