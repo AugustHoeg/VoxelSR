@@ -62,7 +62,7 @@ class ModelPlain(ModelBase):
     def init_test(self, experiment_id):
         # Loads model based on the ID specified.
         # If there exists several logs using the same ID, will load latest one.
-        self.load(experiment_id)  # load model
+        self.load(experiment_id, mode='test')  # load model
         self.netG.eval()  # set eval mode
         self.define_metrics()  # define metrics
         self.define_mixed_precision()  # enable automatic mixed precision
@@ -94,7 +94,7 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     # load pre-trained G and D model
     # ----------------------------------------
-    def load(self, experiment_id=None):
+    def load(self, experiment_id=None, mode='train'):
         """
         Navigate to appropriate directory using dataset -> wandb -> run ID -> latest
         :param experiment_id: ID of the experiment to load, takes precedence over "pretrained_experiment_id" in config
@@ -102,10 +102,13 @@ class ModelPlain(ModelBase):
         """
         pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
 
-        if self.opt['train_mode'] == 'scratch':
-            pretrained_experiment_id_G = None
-        elif self.opt['train_mode'] == 'finetune' or self.opt['train_mode'] == 'resume':
-            assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
+        if mode == 'train':
+            if self.opt['train_mode'] == 'scratch':
+                pretrained_experiment_id_G = None
+            elif self.opt['train_mode'] == 'finetune' or self.opt['train_mode'] == 'resume':
+                assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
+        elif mode == 'test':
+            assert experiment_id is not None, f"Experiment ID must be specified for loading in test mode."
 
         if pretrained_experiment_id_G is not None:
             opt_files = glob.glob(os.path.join(config.ROOT_DIR + "/logs/" + "/*/" "/wandb/" + "*" + pretrained_experiment_id_G + "/files/saved_models/*G.h5"))
