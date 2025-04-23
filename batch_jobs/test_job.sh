@@ -1,13 +1,34 @@
 #!/bin/bash
-# Simple init script for Python on LSF HPC platform
-# Written by Patrick M. Jensen, patmjen@dtu.dk
-# Modified by August Hoeg, aulho@dtu.dk, 2024
+# Simple init script for Python on DTU HPC
+# Patrick M. Jensen, patmjen@dtu.dk, 2022
+# Modified by August Leander Hoeg, s173944@dtu.dk, 2023.
 
 # Configuration
-VENV_NAME=femursr         # Name of your virtualenv (default: venv)
+# This is what you should change for your setup
+VENV_NAME=venv         # Name of your virtualenv (default: venv)
 VENV_DIR=.             # Where to store your virtualenv (default: current directory)
-PYTHON_VERSION=3.11.9  # Python version (default: 3.9.19)
+PYTHON_VERSION=3.11.9  # Python version (default: 3.9.14)
 CUDA_VERSION=12.4      # CUDA version (default: 11.6)
+
+#BSUB -q gpua100
+#BSUB -J Speed
+### -- ask for number of cores (default: 1) --
+#BSUB -n 8
+### -- Select the resources: 1 gpu in exclusive process mode --
+#BSUB -gpu "num=1:mode=exclusive_process"
+### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
+#BSUB -W 8:00
+# request 40GB of system-memory rusage=40
+#BSUB -R "select[gpu40gb]"
+#BSUB -R "rusage[mem=12GB]"
+#BSUB -u "soeba@dtu.dk"
+#BSUB -B
+#BSUB -N
+#BSUB -oo batch_outputs/output_august_XtremeCT_%J.out
+#BSUB -eo batch_errors/error_august_XtremeCT_%J.out
+
+# Exits if any errors occur at any point (non-zero exit code)
+set -e
 
 # Load modules
 module load python3/$PYTHON_VERSION
@@ -33,11 +54,8 @@ then
 fi
 source "${VENV_DIR}/${VENV_NAME}/bin/activate"
 
-# Select least used GPU if any are available
-if command -v nvidia-smi &> /dev/null
-then
-    export CUDA_VISIBLE_DEVICES=$(nvidia-smi --query-gpu=memory.used,utilization.gpu,utilization.gpu,index --format=csv,noheader,nounits | sort -V | awk '{print $NF}' | head -n1)
-    echo CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES}
-fi
+echo "About to run scripts"
 
+invoke trainid MODELNAME DATASETNAME ID00000
 
+echo "Finished scripts"

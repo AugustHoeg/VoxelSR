@@ -196,12 +196,13 @@ class RandomCropForeground(Randomizable):
 class RandomCropLabel(Randomizable):
     """ Randomly crops a region from both LR and HR images based on segmentation label image (supports 2D & 3D). """
 
-    def __init__(self, patch_size_lr, up_factor, pad_size=0, input_type="3D"):
+    def __init__(self, patch_size_lr, up_factor, pad_size=0, input_type="3D", mask_mode="HR"):
         super().__init__()
         self.size_lr = patch_size_lr
         self.up_factor = up_factor
         self.size_hr = patch_size_lr * up_factor
         self.pad_size = pad_size
+        self.mask_mode = mask_mode
 
         if pad_size > 0:
             self.size_hr -= 2 * up_factor * pad_size  # Adjust HR patch size
@@ -236,13 +237,21 @@ class RandomCropLabel(Randomizable):
 
         # sample uniformly within mask image
         assert 'seg_coords' in img_dict, "seg_coords must be in img_dict for RandomCropLabel transform"
-        crop_start_hr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_hr))
+        if self.mask_mode == "HR":
+            crop_start_hr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_hr))
 
-        # Correct indexes to be divisible by up_factor
-        crop_start_lr = crop_start_hr // self.up_factor
-        crop_start_hr = crop_start_lr * self.up_factor
-        crop_start_lr += self.size_lr // 2
-        crop_start_hr += self.size_hr // 2
+            # Correct indexes to be divisible by up_factor
+            crop_start_lr = crop_start_hr // self.up_factor
+            crop_start_hr = crop_start_lr * self.up_factor
+            crop_start_lr += self.size_lr // 2
+            crop_start_hr += self.size_hr // 2
+        else:
+            crop_start_lr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_lr))
+
+            # Correct indexes to be divisible by up_factor
+            crop_start_hr = crop_start_lr * self.up_factor
+            crop_start_lr += self.size_lr // 2
+            crop_start_hr += self.size_hr // 2
 
         # Correct for padding of LR image, if any
         if self.pad_size > 0:
@@ -304,6 +313,9 @@ class BasicSRTransforms:
         self.up_factor = opt['up_factor']
 
         self.patch_crop_type = opt['dataset_opt']['patch_crop_type']
+        self.mask_mode = "HR"
+        if 'mask_mode' in opt['dataset_opt']:
+            self.mask_mode = opt['dataset_opt']['mask_mode']
         self.sample_crop_pad_type = opt['dataset_opt']['sample_crop_pad_type']
         self.foreground_thresh = self.get_foreground_threshold(opt['dataset_opt']['name'])
         self.degradation_type = opt['dataset_opt']['degradation_type']
@@ -369,6 +381,8 @@ class BasicSRTransforms:
             elif self.patch_crop_type == "random_foreground":
                 self.random_crop_pair = RandomCropForeground(self.size_lr, self.up_factor, self.foreground_thresh,
                                                              self.pad_size, self.input_type)
+            elif self.patch_crop_type == "random_label":
+                self.random_crop_pair = RandomCropLabel(self.size_lr, self.up_factor, self.pad_size, self.input_type, self.mask_mode)
 
 
     def foreground_threshold_func(self, img):
@@ -483,6 +497,28 @@ class BasicSRTransforms:
             [
                 # Deterministic Transforms
                 mt.LoadImaged(keys=["H", "L"], dtype=None),
+                mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
+                mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
+                self.sample_crop_pad_transform,
+                self.pad_transform,  # pad LR
+                # Random transforms
+                self.random_crop_pair  # Random crop pair
+
+            ]
+        )
+
+        return transforms
+
+
+    def get_transforms_FEMur(self, baseline=False):
+
+        if baseline:
+            self.random_crop_pair = mt.Identityd(keys=["H", "L"])
+
+        transforms = mt.Compose(
+            [
+                # Deterministic Transforms
+                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=None),
                 mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
                 self.sample_crop_pad_transform,

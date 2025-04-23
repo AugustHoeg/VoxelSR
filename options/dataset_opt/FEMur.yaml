@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-name: 2022_QIM_52_Bone
+name: FEMur
 dataset_type: CacheDataset
 enable_femur_padding: false
 
@@ -9,7 +9,7 @@ patch_size: 32
 channel_dim: no_channel
 norm_type: scale_intensity
 patch_crop_type: random_label
-mask_mode: HR
+mask_mode: LR
 
 # Sample crop and padding
 sample_crop_pad_type : sample_divisible_padding # "sample_divisible_padding" "sample_crop_foreground"
