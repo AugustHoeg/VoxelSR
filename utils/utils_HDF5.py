@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import os
 import skimage
 import zarr
-import multiprocessing
+#import multiprocessing
+from multiprocessing.pool import ThreadPool, Pool
 
 from utils.utils_3D_image import rescale_array_
 
@@ -33,7 +34,7 @@ def parallel_crop_slices(hdf5_path, start_depth, end_depth, start_row, end_row, 
         depth, height, width = f['/exchange/data'].shape
         print("HDF5 shape: {}".format((depth, height, width)))
 
-    with multiprocessing.Pool(n_proc) as pool:
+    with ThreadPool(n_proc) as pool:
         results_async = [
             pool.apply_async(crop_slices, args=(hdf5_path, idx, start_row, end_row, start_col, end_col, percentiles))
             for idx in range(start_depth, end_depth)
@@ -62,7 +63,7 @@ def parallel_estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_
 
     N = int(sample_percent * (end_row - start_row) * (end_col - start_col))
 
-    with multiprocessing.Pool(n_proc) as pool:
+    with ThreadPool(n_proc) as pool:
         results_async = [
             pool.apply_async(sample_from_slice, args=(hdf5_path, idx, N, start_row, end_row, start_col, end_col))
             for idx in range(0, depth, step)
