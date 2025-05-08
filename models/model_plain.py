@@ -15,9 +15,9 @@ import config
 from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
 from models.select_network import define_G
-from performance_metrics.performance_metrics import PSNR_3D, SSIM_3D, NRMSE_3D, compute_performance_metrics
 from utils import utils_3D_image
 
+from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D
 
 class ModelPlain(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -62,7 +62,7 @@ class ModelPlain(ModelBase):
     def init_test(self, experiment_id):
         # Loads model based on the ID specified.
         # If there exists several logs using the same ID, will load latest one.
-        self.load(experiment_id)  # load model
+        self.load(experiment_id, mode='test')  # load model
         self.netG.eval()  # set eval mode
         self.define_metrics()  # define metrics
         self.define_mixed_precision()  # enable automatic mixed precision
@@ -94,7 +94,7 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     # load pre-trained G and D model
     # ----------------------------------------
-    def load(self, experiment_id=None):
+    def load(self, experiment_id=None, mode='train'):
         """
         Navigate to appropriate directory using dataset -> wandb -> run ID -> latest
         :param experiment_id: ID of the experiment to load, takes precedence over "pretrained_experiment_id" in config
@@ -102,10 +102,13 @@ class ModelPlain(ModelBase):
         """
         pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
 
-        if self.opt['train_mode'] == 'scratch':
-            pretrained_experiment_id_G = None
-        elif self.opt['train_mode'] == 'finetune' or self.opt['train_mode'] == 'resume':
-            assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
+        if mode == 'train':
+            if self.opt['train_mode'] == 'scratch':
+                pretrained_experiment_id_G = None
+            elif self.opt['train_mode'] == 'finetune' or self.opt['train_mode'] == 'resume':
+                assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
+        elif mode == 'test':
+            assert experiment_id is not None, f"Experiment ID must be specified for loading in test mode."
 
         if pretrained_experiment_id_G is not None:
             opt_files = glob.glob(os.path.join(config.ROOT_DIR + "/logs/" + "/*/" "/wandb/" + "*" + pretrained_experiment_id_G + "/files/saved_models/*G.h5"))
@@ -288,17 +291,15 @@ class ModelPlain(ModelBase):
         self.metric_fn_dict = {}
         self.metric_val_dict = {}
 
-        from utils.utils_image import calculate_ssim_2D, calculate_nrmse_2D, calculate_psnr_2D
-
         if "psnr" in self.opt_train['performance_metrics']:
             self.metric_val_dict["psnr"] = 0.0
-            self.metric_fn_dict["psnr"] = calculate_psnr_2D
+            self.metric_fn_dict["psnr"] = PSNR_3D()
         if "ssim" in self.opt_train['performance_metrics']:
             self.metric_val_dict["ssim"] = 0.0
-            self.metric_fn_dict["ssim"] = calculate_ssim_2D
+            self.metric_fn_dict["ssim"] = SSIM_3D()
         if "nrmse" in self.opt_train['performance_metrics']:
             self.metric_val_dict["nrmse"] = 0.0
-            self.metric_fn_dict["nrmse"] = calculate_nrmse_2D
+            self.metric_fn_dict["nrmse"] = NRMSE_3D()
 
 
     # ----------------------------------------
@@ -355,18 +356,13 @@ class ModelPlain(ModelBase):
 
     def define_visual_eval(self):
 
-        patch_size_hr = self.opt['dataset_opt']['patch_size_hr']
-
         if self.opt['input_type'] == '2D':
             from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
 
         elif self.opt['input_type'] == '3D':
             from utils.utils_3D_image import ImageComparisonTool3D as comparison_tool
 
-            if self.opt['model_opt']['model_architecture'] == 'MTVNet':
-                patch_size_hr = int(self.opt['model_opt']['netG']['context_sizes'][-1]*self.opt['up_factor'])
-
-        self.comparison_tool = comparison_tool(patch_size_hr=patch_size_hr,
+        self.comparison_tool = comparison_tool(patch_size_hr=self.opt['dataset_opt']['patch_size_hr'],
                                                upscaling_methods=["tio_nearest", "tio_linear"],
                                                unnorm=self.opt['dataset_opt']['norm_type'] == 'znormalization',
                                                div_max=self.opt['dataset_opt']['norm_type'] == 'znormalization',
@@ -598,11 +594,8 @@ class ModelPlain(ModelBase):
 
     def validation(self):
 
-        #self.netG.eval()
-
         # Forward G
-        with torch.inference_mode():
-            self.netG_forward()
+        self.netG_forward()
 
         # Compute loss for G
         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
@@ -612,27 +605,34 @@ class ModelPlain(ModelBase):
 
         # Compute performance metrics
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        if self.opt['input_type'] == '2D':
+            compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        elif self.opt['input_type'] == '3D':
+            compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
     def validation_amp(self):
 
-        #self.netG.eval()
+        # Forward G
+        self.netG_forward()
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            # Forward G
-            self.netG_forward()
-
             # Compute loss for G
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
-        # Compute performance metrics
-        rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-
+        if False:
+            # Compute performance metrics
+            rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+            if self.opt['input_type'] == '2D':
+                compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+            elif self.opt['input_type'] == '3D':
+                compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        else:
+            rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+            compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
         # self.netG.eval()
@@ -711,9 +711,9 @@ class ModelPlain(ModelBase):
     def current_visuals(self, need_H=True):
         out_dict = OrderedDict()
 
-        lr_size = self.opt['patch_size_hr'] / self.opt['up_factor']
-        if lr_size < self.opt['patch_size_lr']:
-            out_dict['L'] = crop_center(self.L, center_size=lr_size).detach()[0].float().cpu()
+        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
+        if self.opt['dataset_opt']['patch_size'] > roi:
+            out_dict['L'] = crop_center(self.L, center_size=roi).detach()[0].float().cpu()
         else:
             out_dict['L'] = self.L.detach()[0].float().cpu()
 
@@ -725,7 +725,7 @@ class ModelPlain(ModelBase):
     def log_comparison_image(self, img_dict, current_step):
 
         grid_image = self.comparison_tool.get_comparison_image(img_dict)
-        figure_string = "SR comparison: %s, step %d, %dx upscaling" % (self.opt['model_architecture'], current_step, self.opt['up_factor'])
+        figure_string = "SR comparison: %s, step %d, %dx upscaling" % (self.opt['model_opt']['model_architecture'], current_step, self.opt['up_factor'])
 
         if self.opt['run_type'] == "HOME PC":
             height, width = grid_image.shape[:2]

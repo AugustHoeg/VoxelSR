@@ -1,7 +1,6 @@
 import os
 import glob
 from data.train_transforms import BasicSRTransforms
-from data.baseline_transforms import Resize_baseline_transformsV2
 
 class Dataset_IXI():
     def __init__(self, opt):

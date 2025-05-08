@@ -1,0 +1,43 @@
+{
+  "os": "Linux-6.1.132-1.el9.elrepo.x86_64-x86_64-with-glibc2.34",
+  "python": "CPython 3.11.9",
+  "startedAt": "2025-04-03T07:32:10.106874Z",
+  "program": "/work3/s173944/Python/venv_srgan/VoxelSR/train.py",
+  "codePath": "train.py",
+  "git": {
+    "remote": "https://github.com/AugustHoeg/VoxelSR.git",
+    "commit": "94deed7d1b1dae64bdb7c3b7a8e1a3f08544bb47"
+  },
+  "email": "aulho@dtu.dk",
+  "root": "logs/Binning_Brain",
+  "host": "n-62-12-85",
+  "username": "aulho",
+  "executable": "/work3/s173944/Python/venv_srgan/basic_framework/venv/bin/python",
+  "codePathLocal": "train.py",
+  "cpu_count": 64,
+  "cpu_count_logical": 64,
+  "gpu": "NVIDIA H100 PCIe",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "76817485824",
+      "used": "6141480960"
+    }
+  },
+  "memory": {
+    "total": "810830020608"
+  },
+  "cpu": {
+    "count": 64,
+    "countLogical": 64
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA H100 PCIe",
+      "memoryTotal": "85520809984",
+      "cudaCores": 14592,
+      "architecture": "Hopper"
+    }
+  ],
+  "cudaVersion": "12.8"
+}

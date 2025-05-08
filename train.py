@@ -11,8 +11,6 @@ from monai.data import SmartCacheDataset, DataLoader
 import config
 from utils.load_options import save_yaml, init_options
 
-from torch.profiler import profile, ProfilerActivity
-
 def train_model(model, opt, iterations, validation_iterations, train_loader, test_loader, print_status=True):
     """
     Train function for universal SR model.
@@ -127,7 +125,6 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
                                 model.validation_amp()
                             else:
                                 model.validation()
-
                     # -------------------------------
                     # 12) Record early stopping
                     # -------------------------------
@@ -260,9 +257,8 @@ def main(opt: DictConfig):
 
     time_start = time.time()
 
-    from torch.profiler import profile, tensorboard_trace_handler
-
     if opt['run_profile']:
+        from torch.profiler import profile, tensorboard_trace_handler, ProfilerActivity
         with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
                      profile_memory=True,
                      record_shapes=False,

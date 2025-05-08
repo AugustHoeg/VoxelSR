@@ -285,7 +285,7 @@ def main(opt: DictConfig):
 
     if opt['model_opt']['model_architecture'] == "MTVNet":
         patch_size = opt['dataset_opt']['patch_size']
-        center_size = opt['netG']['context_sizes'][-1]  # New 
+        center_size = opt['model_opt']['netG']['context_sizes'][-1]  # New
         context_width = (patch_size - center_size) // 2
         patch_size_hr = center_size * opt['up_factor']
     else:

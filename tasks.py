@@ -1,4 +1,13 @@
 from invoke import task
+from datetime import datetime
+@task
+def git(ctx, message=None):
+    """Run the testing script."""
+    ctx.run(f"git add .")
+    if message is None:
+        message = "update"
+    ctx.run(f"git commit -m '{message}'")
+    ctx.run(f"git push origin main")
 
 @task
 def template(ctx):
@@ -14,10 +23,19 @@ def requirements(ctx):
 @task
 def train(ctx, model, dataset):
     """Run the training script."""
-    ctx.run(f"python train.py -cn {model} dataset_opt={dataset}")
+    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset}")
+
+@task
+def trainid(ctx, model, dataset, experiment_id):
+    """Run the training script."""
+    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id}")
 
 @task
 def test(ctx, experiment_id):
     """Run the testing script."""
-    ctx.run(f"python test.py experiment_id={experiment_id}")
+    ctx.run(f"python -u test.py experiment_id={experiment_id}")
 
+@task
+def testid(ctx, model, dataset, experiment_id):
+    """Run the testing script."""
+    ctx.run(f"python -u test.py experiment_id={model}_{dataset}_{experiment_id}")

@@ -11,12 +11,12 @@ norm_type: scale_intensity
 patch_crop_type: random_label
 
 # Sample crop and padding
-sample_crop_pad_type : sample_divisible_padding  # "sample_divisible_padding" "sample_crop_foreground"
+sample_crop_pad_type : sample_divisible_padding # "sample_divisible_padding" "sample_crop_foreground"
 
 # Data augmentation
 degradation_type: resize # "resize" "kspace_trunc"
 trunc_factor: 3.0 # k-space truncation factor
-kspace_trunc_dim: 2 # k-space truncation dimension
+kspace_trunc_dim: 3 # k-space truncation dimension
 
 downsampling_method: linear
 blur_method: monai_gaussian_blur
