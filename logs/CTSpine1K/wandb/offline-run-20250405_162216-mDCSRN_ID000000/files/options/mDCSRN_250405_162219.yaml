@@ -1,0 +1,128 @@
+train_opt:
+  iterations: 1000
+  validation_iterations: 250
+  epochs: 0
+  mixed_precision: BF16
+  num_accum_steps_G: 1
+  early_stop_patience: 100
+  G_loss_weights:
+    MSE: 0
+    L1: 1.0
+    BCE_Logistic: 0
+    BCE: 0
+  E_decay: 0
+  G_optimizer_type: adam
+  G_optimizer_lr: 0.0001
+  G_optimizer_wd: 0
+  G_optimizer_clipgrad: 10
+  G_optimizer_reuse: true
+  G_scheduler_type: MultiStepLR
+  G_scheduler_milestones:
+  - 50000
+  - 70000
+  - 85000
+  - 95000
+  G_scheduler_gamma: 0.5
+  G_regularizer_orthstep: null
+  G_regularizer_clipstep: null
+  G_param_strict: true
+  E_param_strict: true
+  manual_seed: 8338
+  checkpoint_test: 100
+  checkpoint_save: 500
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
+  performance_metrics:
+  - psnr
+  - ssim
+  - nrmse
+  upscaling_methods:
+  - tio_nearest
+  - tio_bspline
+dataset_opt:
+  name: CTSpine1K
+  dataset_type: CacheDataset
+  enable_femur_padding: false
+  n_channels: 1
+  patch_size: 32
+  channel_dim: no_channel
+  norm_type: scale_intensity
+  patch_crop_type: random_spatial
+  sample_crop_pad_type: sample_crop_foreground
+  degradation_type: resize
+  trunc_factor: 3.0
+  kspace_trunc_dim: 2
+  downsampling_method: linear
+  blur_method: 3d_gaussian_blur
+  blur_sigma: 1.0
+  train_dataset_params:
+    patches_per_batch: 1
+    replace_rate: 0.1
+    cache_num: 2000
+    init_workers: 2
+    replace_workers: 2
+  train_dataloader_params:
+    dataloader_shuffle: false
+    dataloader_batch_size: 1
+    num_load_workers: 1
+    persist_workers: true
+    pin_memory: false
+  test_dataset_params:
+    patches_per_batch: 1
+    replace_rate: 0.1
+    cache_num: 2000
+    init_workers: 2
+    replace_workers: 2
+  test_dataloader_params:
+    dataloader_shuffle: false
+    dataloader_batch_size: 1
+    num_load_workers: 0
+    persist_workers: false
+    pin_memory: false
+  patch_size_hr: 64
+model_opt:
+  model: plain
+  model_architecture: mDCSRN
+  netG:
+    net_type: mDCSRN
+    description: 'Multi-Level Densely Connected Network from paper: MRI Super-Resolution
+      with GAN and 3D Multi-Level DenseNet: Smaller, Faster, and Better'
+    in_channels: 1
+    k_factor: 12
+    k_size: 3
+    num_dense_blocks: 8
+    num_dense_units: 4
+    upsample_method: pixelshuffle3D
+    use_checkpoint: false
+    init_type: default
+    init_bn_type: uniform
+    init_gain: 0.2
+task: superresolution
+run_profile: false
+wandb_mode: offline
+wandb_entity: aulho
+wandb_project: CTSpine1K
+experiment_id: mDCSRN_ID000000
+run_name: mDCSRN_000
+note: Note
+train_mode: scratch
+gpu_ids:
+- 0
+dist: false
+cluster: DTU_HPC
+input_type: 3D
+up_factor: 2
+save_model: true
+save_time: 36
+path:
+  root: superresolution
+  pretrained_experiment_id: mDCSRN_ID000000
+  pretrained_netE: null
+opt_path: C:\Users\aulho\OneDrive - Danmarks Tekniske Universitet\Dokumenter\Github\VoxelSR\options\mDCSRN.yaml
+rank: 0
+world_size: 1
+total_gpu_mem: 6.441926656
+run_type: HOME PC
+find_unused_parameters: true
+use_static_graph: false
+num_gpu: 1
