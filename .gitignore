@@ -5,8 +5,18 @@
 
 __pycache__/
 
+batch_errors/**
+batch_outputs/**
+batch_jobs/**
+
+dxchange/
+
+old_versions/
+
 saved_models/
 figures/**
+results/**
+options/
 
 LAM_3d/saved_image_cubes/**
 LAM_3d/saved_models/**
@@ -24,4 +34,8 @@ logs/HCP_1200/**
 logs/IXI/**
 logs/BRATS2023/**
 logs/KIRBY21/**
+logs/CTSpine1K/**
+logs/LITS/**
+logs/LIDC_IDRI/**
+logs/VoDaSuRe/**
 !*.gitkeep
