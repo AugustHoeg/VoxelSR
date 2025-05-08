@@ -1,0 +1,15 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: RRDBNet3D
+netG:
+  net_type: RRDBNet3D
+  description: "Residual in Residual Dense Net 3D"
+  in_channels: 1
+  num_channels: 64
+  num_blocks: 12
+  upsample_method: nearest
+  use_checkpoint: true
+
+  init_type: kaiming_normal
+  init_bn_type: uniform
+  init_gain: 0.1

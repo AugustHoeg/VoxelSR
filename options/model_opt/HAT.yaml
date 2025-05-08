@@ -1,0 +1,26 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: HAT
+netG:
+  net_type: HAT
+  description: "HAT"
+  in_channels: 1
+
+  window_size: 16
+  compress_ratio: 3
+  squeeze_factor: 30
+  conv_scale: 0.01
+  overlap_ratio: 0.5
+  img_range: 1.0
+  depths: [6, 6, 6, 6, 6, 6]
+  embed_dim: 180
+  num_heads: [6, 6, 6, 6, 6, 6]
+  mlp_ratio: 2
+  resi_connection: 1conv
+
+  upsample_method: pixelshuffle # only supports "pixelshuffle"
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform   # "uniform" | "constant"
+  init_gain: 0.2

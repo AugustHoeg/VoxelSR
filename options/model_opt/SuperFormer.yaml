@@ -1,0 +1,28 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: SuperFormer
+netG:
+  net_type: SuperFormer
+  description: "3D Transformer-based SR model from SuperFormer paper"
+
+  window_size: 8  # 7 does not work
+  img_range: 1.0
+  depths: [6, 6, 6]      # Default is [6, 6, 6]
+  embed_dim: 252         # Default is 252, tested 126 working, 192 working, 128 not working
+  num_heads: [6, 6, 6]   # Default is [6, 6, 6]
+  mlp_ratio: 2
+  upsampler: pixelshuffle3D  # Custom upsampling: "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
+
+  resi_connection: 1conv
+  ape: false
+  rpb: true
+  output_type: direct
+  num_feat: 126           # Default is 126
+  patch_size: 2  # 2
+
+  use_checkpoint: true
+
+  init_type: default
+  init_bn_type: null  # "uniform" | "constant"
+  init_gain: 0.0
+

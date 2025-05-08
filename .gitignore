@@ -16,7 +16,6 @@ old_versions/
 saved_models/
 figures/**
 results/**
-options/**
 
 LAM_3d/saved_image_cubes/**
 LAM_3d/saved_models/**

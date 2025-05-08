@@ -1,0 +1,22 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: RCAN
+netG:
+  net_type: RCAN
+  description: "RCAN"
+  in_channels: 1
+
+  num_feat: 64
+  num_group: 10
+  num_block: 20
+  squeeze_factor: 16
+  res_scale: 1
+  img_range: 1.0
+  rgb_mean: [ 0.4488, 0.4371, 0.4040 ]
+
+  upsample_method: pixelshuffle  # only supports "pixelshuffle"
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform      # "uniform" | "constant"
+  init_gain: 0.2
