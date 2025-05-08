@@ -69,8 +69,15 @@ class Dataset_VoDaSuRe():
         self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/HR_chunks/", "*.npy")))
         self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/LR_chunks/", "*.npy")))
 
+        synthetic = True
+        if synthetic:
+            self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/HR_chunks_down4/", "*.npy")))
+
         self.HR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/HR_chunks/", "*.npy")))
         self.LR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/LR_chunks/", "*.npy")))
+
+        if synthetic:
+            self.LR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/HR_chunks_down4/", "*.npy")))
 
         # images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "4x_*.npy")))
         # images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "LFOV_*.npy")))
