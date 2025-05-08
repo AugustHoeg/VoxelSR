@@ -38,4 +38,6 @@ logs/CTSpine1K/**
 logs/LITS/**
 logs/LIDC_IDRI/**
 logs/VoDaSuRe/**
+logs/Binning_Brain/**
+logs/Binning_Bone/**
 !*.gitkeep
