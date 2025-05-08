@@ -30,14 +30,16 @@ class RandomCropOld(Randomizable):
         ''' # For debugging
         import matplotlib.pyplot as plt
         import torch.nn.functional as F
+        slicehr = img_dict['H'][0, 380//2, :, :]
+        slicelr = img_dict['L'][0, 95//2, :, :]
+        slicelrup = F.interpolate(img_dict['L'].unsqueeze(0), scale_factor=self.up_factor, mode='trilinear', align_corners=True)[0, 0, 380//2, :, :]
         plt.figure()
         plt.subplot(1,3,1)
-        plt.imshow(H[0], cmap='gray')
+        plt.imshow(slicehr, cmap='gray')
         plt.subplot(1,3,2)
-        plt.imshow(L[0], cmap='gray')
+        plt.imshow(slicelr, cmap='gray')
         plt.subplot(1,3,3)
-        upscaled_L = F.interpolate(L.unsqueeze(0), scale_factor=self.up_factor, mode='bilinear', align_corners=True)
-        plt.imshow(H[0]-upscaled_L[0,0], cmap='gray')
+        plt.imshow(slicehr-slicelrup, cmap='gray')
         plt.show()
         '''
 
