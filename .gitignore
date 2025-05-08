@@ -5,8 +5,17 @@
 
 __pycache__/
 
+batch_errors/**
+batch_outputs/**
+batch_jobs/**
+
+dxchange/
+
+old_versions/
+
 saved_models/
 figures/**
+results/**
 
 LAM_3d/saved_image_cubes/**
 LAM_3d/saved_models/**
