@@ -69,7 +69,7 @@ class Dataset_VoDaSuRe():
         self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/HR_chunks/", "*.npy")))
         self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/LR_chunks/", "*.npy")))
 
-        synthetic = True
+        synthetic = False
         if synthetic:
             self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/HR_chunks_down4/", "*.npy")))
 
