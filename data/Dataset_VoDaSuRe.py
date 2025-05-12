@@ -6,6 +6,35 @@ import torch
 import monai.transforms as mt
 from data.train_transforms import BasicSRTransforms
 
+def remove_paths(paths_list, filter_strings):
+
+    """
+    Filters a list of paths to only include those that contain a specific string.
+
+    Args:
+        paths (list): List of paths to filter.
+        filter_string (str): String to filter the paths by.
+
+    Returns:
+        list: Filtered list of paths containing the specified string.
+    """
+    if not isinstance(filter_strings, list):
+        filter_strings = [filter_strings]
+
+    # if paths_list is a list of lists, filter each sublist
+    if isinstance(paths_list, list) and all(isinstance(paths, list) for paths in paths_list):
+        for i in range(len(paths_list)):
+            for string in filter_strings:
+                paths_list[i] = [path for path in paths_list[i] if string in path]
+    else:
+        # if paths_list is a list of paths, filter it directly
+        for string in filter_strings:
+            paths_list = [path for path in paths_list if string in path]
+        return paths_list
+
+    return paths_list
+
+
 def save_seg_coords(masks, opt, base_path):
     divisible_pad = 4 if opt['up_factor'] % 2 == 0 else 3   # Added adaptive divisible padding
     mask_transforms = mt.Compose(
@@ -47,37 +76,44 @@ def split_paths(paths, test_paths):
 
 class Dataset_VoDaSuRe():
     def __init__(self, opt, apply_split=True):
+
+        self.synthetic = "Synthetic" in opt['dataset_opt']['synthetic']
+
         self.apply_split = apply_split
         self.opt = opt
 
         self.patch_size_hr = opt['dataset_opt']['patch_size_hr']
         self.patch_size_lr = opt['dataset_opt']['patch_size']
         self.degradation_type = opt['dataset_opt']['degradation_type']
+        exclude_paths = []
 
         if opt['run_type'] == "HOME PC":
             self.data_path = "../Vedrana_master_project/3D_datasets/datasets/VoDaSuRe/"  # "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
             base_path = "../Vedrana_master_project/3D_datasets/datasets/VoDaSuRe/"
+            exclude_paths = []  # ['Bamboo_A_bin1x1', 'Elm_A_bin1x1']
         elif opt['cluster'] == "TITANS":
             pass
         else:  # Default is opt['cluster'] = "DTU_HPC"
             self.data_path = "../3D_datasets/datasets/VoDaSuRe/" # "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
             base_path = "../3D_datasets/datasets/VoDaSuRe/"
-            test_paths = []
-
-        # /train/Bamboo_A/HR_chunks/
+            exclude_paths = []  # ['Bamboo_A_bin1x1', 'Elm_A_bin1x1']
 
         self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/HR_chunks/", "*.npy")))
         self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/LR_chunks/", "*.npy")))
 
-        synthetic = False
-        if synthetic:
+        if self.synthetic:
             self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/HR_chunks_down4/", "*.npy")))
 
         self.HR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/HR_chunks/", "*.npy")))
         self.LR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/LR_chunks/", "*.npy")))
 
-        if synthetic:
+        if self.synthetic:
             self.LR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/HR_chunks_down4/", "*.npy")))
+
+        self.HR_train = remove_paths(self.HR_train, exclude_paths)
+        self.LR_train = remove_paths(self.LR_train, exclude_paths)
+        self.HR_test = remove_paths(self.HR_test, exclude_paths)
+        self.LR_test = remove_paths(self.LR_test, exclude_paths)
 
         # images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "4x_*.npy")))
         # images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "LFOV_*.npy")))
