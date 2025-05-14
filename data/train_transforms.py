@@ -512,6 +512,7 @@ class BasicSRTransforms:
 
         return transforms
 
+
     def get_transforms_FEMur(self, baseline=False):
 
         if baseline:
@@ -525,11 +526,11 @@ class BasicSRTransforms:
         transforms = mt.Compose(
             [
                 # Deterministic Transforms
-                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=None),
+                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=np.float16),
                 mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
                 self.norm_transform,
-                #self.sample_crop_pad_transform,
+                #self.sample_crop_pad_transform,            #Commented out since FEMur dataset might have odd sizes (HR/LR pairs not necessarily 4:1 in size)
                 self.pad_transform,  # pad LR
                 # Random transforms
                 self.random_crop_pair  # Random crop pair

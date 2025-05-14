@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: CTSpine1K       # Default dataset config
+  - dataset_opt: FEMur       # Default dataset config
   - model_opt: RRDBNet3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 

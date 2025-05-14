@@ -326,7 +326,7 @@ def main(opt: DictConfig):
         # Assume batch_size of baseline_loader is always one (only reconstruct one sample in the dataset at a time)
         img_H = baseline_batch['H'][0]
         img_L = baseline_batch['L'][0]
-        img_E = torch.zeros_like(img_H)
+        #img_E = torch.zeros_like(img_H)
         del baseline_batch
 
         overlap_lr = border
