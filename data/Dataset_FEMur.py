@@ -73,6 +73,10 @@ class Dataset_FEMur():
         images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "CAD*.nii")))
         masks = sorted(glob.glob(os.path.join(self.data_path, "MS/", "CAD[0-9][0-9][0-9].npy")))
 
+        print("images_HR", images_HR)
+        print("images_LR", images_LR)
+        print("masks", masks)
+
         #print("masks", masks)
 
         save_femur_seg_coords(masks, opt, base_path)
