@@ -363,7 +363,8 @@ def main(opt: DictConfig):
                         sr_patch = upscale_slices(model, patches_batch_lr['L']['data'], patches_batch_hr['H']['data'], batch_size_2D=16)
                 else:
                     model.feed_data({'H': patches_batch_hr['H'], 'L': patches_batch_lr['L']}, add_key='data')
-                    model.netG_forward()
+                    #model.netG_forward()
+                    model.E = torch.randn_like(patches_batch_hr['H'])  # Dummy tensor for testing
                     sr_patch = model.E
                 locations_hr = patches_batch_hr['location']
                 #aggregator_hr.add_batch(sr_patch, locations_hr)
