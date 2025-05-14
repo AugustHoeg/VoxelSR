@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: CTSpine1K       # Default dataset config
+  - dataset_opt: FEMur       # Default dataset config
   - model_opt: RRDBNet3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
@@ -52,13 +52,13 @@ dataset_opt:
   patch_size: 32
 
   train_dataloader_params:
-    dataloader_batch_size: 8
+    dataloader_batch_size: 1
     num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 8
+    dataloader_batch_size: 1
     num_load_workers: 0
     persist_workers: false
     pin_memory: false

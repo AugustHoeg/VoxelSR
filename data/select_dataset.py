@@ -21,6 +21,15 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         baseline_transforms = dataset.get_baseline_transforms(mode="test")
         data_path = dataset.data_path
 
+    elif dataset_name == "FEMur":
+        from data.Dataset_FEMur import Dataset_FEMur as D
+        dataset = D(opt, apply_split)
+        train_files, test_files = dataset.get_file_paths()
+        transforms = dataset.get_transforms(mode="train")
+        test_transforms = dataset.get_transforms(mode="test")
+        baseline_transforms = dataset.get_baseline_transforms(mode="test")
+        data_path = dataset.data_path
+
     elif dataset_name == "Binning_Brain":
         from data.Dataset_Binning_Brain import Dataset_Binning_Brain as D
         dataset = D(opt, apply_split)

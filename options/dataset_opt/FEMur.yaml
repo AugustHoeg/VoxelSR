@@ -48,7 +48,7 @@ test_dataset_params:
 
 test_dataloader_params:
   dataloader_shuffle: false
-  dataloader_batch_size: 5
+  dataloader_batch_size: 2      #5
   num_load_workers: 0
   persist_workers: false
   pin_memory: false
