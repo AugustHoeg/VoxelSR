@@ -49,6 +49,7 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
+  synthetic: true
   patch_size: 32
 
   train_dataloader_params:
