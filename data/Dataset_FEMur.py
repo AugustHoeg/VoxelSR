@@ -65,8 +65,8 @@ class Dataset_FEMur():
         else:  # Default is opt['cluster'] = "DTU_HPC"
             #self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
             #base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            self.data_path = "../3D_datasets/datasets/FEMur/CAD*"
-            base_path = "../3D_datasets/datasets/FEMur"
+            self.data_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/FEMur/CAD*"
+            base_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/FEMur"
             test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
 
         images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD*.npy")))
