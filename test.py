@@ -364,7 +364,7 @@ def main(opt: DictConfig):
                 else:
                     model.feed_data({'H': patches_batch_hr['H'], 'L': patches_batch_lr['L']}, add_key='data')
                     #model.netG_forward()
-                    model.E = torch.randn_like(patches_batch_hr['L']['data'])  # Dummy tensor for testing
+                    model.E = torch.randn_like(patches_batch_lr['L']['data'])  # Dummy tensor for testing
                     sr_patch = model.E
                 locations_hr = patches_batch_hr['location']
                 #aggregator_hr.add_batch(sr_patch, locations_hr)
