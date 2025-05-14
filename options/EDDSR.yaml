@@ -14,10 +14,10 @@ run_profile: false
 
 # WandB parameters
 wandb_mode: online
-wandb_entity: soeba
+wandb_entity: phialosophy
 wandb_project: ${dataset_opt.name}_${up_factor} # <--- change project
-experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000005
+run_name: ${model_opt.model_architecture}_0005
 note: Note
 
 # GPU configuration

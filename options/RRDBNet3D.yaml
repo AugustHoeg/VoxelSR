@@ -14,14 +14,14 @@ run_profile: false
 
 # WandB parameters
 wandb_mode: online
-wandb_entity: soeba
+wandb_entity: phialosophy
 wandb_project: ${dataset_opt.name}_${up_factor} # <--- change project
-experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000006
+run_name: ${model_opt.model_architecture}_0006
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -31,12 +31,12 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: RRDBNet3D_ps32_4x_ID005597_L1_100K  # "RRDBNet3D_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
+  iterations: 50000
   validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 10000
@@ -46,6 +46,7 @@ train_opt:
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+  G_optimizer_reuse: false      # set to False when finetuning on new dataset
 
 # Overwrite default dataset parameters
 dataset_opt:

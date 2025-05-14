@@ -57,21 +57,21 @@ class Dataset_FEMur():
         if opt['run_type'] == "HOME PC":
             self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
             base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            test_paths = ["CAD045.tif", "CAD050.tif", "CAD053.tif", "CAD045.npy", "CAD050.npy", "CAD053.npy", "CAD045.nii", "CAD050.nii", "CAD053.nii"]
+            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
         elif opt['cluster'] == "TITANS":
             self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
             base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            test_paths = ["CAD045.tif", "CAD050.tif", "CAD053.tif", "CAD045.npy", "CAD050.npy", "CAD053.npy", "CAD045.nii", "CAD050.nii", "CAD053.nii"]
+            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
         else:  # Default is opt['cluster'] = "DTU_HPC"
             self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
             base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            test_paths = ["CAD045.tif", "CAD050.tif", "CAD053.tif", "CAD045.npy", "CAD050.npy", "CAD053.npy", "CAD045.nii", "CAD050.nii", "CAD053.nii"]
+            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
 
-        images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD*.tif")))
+        images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD*.npy")))
         images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "CAD*.nii")))
         masks = sorted(glob.glob(os.path.join(self.data_path, "MS/", "CAD[0-9][0-9][0-9].npy")))
 
-        print("masks", masks)
+        #print("masks", masks)
 
         save_femur_seg_coords(masks, opt, base_path)
         seg_coords = sorted(glob.glob(os.path.join(self.data_path, "MS/seg_coords/", "CAD*.npy")))

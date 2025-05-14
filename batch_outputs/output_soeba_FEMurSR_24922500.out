@@ -1,0 +1,61 @@
+About to run scripts
+Experiment ID: RRDBNet3D_FEMur_ID000006
+Cuda is available True
+Cuda device count 1
+Cuda current device 0
+Cuda device name NVIDIA A100-PCIE-40GB
+Number of trainable parameters, G 26109441
+Training model [ModelPlain] is created.
+['/work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/saved_models/50000_G.h5', '/work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/saved_models/40000_G.h5', '/work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/saved_models/30000_G.h5', '/work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/saved_models/20000_G.h5', '/work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/saved_models/10000_G.h5']
+Loading pretrained model for G [/work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/saved_models/50000_G.h5] ...
+HR femur train CAD046.npy
+LR femur train CAD046.nii
+Mask train CAD046.npy
+Segmentation coords train CAD046.npy
+HR femur train CAD047.npy
+LR femur train CAD047.nii
+Mask train CAD047.npy
+Segmentation coords train CAD047.npy
+HR femur train CAD049.npy
+LR femur train CAD049.nii
+Mask train CAD049.npy
+Segmentation coords train CAD049.npy
+HR femur train CAD051.npy
+LR femur train CAD051.nii
+Mask train CAD051.npy
+Segmentation coords train CAD051.npy
+HR femur train CAD052.npy
+LR femur train CAD052.nii
+Mask train CAD052.npy
+Segmentation coords train CAD052.npy
+HR femur train CAD053.npy
+LR femur train CAD053.nii
+Mask train CAD053.npy
+Segmentation coords train CAD053.npy
+HR femur train CAD055.npy
+LR femur train CAD055.nii
+Mask train CAD055.npy
+Segmentation coords train CAD055.npy
+HR femur train CAD057.npy
+LR femur train CAD057.nii
+Mask train CAD057.npy
+Segmentation coords train CAD057.npy
+HR femur train CAD060.npy
+LR femur train CAD060.nii
+Mask train CAD060.npy
+Segmentation coords train CAD060.npy
+HR femur test CAD045.npy
+LR femur test CAD045.nii
+Mask test CAD045.npy
+Segmentation coords test CAD045.npy
+HR femur test CAD050.npy
+LR femur test CAD050.nii
+Mask test CAD050.npy
+Segmentation coords test CAD050.npy
+HR femur test CAD054.npy
+LR femur test CAD054.nii
+Mask test CAD054.npy
+Segmentation coords test CAD054.npy
+Dataset FEMur of type MonaiDataset is created.
+Saving image comparisons to: /work3/soeba/FEMurSR/logs/FEMur/wandb/run-20250506_160150-RRDBNet3D_FEMur_ID000006/files/media/images/
+RUNNING TEST

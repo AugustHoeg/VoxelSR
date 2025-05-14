@@ -343,6 +343,8 @@ def main(opt: DictConfig):
         patch_loader_hr = tio.SubjectsLoader(grid_sampler_hr, batch_size=test_batch_size)
         aggregator_hr = tio.inference.GridAggregator(grid_sampler_hr, overlap_mode='hann')
 
+        print("Patch loader length", len(patch_loader_lr))
+
         model.netG.eval()
         i = 0
         time_in = time.time()
@@ -363,7 +365,9 @@ def main(opt: DictConfig):
                         sr_patch = upscale_slices(model, patches_batch_lr['L']['data'], patches_batch_hr['H']['data'], batch_size_2D=16)
                 else:
                     model.feed_data({'H': patches_batch_hr['H'], 'L': patches_batch_lr['L']}, add_key='data')
+                    print("Input patch size:", patches_batch_lr['L'].shape)
                     model.netG_forward()
+                    #model.E = torch.randn_like(patches_batch_hr['H'])
                     sr_patch = model.E
                 locations_hr = patches_batch_hr['location']
                 aggregator_hr.add_batch(sr_patch, locations_hr)
@@ -373,6 +377,8 @@ def main(opt: DictConfig):
         img_H = img_H.unsqueeze(0)
         img_L = img_L.unsqueeze(0)
         img_E = img_E.unsqueeze(0)
+        np.save(baseline_dataset.samples[sample_idx],img_E)
+        print(f'Saved whole test volume at: {baseline_dataset.samples[sample_idx]}')
 
         print(i)
         time_end = time.time()

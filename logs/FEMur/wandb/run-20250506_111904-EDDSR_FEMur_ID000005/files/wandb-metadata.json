@@ -1,0 +1,47 @@
+{
+  "os": "Linux-6.1.134-1.el9.elrepo.x86_64-x86_64-with-glibc2.34",
+  "python": "CPython 3.11.9",
+  "startedAt": "2025-05-06T09:19:04.668364Z",
+  "args": [
+    "-cn",
+    "EDDSR",
+    "dataset_opt=FEMur"
+  ],
+  "program": "/work3/soeba/FEMurSR/train.py",
+  "codePath": "train.py",
+  "git": {
+    "remote": "git@github.com:AugustHoeg/VoxelSR.git",
+    "commit": "31ec2c5cc002ee797c182eba6c39b85f6da97694"
+  },
+  "email": "soeba@dtu.dk",
+  "root": "logs/FEMur",
+  "host": "n-62-12-24",
+  "executable": "/work3/soeba/FEMurSR/femursr/bin/python",
+  "codePathLocal": "train.py",
+  "cpu_count": 32,
+  "cpu_count_logical": 32,
+  "gpu": "NVIDIA A100-PCIE-40GB",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "76817485824",
+      "used": "6187634688"
+    }
+  },
+  "memory": {
+    "total": "810713112576"
+  },
+  "cpu": {
+    "count": 32,
+    "countLogical": 32
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA A100-PCIE-40GB",
+      "memoryTotal": "42949672960",
+      "cudaCores": 6912,
+      "architecture": "Ampere"
+    }
+  ],
+  "cudaVersion": "12.8"
+}

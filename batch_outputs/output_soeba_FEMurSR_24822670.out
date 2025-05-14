@@ -1,0 +1,1472 @@
+About to run scripts
+export CUDA_VISIBLE_DEVICES=0
+run type: HPC.
+number of GPUs is: 1
+Random seed: 8338 for rank 0
+Monai set_deterministic enabled
+RUNNING TRAIN MODE: SCRATCH
+Cuda is available True
+Cuda device count 1
+Cuda current device 0
+Cuda device name NVIDIA A100-PCIE-40GB
+Pass this initialization! Initialization was done during network definition!
+Number of trainable parameters, G 1671529
+Training model [ModelPlain] is created.
+HR femur train CAD046.npy
+LR femur train CAD046.nii
+Mask train CAD046.npy
+Segmentation coords train CAD046.npy
+HR femur train CAD047.npy
+LR femur train CAD047.nii
+Mask train CAD047.npy
+Segmentation coords train CAD047.npy
+HR femur train CAD049.npy
+LR femur train CAD049.nii
+Mask train CAD049.npy
+Segmentation coords train CAD049.npy
+HR femur train CAD051.npy
+LR femur train CAD051.nii
+Mask train CAD051.npy
+Segmentation coords train CAD051.npy
+HR femur train CAD052.npy
+LR femur train CAD052.nii
+Mask train CAD052.npy
+Segmentation coords train CAD052.npy
+HR femur train CAD053.npy
+LR femur train CAD053.nii
+Mask train CAD053.npy
+Segmentation coords train CAD053.npy
+HR femur train CAD055.npy
+LR femur train CAD055.nii
+Mask train CAD055.npy
+Segmentation coords train CAD055.npy
+HR femur train CAD057.npy
+LR femur train CAD057.nii
+Mask train CAD057.npy
+Segmentation coords train CAD057.npy
+HR femur train CAD060.npy
+LR femur train CAD060.nii
+Mask train CAD060.npy
+Segmentation coords train CAD060.npy
+HR femur test CAD045.npy
+LR femur test CAD045.nii
+Mask test CAD045.npy
+Segmentation coords test CAD045.npy
+HR femur test CAD050.npy
+LR femur test CAD050.nii
+Mask test CAD050.npy
+Segmentation coords test CAD050.npy
+HR femur test CAD054.npy
+LR femur test CAD054.nii
+Mask test CAD054.npy
+Segmentation coords test CAD054.npy
+Dataset FEMur of type CacheDataset is created.
+G gradient norm: 778.290283203125
+G gradient norm: 406.2073974609375
+G gradient norm: 13.676848411560059
+G gradient norm: 2700.58837890625
+G gradient norm: 307.4316711425781
+G gradient norm: 36.15586471557617
+G gradient norm: 1738.401123046875
+G gradient norm: 880.5036010742188
+G gradient norm: 513.4027709960938
+TODO update these four lines for use with wandb
+Iteration: 9/1000
+Max memory reserved: 3.045 Gb / 42.407 Gb
+G gradient norm: 1612.32373046875
+G gradient norm: 2452.333984375
+G gradient norm: 1015.9478149414062
+G gradient norm: 2231.20068359375
+G gradient norm: 3743.760009765625
+G gradient norm: 2449.52978515625
+G gradient norm: 1028.8238525390625
+G gradient norm: 11127.0029296875
+G gradient norm: 19094.744140625
+TODO update these four lines for use with wandb
+Iteration: 18/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 37851.421875
+G gradient norm: 16137.529296875
+G gradient norm: 7700.88623046875
+G gradient norm: 20428.09375
+G gradient norm: 27598.701171875
+G gradient norm: 39836.02734375
+G gradient norm: 15757.5263671875
+G gradient norm: 28879.798828125
+G gradient norm: 11376.052734375
+TODO update these four lines for use with wandb
+Iteration: 27/1000
+Max memory reserved: 2.036 Gb / 42.407 Gb
+G gradient norm: 99745.953125
+G gradient norm: 112279.609375
+G gradient norm: 42623.84765625
+G gradient norm: 158517.09375
+G gradient norm: 20988.533203125
+G gradient norm: 15556.9501953125
+G gradient norm: 21079.17578125
+G gradient norm: 24589.693359375
+G gradient norm: 64479.7734375
+TODO update these four lines for use with wandb
+Iteration: 36/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 476793.46875
+G gradient norm: 107801.0234375
+G gradient norm: 44842.13671875
+G gradient norm: 113377.3828125
+G gradient norm: 628417.625
+G gradient norm: 480216.21875
+G gradient norm: 101730.0625
+G gradient norm: 233114.140625
+G gradient norm: 676635.4375
+TODO update these four lines for use with wandb
+Iteration: 45/1000
+Max memory reserved: 2.036 Gb / 42.407 Gb
+G gradient norm: 68087.09375
+G gradient norm: 47741.6015625
+G gradient norm: 13772.578125
+G gradient norm: 16108.591796875
+G gradient norm: 37492.5390625
+G gradient norm: 45955.109375
+G gradient norm: 90322.171875
+G gradient norm: 246126.1875
+G gradient norm: 100505.8515625
+TODO update these four lines for use with wandb
+Iteration: 54/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 67001.921875
+G gradient norm: 70054.078125
+G gradient norm: 1647.684326171875
+G gradient norm: 223854.546875
+G gradient norm: 75600.1875
+G gradient norm: 54483.546875
+G gradient norm: 1724.9407958984375
+G gradient norm: 14121.7802734375
+G gradient norm: 116479.96875
+TODO update these four lines for use with wandb
+Iteration: 63/1000
+Max memory reserved: 2.036 Gb / 42.407 Gb
+G gradient norm: 15717.3388671875
+G gradient norm: 64696.890625
+G gradient norm: 820.5845947265625
+G gradient norm: 42076.02734375
+G gradient norm: 77751.765625
+G gradient norm: 60875.91796875
+G gradient norm: 183928.953125
+G gradient norm: 31246.99609375
+G gradient norm: 52349.30859375
+TODO update these four lines for use with wandb
+Iteration: 72/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 58970.5859375
+G gradient norm: 1010.8468017578125
+G gradient norm: 155108.75
+G gradient norm: 52738.35546875
+G gradient norm: 6024.98681640625
+G gradient norm: 40872.3828125
+G gradient norm: 1693.5675048828125
+G gradient norm: 4273.7353515625
+G gradient norm: 441657.46875
+TODO update these four lines for use with wandb
+Iteration: 81/1000
+Max memory reserved: 2.036 Gb / 42.407 Gb
+G gradient norm: 326041.40625
+G gradient norm: 480012.375
+G gradient norm: 32002.65625
+G gradient norm: 345130.40625
+G gradient norm: 6687.0400390625
+G gradient norm: 21109.158203125
+G gradient norm: 30741.38671875
+G gradient norm: 44607.18359375
+G gradient norm: 232370.96875
+TODO update these four lines for use with wandb
+Iteration: 90/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 5232.7705078125
+G gradient norm: 50857.99609375
+G gradient norm: 20101.837890625
+G gradient norm: 492738.0625
+G gradient norm: 45036.13671875
+G gradient norm: 10097.2177734375
+G gradient norm: 59422.22265625
+G gradient norm: 266274.71875
+G gradient norm: 239211.359375
+TODO update these four lines for use with wandb
+Iteration: 99/1000
+Max memory reserved: 2.036 Gb / 42.407 Gb
+G gradient norm: 15400.521484375
+Iteration 100 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.04281042855706676
+Average nrmse 3.086121605307448
+Saving comparison: test image
+G gradient norm: 40825.84765625
+G gradient norm: 4092.84912109375
+G gradient norm: 1020.33154296875
+G gradient norm: 101750.3359375
+G gradient norm: 83559.453125
+G gradient norm: 22465.3046875
+G gradient norm: 320783.4375
+G gradient norm: 84191.0390625
+TODO update these four lines for use with wandb
+Iteration: 108/1000
+Max memory reserved: 2.135 Gb / 42.407 Gb
+G gradient norm: 71335.515625
+G gradient norm: 88198.1953125
+G gradient norm: 6018.91162109375
+G gradient norm: 27886.404296875
+G gradient norm: 4145.7373046875
+G gradient norm: 32715.591796875
+G gradient norm: 50676.00390625
+G gradient norm: 265234.8125
+G gradient norm: 361258.4375
+TODO update these four lines for use with wandb
+Iteration: 117/1000
+Max memory reserved: 2.030 Gb / 42.407 Gb
+G gradient norm: 15044.697265625
+G gradient norm: 15501.8505859375
+G gradient norm: 31979.982421875
+G gradient norm: 12015.7021484375
+G gradient norm: 57581.6796875
+G gradient norm: 11551.0244140625
+G gradient norm: 46618.89453125
+G gradient norm: 400237.15625
+G gradient norm: 21116.443359375
+TODO update these four lines for use with wandb
+Iteration: 126/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 69219.75
+G gradient norm: 136074.203125
+G gradient norm: 75464.3359375
+G gradient norm: 53702.7734375
+G gradient norm: 63370.734375
+G gradient norm: 2995.4013671875
+G gradient norm: 40002.70703125
+G gradient norm: 20713.322265625
+G gradient norm: 65783.4609375
+TODO update these four lines for use with wandb
+Iteration: 135/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 18499.431640625
+G gradient norm: 88109.9921875
+G gradient norm: 2021.9451904296875
+G gradient norm: 58885.5
+G gradient norm: 10889.5673828125
+G gradient norm: 98745.0078125
+G gradient norm: 166011.796875
+G gradient norm: 43857.046875
+G gradient norm: 38658.4609375
+TODO update these four lines for use with wandb
+Iteration: 144/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 28469.77734375
+G gradient norm: 28465.65234375
+G gradient norm: 22770.52734375
+G gradient norm: 158234.1875
+G gradient norm: 196776.78125
+G gradient norm: 20797.8671875
+G gradient norm: 93479.7265625
+G gradient norm: 51494.56640625
+G gradient norm: 48533.4453125
+TODO update these four lines for use with wandb
+Iteration: 153/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 163791.5
+G gradient norm: 55179.86328125
+G gradient norm: 1525.8492431640625
+G gradient norm: 26966.671875
+G gradient norm: 25643.119140625
+G gradient norm: 349111.6875
+G gradient norm: 81642.8515625
+G gradient norm: 22589.283203125
+G gradient norm: 43880.61328125
+TODO update these four lines for use with wandb
+Iteration: 162/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 81712.046875
+G gradient norm: 5038.01416015625
+G gradient norm: 11536.1806640625
+G gradient norm: 96441.234375
+G gradient norm: 83598.8046875
+G gradient norm: 57498.1796875
+G gradient norm: 17752.5
+G gradient norm: 10113.2587890625
+G gradient norm: 7361.1826171875
+TODO update these four lines for use with wandb
+Iteration: 171/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 43382.17578125
+G gradient norm: 50111.10546875
+G gradient norm: 33327.08984375
+G gradient norm: 55271.91796875
+G gradient norm: 4245.8916015625
+G gradient norm: 45307.19921875
+G gradient norm: 45053.328125
+G gradient norm: 44923.87109375
+G gradient norm: 242473.109375
+TODO update these four lines for use with wandb
+Iteration: 180/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 24553.2890625
+G gradient norm: 7893.923828125
+G gradient norm: 4869.4775390625
+G gradient norm: 375080.8125
+G gradient norm: 26932.4140625
+G gradient norm: 90454.484375
+G gradient norm: 122527.5859375
+G gradient norm: 42692.9296875
+G gradient norm: 42677.90234375
+TODO update these four lines for use with wandb
+Iteration: 189/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 195486.125
+G gradient norm: 83625.40625
+G gradient norm: 125844.25
+G gradient norm: 10114.0947265625
+G gradient norm: 53772.17578125
+G gradient norm: 248692.53125
+G gradient norm: 192744.640625
+G gradient norm: 42965.75
+G gradient norm: 418831.8125
+TODO update these four lines for use with wandb
+Iteration: 198/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 60964.47265625
+G gradient norm: 42666.71484375
+Iteration 200 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.04017513477147611
+Average nrmse 2.3049504593306898
+Saving comparison: test image
+G gradient norm: 42322.234375
+G gradient norm: 29713.58203125
+G gradient norm: 8610.306640625
+G gradient norm: 26800.19140625
+G gradient norm: 38026.96875
+G gradient norm: 25893.833984375
+G gradient norm: 54262.59765625
+TODO update these four lines for use with wandb
+Iteration: 207/1000
+Max memory reserved: 2.106 Gb / 42.407 Gb
+G gradient norm: 13141.162109375
+G gradient norm: 93762.1875
+G gradient norm: 107024.7578125
+G gradient norm: 79052.2109375
+G gradient norm: 68386.84375
+G gradient norm: 54706.3359375
+G gradient norm: 346571.375
+G gradient norm: 126266.203125
+G gradient norm: 232826.34375
+TODO update these four lines for use with wandb
+Iteration: 216/1000
+Max memory reserved: 2.030 Gb / 42.407 Gb
+G gradient norm: 64118.10546875
+G gradient norm: 113409.6875
+G gradient norm: 7779.54248046875
+G gradient norm: 68153.5625
+G gradient norm: 44703.04296875
+G gradient norm: 168367.71875
+G gradient norm: 89656.3671875
+G gradient norm: 16389.380859375
+G gradient norm: 24336.689453125
+TODO update these four lines for use with wandb
+Iteration: 225/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 21527.673828125
+G gradient norm: 74365.6953125
+G gradient norm: 50068.85546875
+G gradient norm: 13439.4892578125
+G gradient norm: 57976.328125
+G gradient norm: 71729.546875
+G gradient norm: 7713.65869140625
+G gradient norm: 149491.78125
+G gradient norm: 180059.40625
+TODO update these four lines for use with wandb
+Iteration: 234/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 169338.296875
+G gradient norm: 85074.046875
+G gradient norm: 21122.55859375
+G gradient norm: 567274.4375
+G gradient norm: 17183.693359375
+G gradient norm: 25537.58203125
+G gradient norm: 35021.73828125
+G gradient norm: 128313.3359375
+G gradient norm: 526790.0
+TODO update these four lines for use with wandb
+Iteration: 243/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 599995.25
+G gradient norm: 34089.625
+G gradient norm: 51355.26171875
+G gradient norm: 386678.46875
+G gradient norm: 50797.08203125
+G gradient norm: 6329.0927734375
+G gradient norm: 2644.257568359375
+G gradient norm: 11076.1767578125
+G gradient norm: 59244.5078125
+TODO update these four lines for use with wandb
+Iteration: 252/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 43307.23828125
+G gradient norm: 334659.46875
+G gradient norm: 40761.33984375
+G gradient norm: 215528.59375
+G gradient norm: 72290.3046875
+G gradient norm: 18457.0703125
+G gradient norm: 149564.421875
+G gradient norm: 29563.072265625
+G gradient norm: 74138.5234375
+TODO update these four lines for use with wandb
+Iteration: 261/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 27412.076171875
+G gradient norm: 21483.220703125
+G gradient norm: 59231.640625
+G gradient norm: 45588.7734375
+G gradient norm: 55861.6953125
+G gradient norm: 89694.5078125
+G gradient norm: 54167.171875
+G gradient norm: 424040.90625
+G gradient norm: 234597.3125
+TODO update these four lines for use with wandb
+Iteration: 270/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 270748.9375
+G gradient norm: 230427.390625
+G gradient norm: 30940.544921875
+G gradient norm: 179334.5625
+G gradient norm: 21323.40234375
+G gradient norm: 162324.96875
+G gradient norm: 27782.482421875
+G gradient norm: 19996.673828125
+G gradient norm: 75498.953125
+TODO update these four lines for use with wandb
+Iteration: 279/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 27722.107421875
+G gradient norm: 34716.7265625
+G gradient norm: 311523.875
+G gradient norm: 65044.20703125
+G gradient norm: 74518.4296875
+G gradient norm: 13079.900390625
+G gradient norm: 11951.7841796875
+G gradient norm: 466981.375
+G gradient norm: 43083.22265625
+TODO update these four lines for use with wandb
+Iteration: 288/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 47351.4453125
+G gradient norm: 32458.265625
+G gradient norm: 11634.7041015625
+G gradient norm: 14300.3994140625
+G gradient norm: 83609.7890625
+G gradient norm: 104878.1328125
+G gradient norm: 471481.59375
+G gradient norm: 141660.640625
+G gradient norm: 242824.890625
+TODO update these four lines for use with wandb
+Iteration: 297/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 696311.4375
+G gradient norm: 234475.046875
+G gradient norm: 15430.2041015625
+Iteration 300 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.043062699555508406
+Average nrmse 0.9565704508739359
+Saving comparison: test image
+G gradient norm: 696780.5
+G gradient norm: 67911.4609375
+G gradient norm: 332770.03125
+G gradient norm: 39706.9453125
+G gradient norm: 78043.1953125
+G gradient norm: 342394.1875
+TODO update these four lines for use with wandb
+Iteration: 306/1000
+Max memory reserved: 2.106 Gb / 42.407 Gb
+G gradient norm: 83485.4140625
+G gradient norm: 25397.71484375
+G gradient norm: 33429.04296875
+G gradient norm: 348081.8125
+G gradient norm: 27242.142578125
+G gradient norm: 66864.2890625
+G gradient norm: 90463.4921875
+G gradient norm: 88612.6328125
+G gradient norm: 60074.3046875
+TODO update these four lines for use with wandb
+Iteration: 315/1000
+Max memory reserved: 2.030 Gb / 42.407 Gb
+G gradient norm: 82821.796875
+G gradient norm: 54697.2890625
+G gradient norm: 15282.1865234375
+G gradient norm: 266732.15625
+G gradient norm: 35271.03125
+G gradient norm: 296469.46875
+G gradient norm: 85126.953125
+G gradient norm: 21286.03515625
+G gradient norm: 203516.078125
+TODO update these four lines for use with wandb
+Iteration: 324/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 20105.515625
+G gradient norm: 211744.140625
+G gradient norm: 30147.658203125
+G gradient norm: 73022.9921875
+G gradient norm: 40480.56640625
+G gradient norm: 63600.453125
+G gradient norm: 14642.337890625
+G gradient norm: 54256.984375
+G gradient norm: 77856.453125
+TODO update these four lines for use with wandb
+Iteration: 333/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 23328.83984375
+G gradient norm: 41496.1875
+G gradient norm: 28721.37109375
+G gradient norm: 44236.83203125
+G gradient norm: 69863.796875
+G gradient norm: 309249.125
+G gradient norm: 205060.546875
+G gradient norm: 159760.375
+G gradient norm: 47205.015625
+TODO update these four lines for use with wandb
+Iteration: 342/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 63776.6484375
+G gradient norm: 16787.83984375
+G gradient norm: 58937.8046875
+G gradient norm: 212457.3125
+G gradient norm: 40143.29296875
+G gradient norm: 9169.107421875
+G gradient norm: 23583.3515625
+G gradient norm: 335605.03125
+G gradient norm: 425636.59375
+TODO update these four lines for use with wandb
+Iteration: 351/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 47467.2421875
+G gradient norm: 20539.1796875
+G gradient norm: 406363.84375
+G gradient norm: 30373.640625
+G gradient norm: 107835.4765625
+G gradient norm: 10770.09375
+G gradient norm: 10606.5625
+G gradient norm: 89844.28125
+G gradient norm: 93797.6953125
+TODO update these four lines for use with wandb
+Iteration: 360/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 89235.109375
+G gradient norm: 84445.2421875
+G gradient norm: 43133.93359375
+G gradient norm: 53022.25390625
+G gradient norm: 67148.25
+G gradient norm: 47147.7578125
+G gradient norm: 55134.6875
+G gradient norm: 25635.4765625
+G gradient norm: 76594.203125
+TODO update these four lines for use with wandb
+Iteration: 369/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 55173.55078125
+G gradient norm: 27566.470703125
+G gradient norm: 51203.328125
+G gradient norm: 60791.22265625
+G gradient norm: 152387.125
+G gradient norm: 43488.58203125
+G gradient norm: 74648.8671875
+G gradient norm: 108176.1875
+G gradient norm: 397979.46875
+TODO update these four lines for use with wandb
+Iteration: 378/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 14468.79296875
+G gradient norm: 40049.5546875
+G gradient norm: 42927.6015625
+G gradient norm: 389717.03125
+G gradient norm: 43717.71875
+G gradient norm: 169437.875
+G gradient norm: 31307.86328125
+G gradient norm: 483016.28125
+G gradient norm: 16571.552734375
+TODO update these four lines for use with wandb
+Iteration: 387/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 28153.67578125
+G gradient norm: 328640.03125
+G gradient norm: 38925.40625
+G gradient norm: 497129.125
+G gradient norm: 27750.3828125
+G gradient norm: 269047.1875
+G gradient norm: 83939.96875
+G gradient norm: 56755.09765625
+G gradient norm: 22099.09375
+TODO update these four lines for use with wandb
+Iteration: 396/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 87853.0546875
+G gradient norm: 115913.421875
+G gradient norm: 41255.0390625
+G gradient norm: 361336.75
+Iteration 400 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.03424535568269765
+Average nrmse 1.1516757880647976
+Saving comparison: test image
+G gradient norm: 24428.216796875
+G gradient norm: 19461.298828125
+G gradient norm: 53151.6171875
+G gradient norm: 165813.609375
+G gradient norm: 34742.2421875
+TODO update these four lines for use with wandb
+Iteration: 405/1000
+Max memory reserved: 2.106 Gb / 42.407 Gb
+G gradient norm: 96700.765625
+G gradient norm: 42431.30859375
+G gradient norm: 32040.408203125
+G gradient norm: 20566.052734375
+G gradient norm: 66493.984375
+G gradient norm: 24248.822265625
+G gradient norm: 22940.91015625
+G gradient norm: 127243.4296875
+G gradient norm: 122058.0078125
+TODO update these four lines for use with wandb
+Iteration: 414/1000
+Max memory reserved: 2.030 Gb / 42.407 Gb
+G gradient norm: 174103.375
+G gradient norm: 24738.5859375
+G gradient norm: 23149.97265625
+G gradient norm: 14846.63671875
+G gradient norm: 56729.09765625
+G gradient norm: 118436.1015625
+G gradient norm: 71055.8671875
+G gradient norm: 114834.859375
+G gradient norm: 52346.984375
+TODO update these four lines for use with wandb
+Iteration: 423/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 62506.1328125
+G gradient norm: 43764.48828125
+G gradient norm: 49223.7421875
+G gradient norm: 34400.109375
+G gradient norm: 68220.640625
+G gradient norm: 33085.828125
+G gradient norm: 58850.62109375
+G gradient norm: 30496.93359375
+G gradient norm: 37510.30078125
+TODO update these four lines for use with wandb
+Iteration: 432/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 76735.921875
+G gradient norm: 187761.09375
+G gradient norm: 37752.0078125
+G gradient norm: 411584.125
+G gradient norm: 23916.08984375
+G gradient norm: 25761.828125
+G gradient norm: 306361.09375
+G gradient norm: 372947.46875
+G gradient norm: 155996.0
+TODO update these four lines for use with wandb
+Iteration: 441/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 67741.5390625
+G gradient norm: 38951.3515625
+G gradient norm: 23553.650390625
+G gradient norm: 57060.4921875
+G gradient norm: 37751.35546875
+G gradient norm: 198810.0625
+G gradient norm: 14489.7666015625
+G gradient norm: 159972.703125
+G gradient norm: 20911.98046875
+TODO update these four lines for use with wandb
+Iteration: 450/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 53607.71875
+G gradient norm: 56058.1484375
+G gradient norm: 62581.953125
+G gradient norm: 16317.34375
+G gradient norm: 42565.56640625
+G gradient norm: 187124.765625
+G gradient norm: 48474.2265625
+G gradient norm: 66120.34375
+G gradient norm: 360454.5625
+TODO update these four lines for use with wandb
+Iteration: 459/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 52833.36328125
+G gradient norm: 44534.53515625
+G gradient norm: 70563.6640625
+G gradient norm: 29418.453125
+G gradient norm: 64739.58203125
+G gradient norm: 92699.359375
+G gradient norm: 54358.328125
+G gradient norm: 50737.10546875
+G gradient norm: 33784.6015625
+TODO update these four lines for use with wandb
+Iteration: 468/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 76019.375
+G gradient norm: 32227.76171875
+G gradient norm: 56244.51171875
+G gradient norm: 84798.9296875
+G gradient norm: 49942.64453125
+G gradient norm: 30256.451171875
+G gradient norm: 44955.74609375
+G gradient norm: 47313.32421875
+G gradient norm: 28213.544921875
+TODO update these four lines for use with wandb
+Iteration: 477/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 40480.33984375
+G gradient norm: 35860.5625
+G gradient norm: 53015.8984375
+G gradient norm: 57951.44921875
+G gradient norm: 77836.328125
+G gradient norm: 52631.6796875
+G gradient norm: 80717.328125
+G gradient norm: 56188.59765625
+G gradient norm: 116580.1328125
+TODO update these four lines for use with wandb
+Iteration: 486/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 65869.109375
+G gradient norm: 48380.53515625
+G gradient norm: 81169.46875
+G gradient norm: 546659.1875
+G gradient norm: 73541.1171875
+G gradient norm: 151650.71875
+G gradient norm: 72480.875
+G gradient norm: 300930.75
+G gradient norm: 116756.53125
+TODO update these four lines for use with wandb
+Iteration: 495/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 413618.0625
+G gradient norm: 92521.109375
+G gradient norm: 52419.94921875
+G gradient norm: 40155.703125
+G gradient norm: 269684.78125
+Iteration 500 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.04146775788947208
+Average nrmse 0.4864103078257804
+Saving comparison: test image
+G gradient norm: 28499.89453125
+G gradient norm: 50314.89453125
+G gradient norm: 118143.3125
+G gradient norm: 39879.3515625
+TODO update these four lines for use with wandb
+Iteration: 504/1000
+Max memory reserved: 2.124 Gb / 42.407 Gb
+G gradient norm: 67969.96875
+G gradient norm: 116976.671875
+G gradient norm: 87565.9921875
+G gradient norm: 457181.6875
+G gradient norm: 74541.703125
+G gradient norm: 481071.03125
+G gradient norm: 297188.65625
+G gradient norm: 175310.609375
+G gradient norm: 26046.94921875
+TODO update these four lines for use with wandb
+Iteration: 513/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 332754.4375
+G gradient norm: 265001.375
+G gradient norm: 51187.6171875
+G gradient norm: 54881.765625
+G gradient norm: 78565.828125
+G gradient norm: 189424.796875
+G gradient norm: 175558.3125
+G gradient norm: 45088.32421875
+G gradient norm: 122646.234375
+TODO update these four lines for use with wandb
+Iteration: 522/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 505367.53125
+G gradient norm: 50337.3203125
+G gradient norm: 85970.6015625
+G gradient norm: 288394.75
+G gradient norm: 88402.6796875
+G gradient norm: 372241.21875
+G gradient norm: 186120.90625
+G gradient norm: 72327.4453125
+G gradient norm: 99486.40625
+TODO update these four lines for use with wandb
+Iteration: 531/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 62283.6796875
+G gradient norm: 26508.875
+G gradient norm: 128428.8203125
+G gradient norm: 184615.984375
+G gradient norm: 51846.5
+G gradient norm: 49335.42578125
+G gradient norm: 79112.3203125
+G gradient norm: 482723.4375
+G gradient norm: 580119.0
+TODO update these four lines for use with wandb
+Iteration: 540/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 129917.703125
+G gradient norm: 407463.375
+G gradient norm: 81607.25
+G gradient norm: 540426.0625
+G gradient norm: 70719.2265625
+G gradient norm: 65732.0703125
+G gradient norm: 73071.140625
+G gradient norm: 242230.6875
+G gradient norm: 135014.4375
+TODO update these four lines for use with wandb
+Iteration: 549/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 117683.9765625
+G gradient norm: 58227.109375
+G gradient norm: 56651.71484375
+G gradient norm: 687499.5
+G gradient norm: 67437.40625
+G gradient norm: 44440.8203125
+G gradient norm: 52939.65234375
+G gradient norm: 115807.25
+G gradient norm: 48706.58203125
+TODO update these four lines for use with wandb
+Iteration: 558/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 112740.3515625
+G gradient norm: 287052.5
+G gradient norm: 106409.890625
+G gradient norm: 99704.5703125
+G gradient norm: 81370.515625
+G gradient norm: 39953.71484375
+G gradient norm: 55556.265625
+G gradient norm: 162370.03125
+G gradient norm: 130663.7265625
+TODO update these four lines for use with wandb
+Iteration: 567/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 671665.875
+G gradient norm: 27902.37109375
+G gradient norm: 69466.46875
+G gradient norm: 62083.46484375
+G gradient norm: 190937.84375
+G gradient norm: 470959.625
+G gradient norm: 151829.625
+G gradient norm: 619457.0
+G gradient norm: 195708.4375
+TODO update these four lines for use with wandb
+Iteration: 576/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 115266.1796875
+G gradient norm: 123684.4140625
+G gradient norm: 101989.90625
+G gradient norm: 136028.390625
+G gradient norm: 277675.09375
+G gradient norm: 220240.25
+G gradient norm: 61266.23046875
+G gradient norm: 442306.53125
+G gradient norm: 88839.953125
+TODO update these four lines for use with wandb
+Iteration: 585/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 79473.546875
+G gradient norm: 60580.1796875
+G gradient norm: 49509.4375
+G gradient norm: 88905.3203125
+G gradient norm: 135613.015625
+G gradient norm: 155285.453125
+G gradient norm: 29572.6015625
+G gradient norm: 466168.03125
+G gradient norm: 82014.1640625
+TODO update these four lines for use with wandb
+Iteration: 594/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 85012.703125
+G gradient norm: 171554.109375
+G gradient norm: 47011.81640625
+G gradient norm: 252576.4375
+G gradient norm: 113412.71875
+G gradient norm: 55214.390625
+Iteration 600 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.033025905525588026
+Average nrmse 0.7762831721235725
+Saving comparison: test image
+G gradient norm: 64877.765625
+G gradient norm: 149620.953125
+G gradient norm: 80930.5546875
+TODO update these four lines for use with wandb
+Iteration: 603/1000
+Max memory reserved: 2.124 Gb / 42.407 Gb
+G gradient norm: 90059.734375
+G gradient norm: 60845.86328125
+G gradient norm: 233127.0625
+G gradient norm: 186595.734375
+G gradient norm: 50197.1875
+G gradient norm: 77270.6796875
+G gradient norm: 204070.25
+G gradient norm: 179085.21875
+G gradient norm: 69923.109375
+TODO update these four lines for use with wandb
+Iteration: 612/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 214815.234375
+G gradient norm: 54362.15234375
+G gradient norm: 27099.931640625
+G gradient norm: 56278.30859375
+G gradient norm: 72987.9921875
+G gradient norm: 194932.34375
+G gradient norm: 45493.84765625
+G gradient norm: 154214.734375
+G gradient norm: 70967.3828125
+TODO update these four lines for use with wandb
+Iteration: 621/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 251561.6875
+G gradient norm: 309532.875
+G gradient norm: 39353.078125
+G gradient norm: 159408.390625
+G gradient norm: 68916.2109375
+G gradient norm: 69556.7421875
+G gradient norm: 72588.6953125
+G gradient norm: 168257.90625
+G gradient norm: 421196.21875
+TODO update these four lines for use with wandb
+Iteration: 630/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 98456.2734375
+G gradient norm: 542402.5625
+G gradient norm: 54041.40625
+G gradient norm: 358447.1875
+G gradient norm: 99968.9609375
+G gradient norm: 141924.140625
+G gradient norm: 28711.412109375
+G gradient norm: 162908.578125
+G gradient norm: 30074.982421875
+TODO update these four lines for use with wandb
+Iteration: 639/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 168083.265625
+G gradient norm: 71442.1171875
+G gradient norm: 209162.90625
+G gradient norm: 59409.65234375
+G gradient norm: 192491.84375
+G gradient norm: 58876.62890625
+G gradient norm: 35330.9296875
+G gradient norm: 101741.359375
+G gradient norm: 59018.42578125
+TODO update these four lines for use with wandb
+Iteration: 648/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 137060.296875
+G gradient norm: 43452.91796875
+G gradient norm: 39390.58203125
+G gradient norm: 655518.4375
+G gradient norm: 558538.1875
+G gradient norm: 264153.71875
+G gradient norm: 63349.75390625
+G gradient norm: 76536.3046875
+G gradient norm: 257362.296875
+TODO update these four lines for use with wandb
+Iteration: 657/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 391350.5625
+G gradient norm: 683704.4375
+G gradient norm: 87282.6640625
+G gradient norm: 187999.328125
+G gradient norm: 136647.0625
+G gradient norm: 16376.666015625
+G gradient norm: 91075.828125
+G gradient norm: 95466.6484375
+G gradient norm: 33124.046875
+TODO update these four lines for use with wandb
+Iteration: 666/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 58424.359375
+G gradient norm: 362945.28125
+G gradient norm: 46638.7890625
+G gradient norm: 424409.875
+G gradient norm: 67222.234375
+G gradient norm: 345148.5625
+G gradient norm: 26614.431640625
+G gradient norm: 166948.796875
+G gradient norm: 53640.16796875
+TODO update these four lines for use with wandb
+Iteration: 675/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 79613.4765625
+G gradient norm: 83568.7734375
+G gradient norm: 60889.3125
+G gradient norm: 54086.3359375
+G gradient norm: 83479.0546875
+G gradient norm: 14292.1240234375
+G gradient norm: 65511.90625
+G gradient norm: 264817.625
+G gradient norm: 160574.046875
+TODO update these four lines for use with wandb
+Iteration: 684/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 224787.5
+G gradient norm: 279547.4375
+G gradient norm: 107052.8203125
+G gradient norm: 688753.3125
+G gradient norm: 143843.40625
+G gradient norm: 45236.2734375
+G gradient norm: 55731.3125
+G gradient norm: 73869.9140625
+G gradient norm: 154534.296875
+TODO update these four lines for use with wandb
+Iteration: 693/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 492722.84375
+G gradient norm: 16594.83203125
+G gradient norm: 92289.375
+G gradient norm: 144427.671875
+G gradient norm: 9219.5478515625
+G gradient norm: 98078.546875
+G gradient norm: 43138.375
+Iteration 700 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.03334197140864882
+Average nrmse 0.5380530537051313
+Saving comparison: test image
+G gradient norm: 629736.0
+G gradient norm: 50220.2890625
+TODO update these four lines for use with wandb
+Iteration: 702/1000
+Max memory reserved: 2.124 Gb / 42.407 Gb
+G gradient norm: 122866.828125
+G gradient norm: 57711.578125
+G gradient norm: 50375.2265625
+G gradient norm: 76074.3984375
+G gradient norm: 301938.84375
+G gradient norm: 36396.0859375
+G gradient norm: 26972.79296875
+G gradient norm: 293928.71875
+G gradient norm: 26626.373046875
+TODO update these four lines for use with wandb
+Iteration: 711/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 295848.84375
+G gradient norm: 236637.84375
+G gradient norm: 61590.640625
+G gradient norm: 101927.8828125
+G gradient norm: 60508.4375
+G gradient norm: 493307.90625
+G gradient norm: 250241.109375
+G gradient norm: 124761.6796875
+G gradient norm: 257469.9375
+TODO update these four lines for use with wandb
+Iteration: 720/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 71413.2265625
+G gradient norm: 150088.53125
+G gradient norm: 92964.0625
+G gradient norm: 167174.3125
+G gradient norm: 446038.84375
+G gradient norm: 45107.40625
+G gradient norm: 33723.93359375
+G gradient norm: 113963.421875
+G gradient norm: 41329.19921875
+TODO update these four lines for use with wandb
+Iteration: 729/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 577836.25
+G gradient norm: 51411.5546875
+G gradient norm: 145601.765625
+G gradient norm: 166777.578125
+G gradient norm: 77138.875
+G gradient norm: 92934.765625
+G gradient norm: 43300.25390625
+G gradient norm: 491552.8125
+G gradient norm: 40208.98046875
+TODO update these four lines for use with wandb
+Iteration: 738/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 115293.34375
+G gradient norm: 66064.2890625
+G gradient norm: 275878.0625
+G gradient norm: 761523.875
+G gradient norm: 88614.4921875
+G gradient norm: 52793.57421875
+G gradient norm: 61010.80859375
+G gradient norm: 318196.875
+G gradient norm: 29599.09765625
+TODO update these four lines for use with wandb
+Iteration: 747/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 131235.90625
+G gradient norm: 44159.69140625
+G gradient norm: 72927.3984375
+G gradient norm: 77567.640625
+G gradient norm: 51058.390625
+G gradient norm: 64653.859375
+G gradient norm: 35205.3515625
+G gradient norm: 499226.8125
+G gradient norm: 14459.3662109375
+TODO update these four lines for use with wandb
+Iteration: 756/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 79476.953125
+G gradient norm: 97279.734375
+G gradient norm: 293890.96875
+G gradient norm: 442913.59375
+G gradient norm: 149072.578125
+G gradient norm: 8584.48046875
+G gradient norm: 56496.33984375
+G gradient norm: 151325.3125
+G gradient norm: 192130.203125
+TODO update these four lines for use with wandb
+Iteration: 765/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 550282.9375
+G gradient norm: 77334.625
+G gradient norm: 66535.6328125
+G gradient norm: 82580.6796875
+G gradient norm: 110293.828125
+G gradient norm: 78508.8828125
+G gradient norm: 279902.71875
+G gradient norm: 65221.43359375
+G gradient norm: 21106.619140625
+TODO update these four lines for use with wandb
+Iteration: 774/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 548167.5625
+G gradient norm: 66633.4375
+G gradient norm: 61765.98046875
+G gradient norm: 115463.203125
+G gradient norm: 7795.1806640625
+G gradient norm: 21426.845703125
+G gradient norm: 60474.828125
+G gradient norm: 395967.78125
+G gradient norm: 42576.9765625
+TODO update these four lines for use with wandb
+Iteration: 783/1000
+Max memory reserved: 2.038 Gb / 42.407 Gb
+G gradient norm: 16858.474609375
+G gradient norm: 235869.75
+G gradient norm: 70707.5703125
+G gradient norm: 73029.8984375
+G gradient norm: 70561.9609375
+G gradient norm: 211222.90625
+G gradient norm: 122897.8828125
+G gradient norm: 208569.15625
+G gradient norm: 141995.609375
+TODO update these four lines for use with wandb
+Iteration: 792/1000
+Max memory reserved: 2.034 Gb / 42.407 Gb
+G gradient norm: 641539.875
+G gradient norm: 93441.1171875
+G gradient norm: 60411.80859375
+G gradient norm: 244664.078125
+G gradient norm: 78867.390625
+G gradient norm: 23805.345703125
+G gradient norm: 116558.0859375
+G gradient norm: 152478.796875
+Iteration 800 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.04524399290276764
+Average nrmse 0.3925915803102886
+Saving comparison: test image
+G gradient norm: 48378.0390625
+TODO update these four lines for use with wandb
+Iteration: 801/1000
+Max memory reserved: 2.124 Gb / 42.407 Gb
+G gradient norm: 591367.6875
+G gradient norm: 195131.734375
+G gradient norm: 98345.3515625
+G gradient norm: 750191.625
+G gradient norm: 110129.9375
+G gradient norm: 64552.30078125
+G gradient norm: 48781.4609375
+G gradient norm: 521165.21875
+G gradient norm: 439295.0625
+TODO update these four lines for use with wandb
+Iteration: 810/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 109267.8984375
+G gradient norm: 45138.6796875
+G gradient norm: 85280.6171875
+G gradient norm: 98713.5703125
+G gradient norm: 83333.1015625
+G gradient norm: 190088.28125
+G gradient norm: 39913.35546875
+G gradient norm: 198881.96875
+G gradient norm: 108721.34375
+TODO update these four lines for use with wandb
+Iteration: 819/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 74387.953125
+G gradient norm: 77825.4140625
+G gradient norm: 102060.1484375
+G gradient norm: 83024.0859375
+G gradient norm: 430811.875
+G gradient norm: 130583.5859375
+G gradient norm: 139213.515625
+G gradient norm: 243886.203125
+G gradient norm: 28558.08203125
+TODO update these four lines for use with wandb
+Iteration: 828/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 442651.5
+G gradient norm: 41685.02734375
+G gradient norm: 49109.6953125
+G gradient norm: 795789.0
+G gradient norm: 132218.171875
+G gradient norm: 56560.8359375
+G gradient norm: 79422.34375
+G gradient norm: 104268.7421875
+G gradient norm: 162178.140625
+TODO update these four lines for use with wandb
+Iteration: 837/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 402890.375
+G gradient norm: 31592.23828125
+G gradient norm: 57063.484375
+G gradient norm: 318921.3125
+G gradient norm: 93808.8359375
+G gradient norm: 72528.2109375
+G gradient norm: 82991.84375
+G gradient norm: 179345.515625
+G gradient norm: 490628.40625
+TODO update these four lines for use with wandb
+Iteration: 846/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 148221.6875
+G gradient norm: 59703.01953125
+G gradient norm: 74114.390625
+G gradient norm: 106918.6171875
+G gradient norm: 39269.921875
+G gradient norm: 44562.53515625
+G gradient norm: 42266.99609375
+G gradient norm: 134068.09375
+G gradient norm: 32407.7578125
+TODO update these four lines for use with wandb
+Iteration: 855/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 95045.6875
+G gradient norm: 34641.37109375
+G gradient norm: 77999.984375
+G gradient norm: 97297.1171875
+G gradient norm: 108454.3046875
+G gradient norm: 97441.6015625
+G gradient norm: 180760.828125
+G gradient norm: 127243.6015625
+G gradient norm: 189583.5625
+TODO update these four lines for use with wandb
+Iteration: 864/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 40726.1640625
+G gradient norm: 119826.953125
+G gradient norm: 48397.96484375
+G gradient norm: 84855.5859375
+G gradient norm: 309876.25
+G gradient norm: 38228.2265625
+G gradient norm: 15006.6796875
+G gradient norm: 126008.421875
+G gradient norm: 221165.921875
+TODO update these four lines for use with wandb
+Iteration: 873/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 313303.21875
+G gradient norm: 321750.21875
+G gradient norm: 104190.03125
+G gradient norm: 74583.484375
+G gradient norm: 433511.3125
+G gradient norm: 77979.1328125
+G gradient norm: 96009.765625
+G gradient norm: 162716.546875
+G gradient norm: 70271.71875
+TODO update these four lines for use with wandb
+Iteration: 882/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 97415.546875
+G gradient norm: 87735.5
+G gradient norm: 104655.046875
+G gradient norm: 63147.0390625
+G gradient norm: 90696.75
+G gradient norm: 18179.232421875
+G gradient norm: 21177.87890625
+G gradient norm: 80618.8671875
+G gradient norm: 118784.859375
+TODO update these four lines for use with wandb
+Iteration: 891/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 146869.46875
+G gradient norm: 349341.34375
+G gradient norm: 88719.6640625
+G gradient norm: 61871.546875
+G gradient norm: 281682.0625
+G gradient norm: 13419.6103515625
+G gradient norm: 8737.3408203125
+G gradient norm: 248966.78125
+G gradient norm: 79465.671875
+Iteration 900 / 1000
+TODO update these four lines for use with wandb
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.051533176141317964
+Average nrmse 0.42170463356317256
+Saving comparison: test image
+Iteration: 900/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 59216.390625
+G gradient norm: 75340.2734375
+G gradient norm: 402036.8125
+G gradient norm: 79230.484375
+G gradient norm: 33135.9921875
+G gradient norm: 173158.125
+G gradient norm: 77869.5234375
+G gradient norm: 135284.390625
+G gradient norm: 126633.96875
+TODO update these four lines for use with wandb
+Iteration: 909/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 83918.71875
+G gradient norm: 120410.5546875
+G gradient norm: 167368.140625
+G gradient norm: 449708.21875
+G gradient norm: 92774.3671875
+G gradient norm: 37548.31640625
+G gradient norm: 26276.224609375
+G gradient norm: 68783.8984375
+G gradient norm: 165226.796875
+TODO update these four lines for use with wandb
+Iteration: 918/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 190370.703125
+G gradient norm: 75942.1484375
+G gradient norm: 93857.2421875
+G gradient norm: 108905.7109375
+G gradient norm: 52493.5625
+G gradient norm: 539648.3125
+G gradient norm: 70425.796875
+G gradient norm: 103226.1171875
+G gradient norm: 71502.296875
+TODO update these four lines for use with wandb
+Iteration: 927/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 120791.40625
+G gradient norm: 307465.78125
+G gradient norm: 38539.4453125
+G gradient norm: 129237.5703125
+G gradient norm: 54601.75390625
+G gradient norm: 82430.046875
+G gradient norm: 397776.46875
+G gradient norm: 389236.09375
+G gradient norm: 75393.53125
+TODO update these four lines for use with wandb
+Iteration: 936/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 557256.3125
+G gradient norm: 65916.5234375
+G gradient norm: 82598.515625
+G gradient norm: 235724.921875
+G gradient norm: 76681.796875
+G gradient norm: 64146.89453125
+G gradient norm: 56451.9765625
+G gradient norm: 246560.9375
+G gradient norm: 423387.03125
+TODO update these four lines for use with wandb
+Iteration: 945/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 107736.140625
+G gradient norm: 111860.2109375
+G gradient norm: 77006.8046875
+G gradient norm: 71927.5
+G gradient norm: 103357.90625
+G gradient norm: 472530.75
+G gradient norm: 9030.75390625
+G gradient norm: 356119.8125
+G gradient norm: 162532.34375
+TODO update these four lines for use with wandb
+Iteration: 954/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 154221.59375
+G gradient norm: 148635.9375
+G gradient norm: 88384.1171875
+G gradient norm: 458147.28125
+G gradient norm: 39326.42578125
+G gradient norm: 23876.9453125
+G gradient norm: 89656.3046875
+G gradient norm: 158664.390625
+G gradient norm: 446392.3125
+TODO update these four lines for use with wandb
+Iteration: 963/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 322959.59375
+G gradient norm: 372821.5625
+G gradient norm: 86765.4140625
+G gradient norm: 410128.375
+G gradient norm: 40470.3828125
+G gradient norm: 27704.748046875
+G gradient norm: 42196.00390625
+G gradient norm: 164993.875
+G gradient norm: 57144.63671875
+TODO update these four lines for use with wandb
+Iteration: 972/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 19020.9453125
+G gradient norm: 150969.5625
+G gradient norm: 194296.71875
+G gradient norm: 547828.8125
+G gradient norm: 90438.484375
+G gradient norm: 91686.84375
+G gradient norm: 27733.427734375
+G gradient norm: 207767.046875
+G gradient norm: 181974.53125
+TODO update these four lines for use with wandb
+Iteration: 981/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 61300.59375
+G gradient norm: 87713.75
+G gradient norm: 392624.3125
+G gradient norm: 123849.59375
+G gradient norm: 62772.65625
+G gradient norm: 70581.53125
+G gradient norm: 32239.015625
+G gradient norm: 70135.25
+G gradient norm: 22422.919921875
+TODO update these four lines for use with wandb
+Iteration: 990/1000
+Max memory reserved: 2.041 Gb / 42.407 Gb
+G gradient norm: 100886.7734375
+G gradient norm: 57690.36328125
+G gradient norm: 93861.3125
+G gradient norm: 249845.640625
+G gradient norm: 28973.990234375
+G gradient norm: 327522.40625
+G gradient norm: 59696.65625
+G gradient norm: 145839.28125
+G gradient norm: 62514.70703125
+TODO update these four lines for use with wandb
+Iteration: 999/1000
+Max memory reserved: 2.032 Gb / 42.407 Gb
+G gradient norm: 469194.21875
+Iteration 1000 / 1000
+Validation iteration 100 / 100
+Average psnr inf
+Average ssim 0.03775022901462245
+Average nrmse 0.7294675319218168
+Saving comparison: test image
+G gradient norm: 98583.9765625
+G gradient norm: 104837.15625
+G gradient norm: 47760.21484375
+G gradient norm: 47700.265625
+G gradient norm: 675450.375
+G gradient norm: 77407.6015625
+G gradient norm: 72619.9375
+G gradient norm: 55714.0703125
+TODO update these four lines for use with wandb
+Iteration: 1008/1000
+Max memory reserved: 2.162 Gb / 42.407 Gb
+SAVING NETWORK PARAMETERS AFTER TRAINING
+Training finished
+Time taken to train:  111.18987512588501
+Done
+Finished scripts

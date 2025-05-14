@@ -11,6 +11,9 @@ from utils.utils_ARSSR import make_coord
 
 from data.train_transforms_implicit import RandomCropPairImplicitd
 
+# FOR TESTING
+#import matplotlib.pyplot as plt
+
 
 class RandomCropOld(Randomizable):
     """ Randomly crops a uniform region from both LR and HR images (supports 2D & 3D). """
@@ -279,6 +282,19 @@ class RandomCropLabel(Randomizable):
                          crop_start_hr[1] - self.size_hr//2:crop_start_hr[1] + self.size_hr//2,
                          crop_start_hr[2] - self.size_hr//2:crop_start_hr[2] + self.size_hr//2]
 
+        # # Plot slice
+        # plt.figure()
+        # plt.imshow(img_L[:,:,img_L.shape[-1]//2].squeeze())
+        # plt.figure()
+        # plt.imshow(img_H[:,:,img_H.shape[-1]//2].squeeze())
+        # plt.savefig("figures/FEMur_test_slice.png", dpi=300)
+
+        # plt.figure()
+        # plt.imshow(L[:,:,L.shape[-1]//2].squeeze())
+        # plt.figure()
+        # plt.imshow(H[:,:,H.shape[-1]//2].squeeze())
+        # plt.savefig("figures/FEMur_test_crop.png", dpi=300)
+
         return {'H': H.float(), 'L': L.float()}
 
 
@@ -302,6 +318,7 @@ class BasicSRTransforms:
 
     def __init__(self, opt, mode="train"):
 
+        self.opt = opt
         self.implicit = True if opt['model_opt']['model'] == "implicit" else False
         self.mode = mode
         self.size_hr = opt['dataset_opt']['patch_size_hr']
@@ -515,13 +532,19 @@ class BasicSRTransforms:
         if baseline:
             self.random_crop_pair = mt.Identityd(keys=["H", "L"])
 
+        if self.opt['dataset_opt']['norm_type'] == "scale_intensity":
+            self.norm_transform = mt.ScaleIntensityd(keys=["H", "L"], minv=0.0, maxv=1.0)
+        elif self.opt['dataset_opt']['norm_type'] == "znormalization":
+            self.norm_transform = mt.NormalizeIntensityd(keys=["H", "L"])
+
         transforms = mt.Compose(
             [
                 # Deterministic Transforms
                 mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=None),
                 mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
-                self.sample_crop_pad_transform,
+                self.norm_transform,
+                #self.sample_crop_pad_transform,            #Commented out since FEMur dataset might have odd sizes (HR/LR pairs not necessarily 4:1 in size)
                 self.pad_transform,  # pad LR
                 # Random transforms
                 self.random_crop_pair  # Random crop pair

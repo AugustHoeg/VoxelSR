@@ -80,7 +80,7 @@ class ModelPlain(ModelBase):
         self.define_metrics()                   # define metrics
 
         self.define_optimizer()                 # define optimizer
-        self.load_optimizers()                  # load optimizer
+        self.load_optimizers()                  # load optimizer          
 
         self.define_mixed_precision()           # define mixed precision
         self.load_gradscalers()                 # load gradscaler
@@ -113,6 +113,7 @@ class ModelPlain(ModelBase):
         if pretrained_experiment_id_G is not None:
             opt_files = glob.glob(os.path.join(config.ROOT_DIR + "/logs/" + "/*/" "/wandb/" + "*" + pretrained_experiment_id_G + "/files/saved_models/*G.h5"))
             opt_files.sort(key=os.path.getmtime, reverse=True)
+            print(opt_files)
             try:
                 G_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
             except:

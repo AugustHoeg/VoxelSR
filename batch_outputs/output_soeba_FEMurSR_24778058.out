@@ -1,0 +1,14 @@
+About to run scripts
+export CUDA_VISIBLE_DEVICES=0
+run type: HPC.
+number of GPUs is: 1
+Random seed: 8338 for rank 0
+Monai set_deterministic enabled
+RUNNING TRAIN MODE: SCRATCH
+Cuda is available True
+Cuda device count 1
+Cuda current device 0
+Cuda device name NVIDIA A100-PCIE-40GB
+Pass this initialization! Initialization was done during network definition!
+Number of trainable parameters, G 1671529
+Training model [ModelPlain] is created.
