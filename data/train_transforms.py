@@ -526,7 +526,7 @@ class BasicSRTransforms:
         transforms = mt.Compose(
             [
                 # Deterministic Transforms
-                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=np.float16),
+                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=None),
                 mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
                 self.norm_transform,
