@@ -366,7 +366,7 @@ def main(opt: DictConfig):
                     model.netG_forward()
                     sr_patch = model.E
                 locations_hr = patches_batch_hr['location']
-                aggregator_hr.add_batch(sr_patch, locations_hr)
+                #aggregator_hr.add_batch(sr_patch, locations_hr)
 
         img_E = aggregator_hr.get_output_tensor().float()  # convert from FP16 to FP32
         print("Full reconstruction size:", img_E.size())
