@@ -337,11 +337,7 @@ def main(opt: DictConfig):
         img_E = run_strided_inference(model=model, img_L=img_L, f=opt['up_factor'], size_lr=patch_size, border=overlap_lr, batch_size=test_batch_size)
         time_end = time.time()
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
-
         print("Full reconstruction size:", img_E.size())
-        img_H = img_H.unsqueeze(0)
-        img_L = img_L.unsqueeze(0)
-        img_E = img_E.unsqueeze(0)
 
         if opt['model_opt']['model_architecture'] == "MTVNet":
             # Crop context if needed
