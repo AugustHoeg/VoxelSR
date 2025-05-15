@@ -335,7 +335,6 @@ def main(opt: DictConfig):
 
         time_in = time.time()
         img_E = run_strided_inference(model=model, img_L=img_L, f=opt['up_factor'], size_lr=patch_size, border=overlap_lr, batch_size=test_batch_size)
-        img_E = torch.from_numpy(img_E)
         time_end = time.time()
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
 
