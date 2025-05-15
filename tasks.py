@@ -39,3 +39,13 @@ def test(ctx, experiment_id):
 def testid(ctx, model, dataset, experiment_id):
     """Run the testing script."""
     ctx.run(f"python -u test.py experiment_id={model}_{dataset}_{experiment_id}")
+
+@task
+def run_test(ctx, experiment_id):
+    """Run the testing script."""
+    ctx.run(f"python -u run_test.py experiment_id={experiment_id}")
+
+@task
+def run_testid(ctx, model, dataset, experiment_id):
+    """Run the testing script."""
+    ctx.run(f"python -u run_test.py experiment_id={model}_{dataset}_{experiment_id}")

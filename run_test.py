@@ -18,6 +18,7 @@ import config
 from data.train_transforms_implicit import ImplicitModelTransformFastd
 from models.model_implicit import coords_to_image
 from utils import utils_3D_image
+from utils.utils_3D_image import run_strided_inference
 from utils.load_options import load_options_from_experiment_id
 from utils.utils_2D_image import upscale_slices, upscale_slices_upfactor
 from utils.utils_image import calculate_ssim_2D, calculate_nrmse_2D, calculate_psnr_2D
@@ -321,63 +322,27 @@ def main(opt: DictConfig):
                    {"avg_psnr_list": [], "avg_ssim_list": [], "avg_nrmse_list": [], "psnr_slice_list": [], "ssim_slice_list": [], "nrmse_slice_list": []},
                    {"avg_psnr_list": [], "avg_ssim_list": [], "avg_nrmse_list": [], "psnr_slice_list": [], "ssim_slice_list": [], "nrmse_slice_list": []}]
 
+    test_batch_size = opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
+    overlap_lr = 2 * border + 2 * context_width
+    overlap_hr = border * opt['up_factor']
+
     for sample_idx, baseline_batch in enumerate(baseline_loader):
 
         # Assume batch_size of baseline_loader is always one (only reconstruct one sample in the dataset at a time)
         img_H = baseline_batch['H'][0]
         img_L = baseline_batch['L'][0]
-        #img_E = torch.zeros_like(img_H)
         del baseline_batch
 
-        overlap_lr = border
-        overlap_hr = border * opt['up_factor']
-        subject_hr = tio.Subject(H=tio.ScalarImage(tensor=img_H))
-        subject_lr = tio.Subject(L=tio.ScalarImage(tensor=img_L))
-        grid_sampler_lr = tio.GridSampler(subject=subject_lr, patch_size=patch_size, patch_overlap=2*overlap_lr+2*context_width, padding_mode=None)
-        grid_sampler_hr = tio.GridSampler(subject=subject_hr, patch_size=patch_size_hr, patch_overlap=2*overlap_hr, padding_mode=None)
-
-        test_batch_size = opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
-        #patch_loader_lr = torch.utils.data.DataLoader(grid_sampler_lr, batch_size=test_batch_size)
-        #patch_loader_hr = torch.utils.data.DataLoader(grid_sampler_hr, batch_size=test_batch_size)
-        patch_loader_lr = tio.SubjectsLoader(grid_sampler_lr, batch_size=test_batch_size)
-        patch_loader_hr = tio.SubjectsLoader(grid_sampler_hr, batch_size=test_batch_size)
-        aggregator_hr = tio.inference.GridAggregator(grid_sampler_hr, overlap_mode='hann')
-
-        model.netG.eval()
-        i = 0
         time_in = time.time()
+        img_E = run_strided_inference(model=model, img_L=img_L, f=opt['up_factor'], size_lr=patch_size, border=overlap_lr, batch_size=test_batch_size)
+        img_E = torch.from_numpy(img_E)
+        time_end = time.time()
+        print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
 
-        with torch.inference_mode():
-            c = 1
-            for patches_batch_lr, patches_batch_hr in tqdm(zip(patch_loader_lr, patch_loader_hr), desc='Reconstructing patches', mininterval=2):
-                if opt['model_opt']['model'] == 'implicit':
-                    data = apply_implicit_transform((patches_batch_lr, patches_batch_hr), implicit_model_transform)
-                    model.feed_data(data)
-                    model.netG_forward()
-                    sr_patch = coords_to_image(model.E, patch_size=opt['dataset_opt']['patch_size_hr'])
-                elif opt['input_type'] == '2D':
-                    # Upsample 2D slices individually
-                    if opt['up_factor'] > 1:
-                        sr_patch = upscale_slices_upfactor(model, patches_batch_lr['L']['data'], patches_batch_hr['H']['data'], 16, opt['up_factor'])
-                    else:
-                        sr_patch = upscale_slices(model, patches_batch_lr['L']['data'], patches_batch_hr['H']['data'], batch_size_2D=16)
-                else:
-                    model.feed_data({'H': patches_batch_hr['H'], 'L': patches_batch_lr['L']}, add_key='data')
-                    model.netG_forward()
-                    sr_patch = model.E
-                locations_hr = patches_batch_hr['location']
-                aggregator_hr.add_batch(sr_patch, locations_hr)
-
-        img_E = aggregator_hr.get_output_tensor().float()  # convert from FP16 to FP32
         print("Full reconstruction size:", img_E.size())
         img_H = img_H.unsqueeze(0)
         img_L = img_L.unsqueeze(0)
         img_E = img_E.unsqueeze(0)
-
-        print(i)
-        time_end = time.time()
-
-        print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
 
         if opt['model_opt']['model_architecture'] == "MTVNet":
             # Crop context if needed
