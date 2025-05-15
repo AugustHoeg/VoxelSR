@@ -30,13 +30,13 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
     size_hr = size_lr * f
     stride = size_lr - border
 
-    img_E = np.zeros((C, D * f, H * f, W * f), dtype=np.float32)
-    weight = np.zeros_like(img_E)
+    img_E = torch.zeros((C, int(D * f), int(H * f), int(W * f)), dtype=torch.float32)
+    weight = torch.zeros_like(img_E)
 
     coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
     N = coords_lr.shape[0]
 
-    patch_batch = np.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=img_L.dtype)
+    patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=img_L.dtype)
 
     model.netG.eval()
     with torch.inference_mode():
@@ -47,15 +47,15 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
             batch_coords_hr = coords_hr[i:i+batch_size]
 
             for j, (z, y, x) in enumerate(batch_coords_lr):
-                patch = np.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
+                patch = torch.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
                 data_L = img_L[:, z:z+size_lr, y:y+size_lr, x:x+size_lr]  # Extract data
                 patch[:, :data_L.shape[1], :data_L.shape[2], :data_L.shape[3]] = data_L  # Fill patch with data
                 patch_batch[j] = patch  # Fill batch with patch
 
             # upsampled_batch = np.ones((batch_size, C, size_hr, size_hr, size_hr))  # dummy initialization
-            model.L = torch.from_numpy(patch_batch).to(model.device)
+            model.L = patch_batch.to(model.device)
             model.netG_forward()
-            upsampled_batch = model.E.float().cpu().numpy()  # Transfer back to CPU
+            upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D*f) - z_hr
