@@ -12,6 +12,63 @@ import matplotlib.pyplot as plt
 import h5py
 import monai.transforms as mt
 
+def generate_patch_coords(D, H, W, stride, f):
+    z_idx = np.arange(0, D, stride)
+    y_idx = np.arange(0, H, stride)
+    x_idx = np.arange(0, W, stride)
+    # print(len(z_idx))
+
+    zz, yy, xx = np.meshgrid(z_idx, y_idx, x_idx, indexing='ij')
+    coords_lr = np.stack([zz, yy, xx], axis=-1).reshape(-1, 3)
+    coords_hr = coords_lr * f
+    return coords_lr, coords_hr
+
+#from utils.utils_3D_image import run_strided_inference
+#run_strided_inference(model=model, img_L=np.zeros((1, 200, 200, 200), dtype=np.float32), f=4, size_lr=20, border=0, batch_size=2)
+def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
+    C, D, H, W = img_L.shape
+    size_hr = size_lr * f
+    stride = size_lr - border
+
+    img_E = np.zeros((C, D * f, H * f, W * f), dtype=np.float32)
+    weight = np.zeros_like(img_E)
+
+    coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
+    N = coords_lr.shape[0]
+
+    patch_batch = np.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=img_L.dtype)
+
+    model.netG.eval()
+    with torch.inference_mode():
+        for i in range(0, N, batch_size):
+            if i % 10 == 0:
+                print("Processing batch %d-%d/%d" % (i, i+batch_size, N))
+            batch_coords_lr = coords_lr[i:i+batch_size]
+            batch_coords_hr = coords_hr[i:i+batch_size]
+
+            for j, (z, y, x) in enumerate(batch_coords_lr):
+                patch = np.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
+                data_L = img_L[:, z:z+size_lr, y:y+size_lr, x:x+size_lr]  # Extract data
+                patch[:, :data_L.shape[1], :data_L.shape[2], :data_L.shape[3]] = data_L  # Fill patch with data
+                patch_batch[j] = patch  # Fill batch with patch
+
+            # upsampled_batch = np.ones((batch_size, C, size_hr, size_hr, size_hr))  # dummy initialization
+            model.L = torch.from_numpy(patch_batch).to(model.device)
+            model.netG_forward()
+            upsampled_batch = model.E.float().cpu().numpy()  # Transfer back to CPU
+
+            for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
+                dz = min(z_hr+size_hr, D*f) - z_hr
+                dy = min(y_hr+size_hr, H*f) - y_hr
+                dx = min(x_hr+size_hr, W*f) - x_hr
+                img_E[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += upsampled_batch[j, :, :dz, :dy, :dx]
+                weight[:, z_hr:z_hr+size_hr, y_hr:y_hr+size_hr, x_hr:x_hr+size_hr] += 1
+
+    weight[weight == 0] = 1
+    img_E /= weight
+    return img_E
+
+
 def rescale_array_(arr, mina, maxa, new_min=0.0, new_max=1.0, dtype=np.float32):
     """
     Rescale the values of numpy array `arr` to be from `minv` to `maxv`.
