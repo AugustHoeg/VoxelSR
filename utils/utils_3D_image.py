@@ -52,10 +52,10 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
                 patch[:, :data_L.shape[1], :data_L.shape[2], :data_L.shape[3]] = data_L  # Fill patch with data
                 patch_batch[j] = patch  # Fill batch with patch
 
-            upsampled_batch = np.ones((batch_size, C, size_hr, size_hr, size_hr))  # dummy initialization
-            #model.L = patch_batch.to(model.device)
-            #model.netG_forward()
-            #upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
+            #upsampled_batch = np.ones((batch_size, C, size_hr, size_hr, size_hr))  # dummy initialization
+            model.L = patch_batch.to(model.device)
+            model.netG_forward()
+            upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D*f) - z_hr
