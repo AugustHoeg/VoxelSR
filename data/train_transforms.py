@@ -502,7 +502,7 @@ class BasicSRTransforms:
                 mt.LoadImaged(keys=["H", "L"], dtype=None),
                 mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
-                #self.sample_crop_pad_transform,
+                self.sample_crop_pad_transform,
                 self.pad_transform,  # pad LR
                 # Random transforms
                 self.random_crop_pair  # Random crop pair
