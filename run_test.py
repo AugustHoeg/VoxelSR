@@ -329,12 +329,13 @@ def main(opt: DictConfig):
     for sample_idx, baseline_batch in enumerate(baseline_loader):
 
         # Assume batch_size of baseline_loader is always one (only reconstruct one sample in the dataset at a time)
-        img_H = baseline_batch['H'][0]
-        img_L = baseline_batch['L'][0]
+        img_H = baseline_batch['H']
+        img_L = baseline_batch['L']
         del baseline_batch
 
         time_in = time.time()
-        img_E = run_strided_inference(model=model, img_L=img_L, f=opt['up_factor'], size_lr=patch_size, border=overlap_lr, batch_size=test_batch_size)
+        img_E = run_strided_inference(model=model, img_L=img_L[0], f=opt['up_factor'], size_lr=patch_size, border=overlap_lr, batch_size=test_batch_size)
+        img_E = img_E.unsqueeze(0)
         time_end = time.time()
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
         print("Full reconstruction size:", img_E.size())
