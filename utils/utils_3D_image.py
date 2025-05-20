@@ -25,7 +25,22 @@ def generate_patch_coords(D, H, W, stride, f):
 
 #from utils.utils_3D_image import run_strided_inference
 #run_strided_inference(model=model, img_L=np.zeros((1, 200, 200, 200), dtype=np.float32), f=4, size_lr=20, border=0, batch_size=2)
-def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
+
+def get_hann_window(patch_size):
+    hann_window_3d = torch.as_tensor([1])
+    # create a n-dim hann window
+    for spatial_dim, size in enumerate(patch_size):
+        window_shape = np.ones_like(patch_size)
+        window_shape[spatial_dim] = size
+        hann_window_1d = torch.hann_window(
+            size + 2,
+            periodic=False,
+        )
+        hann_window_1d = hann_window_1d[1:-1].view(*window_shape)
+        hann_window_3d = hann_window_3d * hann_window_1d
+    return hann_window_3d
+
+def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_mode="hann"):
     C, D, H, W = img_L.shape
     size_hr = size_lr * f
     stride = size_lr - border
@@ -37,6 +52,10 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
     N = coords_lr.shape[0]
 
     patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=img_L.dtype)
+
+    if overlap_mode == "hann":
+        hann_window = get_hann_window((size_hr, size_hr, size_hr))
+        hann_window = hann_window.reshape(1, size_hr, size_hr, size_hr)
 
     model.netG.eval()
     with torch.inference_mode():
@@ -61,10 +80,16 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size):
                 dz = min(z_hr+size_hr, D*f) - z_hr
                 dy = min(y_hr+size_hr, H*f) - y_hr
                 dx = min(x_hr+size_hr, W*f) - x_hr
-                img_E[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += upsampled_batch[j, :, :dz, :dy, :dx]
-                weight[:, z_hr:z_hr+size_hr, y_hr:y_hr+size_hr, x_hr:x_hr+size_hr] += 1
+                if overlap_mode == "hann":
+                    img_E[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += upsampled_batch[j, :, :dz, :dy, :dx] * hann_window[:, :dz, :dy, :dx]
+                    weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += hann_window[:, :dz, :dy, :dx]
+                elif overlap_mode == "mean":
+                    img_E[:, z_hr:z_hr + dz, y_hr:y_hr + dy, x_hr:x_hr + dx] += upsampled_batch[j, :, :dz, :dy, :dx]
+                    weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += 1
+                #weight[:, z_hr:z_hr+size_hr, y_hr:y_hr+size_hr, x_hr:x_hr+size_hr] += 1
 
-    weight[weight == 0] = 1
+    if overlap_mode == "mean":
+        weight[weight == 0] = 1
     img_E /= weight
     return img_E
 

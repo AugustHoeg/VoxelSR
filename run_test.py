@@ -334,7 +334,13 @@ def main(opt: DictConfig):
         del baseline_batch
 
         time_in = time.time()
-        img_E = run_strided_inference(model=model, img_L=img_L[0], f=opt['up_factor'], size_lr=patch_size, border=overlap_lr, batch_size=test_batch_size)
+        img_E = run_strided_inference(model=model,
+                                      img_L=img_L[0],
+                                      f=opt['up_factor'],
+                                      size_lr=patch_size,
+                                      border=overlap_lr,
+                                      batch_size=test_batch_size,
+                                      overlap_mode="hann")
         img_E = img_E.unsqueeze(0)
         time_end = time.time()
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
