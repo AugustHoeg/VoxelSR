@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: VoDaSuRe       # Default dataset config
+  - dataset_opt: HCP_1200       # Default dataset config
   - model_opt: mDCSRN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
