@@ -22,7 +22,7 @@ class Dataset_LUND():
         elif opt['cluster'] == "TITANS":
             self.data_path = "/scratch/aulho/Python/3D_datasets/datasets/LUND/bamboo"
         else:  # Default is opt['cluster'] = "DTU_HPC"
-            self.data_path = "../3D_datasets/datasets/Lund/bamboo"
+            self.data_path = "../3D_datasets/datasets/LUND/bamboo"
 
         self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/HR_chunks/", "*.npy")))
         self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/LR_chunks/", "*.npy")))
