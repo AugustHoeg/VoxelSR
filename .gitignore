@@ -31,6 +31,7 @@ LAM_3d/Figures/**
 logs/2022_QIM_52_Bone/**
 logs/Synthetic_2022_QIM_52_Bone/**
 logs/HCP_1200/**
+logs/HCP_1200_new/**
 logs/IXI/**
 logs/BRATS2023/**
 logs/KIRBY21/**
@@ -41,4 +42,5 @@ logs/VoDaSuRe/**
 logs/Binning_Brain/**
 logs/Binning_Bone/**
 logs/FEMur/**
+logs/LUND/**
 !*.gitkeep

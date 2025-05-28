@@ -1,7 +1,12 @@
 import os
 import glob
+import numpy as np
 from data.train_transforms import BasicSRTransforms
 import monai.transforms as mt
+from data.train_transforms import GaussianblurImaged, KspaceTruncd, \
+    RandomCropPairImplicitd, RandomCropUniform, RandomCropForeground, \
+    RandomCropLabel, get_context_pad_size # CustomRand3DElasticd
+
 
 class Dataset_HCP_1200():
     def __init__(self, opt):
@@ -33,54 +38,72 @@ class Dataset_HCP_1200():
     def get_transforms(self, mode="train", baseline=False):
 
         # parse the options
-        param = parse_transform_params(self.opt)
+        p = self.opt
+        pdata = p.dataset_opt
+        pdata.pad_size = get_context_pad_size(p)
+
         trans_list = []
         trans_list.append(mt.LoadImaged(keys=["H"], dtype=None))  # Load the image
-        trans_list.append(mt.EnsureChannelFirstd(keys=["H"], channel_dim=param.channel_dim))  # Load the image
+        trans_list.append(mt.EnsureChannelFirstd(keys=["H"], channel_dim=pdata.channel_dim))  # Load the image
         trans_list.append(mt.SignalFillEmptyd(keys=["H"], replacement=0))
 
         # Normalization and scaling
-        if param.norm_type == "scale_intensity":
+        if pdata.norm_type == "scale_intensity":
             trans_list.append(mt.ScaleIntensityd(keys=["H"], minv=0.0, maxv=1.0))
-        elif param.norm_type == "znormalization":
+        elif pdata.norm_type == "znormalization":
             trans_list.append(mt.NormalizeIntensityd(keys=["H"]))
 
         # Foreground cropping
-        if param.sample_crop_pad_type == "sample_crop_foreground":
+        if pdata.sample_crop_pad_type == "sample_crop_foreground":
             trans_list.append(mt.CropForegroundd(keys=["H"], source_key="H", margin=0, select_fn=lambda a: a > 0.05, k_divisible=4))
-        elif param.sample_crop_pad_type == "sample_divisible_padding":
+        elif pdata.sample_crop_pad_type == "sample_divisible_padding":
             trans_list.append(mt.DivisiblePadd(keys=["H"], k=4, mode="constant"))
 
         # Minimum padding
-        trans_list.append(mt.SpatialPadd(keys=["H"], spatial_size=[param.size_hr, param.size_hr, param.size_hr], mode="constant", value=0))
+        trans_list.append(mt.SpatialPadd(keys=["H"], spatial_size=[pdata.patch_size_hr, pdata.patch_size_hr, pdata.patch_size_hr], mode="constant", value=0))
 
         # Create LR image
         trans_list.append(mt.CopyItemsd(keys=["H"], times=1, names=["L"]))
-        if param.degradation_type == "resize":
+        if pdata.degradation_type == "resize":
             # Apply Gaussian blur
-            if param.blur_method == '3d_gaussian_blur':
-                trans_list.append(GaussianblurImaged(keys=["L"], blur_sigma=param.blur_sigma))
-            elif param.blur_method == 'monai_gaussian_blur':
-                trans_list.append(mt.GaussianSmoothd(keys=["L"], sigma=param.blur_sigma))
+            if pdata.blur_method == '3d_gaussian_blur':
+                trans_list.append(GaussianblurImaged(keys=["L"], blur_sigma=pdata.blur_sigma))
+            elif pdata.blur_method == 'monai_gaussian_blur':
+                trans_list.append(mt.GaussianSmoothd(keys=["L"], sigma=pdata.blur_sigma))
             # Resize the image
-            trans_list.append(mt.Zoomd(keys=["L"], zoom=1 / param.up_factor, mode=param.downsampling_method, align_corners=True, keep_size=False))
+            trans_list.append(mt.Zoomd(keys=["L"], zoom=1 / p.up_factor, mode=pdata.downsampling_method, align_corners=True, keep_size=False))
 
-        elif param.degradation_type == "kspace_trunc":
-            trans_list.append(KspaceTruncd(keys=["L"], trunc_factor=param.trunc_factor, norm_val=1.0, slice_dim=param.kspace_trunc_dim))
+        elif pdata.degradation_type == "kspace_trunc":
+            trans_list.append(KspaceTruncd(keys=["L"], trunc_factor=pdata.trunc_factor, norm_val=1.0, slice_dim=pdata.kspace_trunc_dim))
 
         # Pad for MTVNet
-        trans_list.append(mt.BorderPadd(keys=["L"], spatial_border=[param.pad_size, param.pad_size, param.pad_size], mode='constant'))
+        trans_list.append(mt.BorderPadd(keys=["L"], spatial_border=[pdata.pad_size, pdata.pad_size, pdata.pad_size], mode='constant'))
 
         # Random crop
         if not baseline:
-            if param.implicit:
-                trans_list.append(RandomCropPairImplicitd(param.size_lr, param.up_factor, param.foreground_thresh, mode))
+            if p.model_opt.model == "implicit":
+                trans_list.append(RandomCropPairImplicitd(pdata.patch_size, p.up_factor, pdata.foreground_thresh, mode))
             else:
-                if param.patch_crop_type == "random_spatial":
-                    trans_list.append(RandomCropUniform(param.size_lr, param.up_factor, param.pad_size, param.input_type))
-                elif self.patch_crop_type == "random_foreground":
-                    trans_list.append(RandomCropForeground(param.size_lr, param.up_factor, param.foreground_thresh, param.pad_size, param.input_type))
-                elif self.patch_crop_type == "random_label":
-                    trans_list.append(RandomCropLabel(param.size_lr, param.up_factor, param.pad_size, param.input_type, param.mask_mode))
+                if pdata.patch_crop_type == "random_spatial":
+                    trans_list.append(RandomCropUniform(pdata.patch_size, p.up_factor, pdata.pad_size, p.input_type))
+                elif pdata.patch_crop_type == "random_foreground":
+                    trans_list.append(RandomCropForeground(pdata.patch_size, p.up_factor, pdata.foreground_thresh, pdata.pad_size, p.input_type))
+                elif pdata.patch_crop_type == "random_label":
+                    trans_list.append(RandomCropLabel(pdata.patch_size, p.up_factor, pdata.pad_size, p.input_type, p.mask_mode))
+
+        # Augmentations after crop
+        if mode == "train":
+            # Random augmentations
+            # trans_list.append(mt.RandFlipd(keys=["H", "L"], prob=0.20, spatial_axis=[0, 1, 2]))  # Random flip
+
+            trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=0, prob=0.5))
+            trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=1, prob=0.5))
+            trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=2, prob=0.5))
+            trans_list.append(mt.RandRotated(keys=["H", "L"], prob=0.50, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear"))
+            # trans_list.append(mt.Rand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
+            # trans_list.append(CustomRand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
+
+            trans_list.append(mt.RandZoomd(keys=["H", "L"], prob=0.50, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
+            # trans_list.append(mt.RandGaussianNoised(keys=["L"], prob=0.2, mean=0.0, std=0.005))
 
         return mt.Compose(trans_list)

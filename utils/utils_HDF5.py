@@ -72,6 +72,17 @@ def parallel_estimate_percentiles(hdf5_path, start_row, end_row, start_col, end_
         samples = np.concatenate([r.get() for r in results_async])  # Retrieve and concatenate results
 
     percentiles = np.percentile(samples, [5, 95])  # Compute percentiles
+
+    # Save to a text file for later use, file name based on hdf5_path
+    base_name = os.path.basename(hdf5_path)
+    output_name = f"percentiles_{base_name}_{start_row}_{end_row}_{start_col}_{end_col}.txt"
+    output_path = os.path.join(os.getcwd(), output_name)
+
+    with open(output_path, 'w') as f:
+        f.write(f"5th Percentile: {percentiles[0]}\n")
+        f.write(f"95th Percentile: {percentiles[1]}\n")
+    print(f"Percentiles saved to {output_path}")
+
     return percentiles
 
 # def sample_from_slice(data, idx, N, start_row, end_row, start_col, end_col):

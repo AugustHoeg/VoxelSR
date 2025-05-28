@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-name: HCP_1200_new
+name: LUND
 synthetic: true # Set to true to use downsampled HR data as LR input
 dataset_type: CacheDataset
 enable_femur_padding: false
@@ -25,7 +25,7 @@ blur_sigma: 1.0
 
 # Dataset and dataloader parameters
 train_dataset_params:
-  patches_per_batch: 1
+  patches_per_batch: 4
   replace_rate: 0.10
   cache_num: 2000
   init_workers: 2
@@ -39,7 +39,7 @@ train_dataloader_params:
   pin_memory: false
 
 test_dataset_params:
-  patches_per_batch: 1
+  patches_per_batch: 4
   replace_rate: 0.10
   cache_num: 2000
   init_workers: 2

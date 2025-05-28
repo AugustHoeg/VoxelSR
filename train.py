@@ -1,6 +1,6 @@
 import os
 import time
-
+import matplotlib.pyplot as plt
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
@@ -10,6 +10,48 @@ from monai.data import SmartCacheDataset, DataLoader
 
 import config
 from utils.load_options import save_yaml, init_options
+
+
+# def test_plot(train_batch):
+#     size_hr = train_batch['H'].shape[-1]
+#     size_lr = train_batch['L'].shape[-1]
+#     plt.figure()
+#     batch_size = len(train_batch['H'])
+#     c = 0
+#     for i in range(batch_size):
+#         plt.subplot(2, batch_size, 1 + c)
+#         plt.imshow(train_batch['H'][i, 0, :, :, size_hr//2])
+#         plt.subplot(2, batch_size, 2 + c)
+#         plt.imshow(train_batch['L'][i, 0, :, :, size_lr//2])
+#         plt.show()
+#         c += 1
+
+def test_plot(train_batch):
+    size_hr = train_batch['H'].shape[-1]
+    size_lr = train_batch['L'].shape[-1]
+    batch_size = len(train_batch['H'])
+
+    plt.figure(figsize=(3 * batch_size, 6))  # wider figure for multiple samples
+
+    for i in range(batch_size):
+        # Plot HR slice
+        plt.subplot(2, batch_size, i + 1)
+        plt.imshow(train_batch['H'][i, 0, :, :, size_hr // 2], cmap='gray')
+        plt.title(f'HR #{i}')
+        plt.axis('off')
+
+        # Plot LR slice
+        plt.subplot(2, batch_size, batch_size + i + 1)
+        plt.imshow(train_batch['L'][i, 0, :, :, size_lr // 2], cmap='gray')
+        plt.title(f'LR #{i}')
+        plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+    # To use, add this line to the training loop:
+    # test_plot(train_batch)  # Uncomment to visualize training batches
+
 
 def train_model(model, opt, iterations, validation_iterations, train_loader, test_loader, print_status=True):
     """
