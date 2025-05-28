@@ -12,6 +12,163 @@ from utils.utils_ARSSR import make_coord
 from data.train_transforms_implicit import RandomCropPairImplicitd
 
 
+# from monai.transforms import RandomizableTransform, Rand3DElastic
+# from collections.abc import Hashable, Mapping, Sequence
+# from monai.config import DtypeLike, KeysCollection, SequenceStr
+
+# class CustomRand3DElasticd(RandomizableTransform, MapTransform):
+#     """
+#     Dictionary-based wrapper of :py:class:`monai.transforms.Rand3DElastic`.
+#     """
+#
+#     backend = Rand3DElastic.backend
+#
+#     def __init__(
+#         self,
+#         keys: KeysCollection,
+#         sigma_range: tuple[float, float],
+#         magnitude_range: tuple[float, float],
+#         spatial_size: tuple[int, int, int] | int | None = None,
+#         prob: float = 0.1,
+#         rotate_range: Sequence[tuple[float, float] | float] | float | None = None,
+#         shear_range: Sequence[tuple[float, float] | float] | float | None = None,
+#         translate_range: Sequence[tuple[float, float] | float] | float | None = None,
+#         scale_range: Sequence[tuple[float, float] | float] | float | None = None,
+#         mode: SequenceStr = GridSampleMode.BILINEAR,
+#         padding_mode: SequenceStr = GridSamplePadMode.REFLECTION,
+#         device: torch.device | None = None,
+#         allow_missing_keys: bool = False,
+#     ) -> None:
+#         """
+#         Args:
+#             keys: keys of the corresponding items to be transformed.
+#             sigma_range: a Gaussian kernel with standard deviation sampled from
+#                 ``uniform[sigma_range[0], sigma_range[1])`` will be used to smooth the random offset grid.
+#             magnitude_range: the random offsets on the grid will be generated from
+#                 ``uniform[magnitude[0], magnitude[1])``.
+#             spatial_size: specifying output image spatial size [h, w, d].
+#                 if `spatial_size` and `self.spatial_size` are not defined, or smaller than 1,
+#                 the transform will use the spatial size of `img`.
+#                 if some components of the `spatial_size` are non-positive values, the transform will use the
+#                 corresponding components of img size. For example, `spatial_size=(32, 32, -1)` will be adapted
+#                 to `(32, 32, 64)` if the third spatial dimension size of img is `64`.
+#             prob: probability of returning a randomized affine grid.
+#                 defaults to 0.1, with 10% chance returns a randomized grid,
+#                 otherwise returns a ``spatial_size`` centered area extracted from the input image.
+#             rotate_range: angle range in radians. If element `i` is a pair of (min, max) values, then
+#                 `uniform[-rotate_range[i][0], rotate_range[i][1])` will be used to generate the rotation parameter
+#                 for the `i`th spatial dimension. If not, `uniform[-rotate_range[i], rotate_range[i])` will be used.
+#                 This can be altered on a per-dimension basis. E.g., `((0,3), 1, ...)`: for dim0, rotation will be
+#                 in range `[0, 3]`, and for dim1 `[-1, 1]` will be used. Setting a single value will use `[-x, x]`
+#                 for dim0 and nothing for the remaining dimensions.
+#             shear_range: shear range with format matching `rotate_range`, it defines the range to randomly select
+#                 shearing factors(a tuple of 6 floats for 3D) for affine matrix, take a 3D affine as example::
+#
+#                     [
+#                         [1.0, params[0], params[1], 0.0],
+#                         [params[2], 1.0, params[3], 0.0],
+#                         [params[4], params[5], 1.0, 0.0],
+#                         [0.0, 0.0, 0.0, 1.0],
+#                     ]
+#
+#             translate_range: translate range with format matching `rotate_range`, it defines the range to randomly
+#                 select voxel to translate for every spatial dims.
+#             scale_range: scaling range with format matching `rotate_range`. it defines the range to randomly select
+#                 the scale factor to translate for every spatial dims. A value of 1.0 is added to the result.
+#                 This allows 0 to correspond to no change (i.e., a scaling of 1.0).
+#             mode: {``"bilinear"``, ``"nearest"``} or spline interpolation order 0-5 (integers).
+#                 Interpolation mode to calculate output values. Defaults to ``"bilinear"``.
+#                 See also: https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html
+#                 When it's an integer, the numpy (cpu tensor)/cupy (cuda tensor) backends will be used
+#                 and the value represents the order of the spline interpolation.
+#                 See also: https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.map_coordinates.html
+#                 It also can be a sequence, each element corresponds to a key in ``keys``.
+#             padding_mode: {``"zeros"``, ``"border"``, ``"reflection"``}
+#                 Padding mode for outside grid values. Defaults to ``"reflection"``.
+#                 See also: https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html
+#                 When `mode` is an integer, using numpy/cupy backends, this argument accepts
+#                 {'reflect', 'grid-mirror', 'constant', 'grid-constant', 'nearest', 'mirror', 'grid-wrap', 'wrap'}.
+#                 See also: https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.map_coordinates.html
+#                 It also can be a sequence, each element corresponds to a key in ``keys``.
+#             device: device on which the tensor will be allocated.
+#             allow_missing_keys: don't raise exception if key is missing.
+#
+#         See also:
+#             - :py:class:`RandAffineGrid` for the random affine parameters configurations.
+#             - :py:class:`Affine` for the affine transformation parameters configurations.
+#
+#         """
+#         MapTransform.__init__(self, keys, allow_missing_keys)
+#         RandomizableTransform.__init__(self, prob)
+#         self.rand_3d_elastic = Rand3DElastic(
+#             sigma_range=sigma_range,
+#             magnitude_range=magnitude_range,
+#             prob=1.0,  # because probability controlled by this class
+#             rotate_range=rotate_range,
+#             shear_range=shear_range,
+#             translate_range=translate_range,
+#             scale_range=scale_range,
+#             spatial_size=spatial_size,
+#             device=device,
+#         )
+#         self.mode = ensure_tuple_rep(mode, len(self.keys))
+#         self.padding_mode = ensure_tuple_rep(padding_mode, len(self.keys))
+#
+#     def set_random_state(self, seed: int | None = None, state: np.random.RandomState | None = None) -> Rand3DElasticd:
+#         self.rand_3d_elastic.set_random_state(seed, state)
+#         super().set_random_state(seed, state)
+#         return self
+#
+#     def __call__(self, data: Mapping[Hashable, torch.Tensor]) -> dict[Hashable, torch.Tensor]:
+#         """
+#         Args:
+#             data: a dictionary containing the tensor-like data to be processed. The ``keys`` specified
+#                 in this dictionary must be tensor like arrays that are channel first and have at most
+#                 three spatial dimensions
+#
+#         Returns:
+#             a dictionary containing the transformed data, as well as any other data present in the dictionary
+#         """
+#         d = dict(data)
+#         first_key: Hashable = self.first_key(d)
+#
+#         if first_key == ():
+#             out: dict[Hashable, torch.Tensor] = convert_to_tensor(d, track_meta=get_track_meta())
+#             return out
+#
+#         self.randomize(None)
+#         if isinstance(d[first_key], MetaTensor) and d[first_key].pending_operations:  # type: ignore
+#             warnings.warn(f"data['{first_key}'] has pending operations, transform may return incorrect results.")
+#         sp_size = fall_back_tuple(self.rand_3d_elastic.spatial_size, d[first_key].shape[1:])
+#
+#         # all the keys share the same random elastic factor
+#         self.rand_3d_elastic.randomize(sp_size)
+#
+#         device = self.rand_3d_elastic.device
+#         if device is None and isinstance(d[first_key], torch.Tensor):
+#             device = d[first_key].device
+#             self.rand_3d_elastic.set_device(device)
+#         grid = create_grid(spatial_size=sp_size, device=device, backend="torch")
+#         if self._do_transform:
+#             gaussian = GaussianFilter(spatial_dims=3, sigma=self.rand_3d_elastic.sigma, truncated=3.0).to(device)
+#             offset = torch.as_tensor(self.rand_3d_elastic.rand_offset, device=device).unsqueeze(0)
+#             grid[:3] += gaussian(offset)[0] * self.rand_3d_elastic.magnitude
+#             grid = self.rand_3d_elastic.rand_affine_grid(grid=grid)
+#
+#         for key, mode, padding_mode in self.key_iterator(d, self.mode, self.padding_mode):
+#             d[key] = self.rand_3d_elastic.resampler(d[key], grid, mode=mode, padding_mode=padding_mode)  # type: ignore
+#         return d
+
+
+def get_context_pad_size(opt):
+    if 'context_sizes' in opt.model_opt.netG:
+        center_size = opt.model_opt.netG.context_sizes[-1]
+        pad_size = (opt.dataset_opt.patch_size - center_size) // 2  # pad half of the context on all sides
+    else:
+        pad_size = 0
+    return pad_size
+
+
 class RandomCropOld(Randomizable):
     """ Randomly crops a uniform region from both LR and HR images (supports 2D & 3D). """
 
@@ -388,6 +545,10 @@ class BasicSRTransforms:
             elif self.patch_crop_type == "random_label":
                 self.random_crop_pair = RandomCropLabel(self.size_lr, self.up_factor, self.pad_size, self.input_type, self.mask_mode)
 
+        # Random augmentations
+        #self.random_aug_HR = mt.RandFlipd(keys=["H"], prob=0.5, spatial_axis=[0, 1, 2])  # Randomly flip HR image
+        self.random_aug_LR = mt.RandFlipd(keys=["H", "L"], prob=0.5, spatial_axis=[0, 1, 2])  # Randomly flip HR and LR images
+
     def foreground_threshold_func(self, img):
         # threshold foreground
         return img > self.foreground_thresh  # This is actually the HR image
@@ -430,7 +591,9 @@ class BasicSRTransforms:
                 self.pad_transform,  # pad LR
                 # Random transforms
                 #RandomCropPaird(self.size_lr, self.up_factor)
-                self.random_crop_pair  # Random crop pair
+                self.random_crop_pair,  # Random crop pair
+                # Augmentations
+                self.random_aug_LR,  # Randomly flip HR image
 
             ]
         )

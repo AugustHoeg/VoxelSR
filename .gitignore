@@ -41,4 +41,5 @@ logs/VoDaSuRe/**
 logs/Binning_Brain/**
 logs/Binning_Bone/**
 logs/FEMur/**
+logs/LUND/**
 !*.gitkeep
