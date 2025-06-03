@@ -37,10 +37,10 @@ class Dataset_LUND():
             self.LR_test = sorted(glob.glob(os.path.join(self.data_path, "test/HR_chunks_down4/", "*.npy")))
 
         # Synthetically duplicate the file paths... TODO fix this later
-        self.HR_train = self.HR_train * opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size']
-        self.HR_test = self.HR_test * opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size']
-        self.LR_train = self.LR_train * opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
-        self.LR_test = self.LR_test * opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
+        #self.HR_train = self.HR_train * opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size']
+        #self.HR_test = self.HR_test * opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size']
+        #self.LR_train = self.LR_train * opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
+        #self.LR_test = self.LR_test * opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
 
     def get_file_paths(self):
 

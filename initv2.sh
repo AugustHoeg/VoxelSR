@@ -7,7 +7,7 @@
 VENV_NAME=venv         # Name of your virtualenv (default: venv)
 VENV_DIR=.             # Where to store your virtualenv (default: current directory)
 PYTHON_VERSION=3.11.9  # Python version (default: 3.9.19)
-CUDA_VERSION=12.4      # CUDA version (default: 11.6)
+CUDA_VERSION=12.1      # CUDA version (default: 11.6)
 
 # Load modules
 module load python3/$PYTHON_VERSION
