@@ -228,6 +228,43 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         test_dataset = monai.data.CacheDataset(test_files, transform=transforms, num_workers=1)
         baseline_dataset = monai.data.Dataset(test_files, transform=baseline_transforms)
 
+    elif dataset_type == "ZarrDataset":
+        print("ZarrDataset is not implemented yet. Please implement it if needed.")
+        from data.ZarrDataset import ZarrDataset
+        group_name = 'HR'
+        ome_levels = ['0', '1', '2']  # Example levels, adjust as needed
+        patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
+
+        train_dataset = ZarrDataset(ome_levels,
+                                    group_name,
+                                    paths=train_files,
+                                    patch_shape=patch_shape,
+                                    patch_transform=transforms,
+                                    num_producers=16,
+                                    num_workers=1,
+                                    queue_size=16,
+                                    use_LRU_cache=False)
+
+        test_dataset = ZarrDataset(ome_levels,
+                                   group_name,
+                                   paths=test_files,
+                                   patch_shape=patch_shape,
+                                   patch_transform=test_transforms,
+                                   num_producers=16,
+                                   num_workers=1,
+                                   queue_size=16,
+                                   use_LRU_cache=False)
+
+        baseline_dataset = ZarrDataset(ome_levels,
+                                   group_name,
+                                   paths=test_files,
+                                   patch_shape=patch_shape,
+                                   patch_transform=test_transforms,
+                                   num_producers=16,
+                                   num_workers=1,
+                                   queue_size=16,
+                                   use_LRU_cache=False)
+
     else:
         raise NotImplementedError('Dataset type %s is not found.' % dataset_type)
 
