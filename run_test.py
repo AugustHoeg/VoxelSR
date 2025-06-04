@@ -346,6 +346,13 @@ def main(opt: DictConfig):
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
         print("Full reconstruction size:", img_E.size())
 
+        if True:
+            # Save the full reconstruction to a TIFF file
+            from utils.utils_image import write_tiff
+            write_tiff(img_E[0, 0], os.path.join(image_dir, "full_SR_sample_%d.tiff" % sample_idx))
+            write_tiff(img_H[0, 0], os.path.join(image_dir, "full_HR_sample_%d.tiff" % sample_idx))
+            write_tiff(img_L[0, 0], os.path.join(image_dir, "full_LR_sample_%d.tiff" % sample_idx))
+
         if opt['model_opt']['model_architecture'] == "MTVNet":
             # Crop context if needed
             if context_width > 0:

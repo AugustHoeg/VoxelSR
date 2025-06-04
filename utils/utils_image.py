@@ -10,6 +10,7 @@ from skimage.metrics import normalized_root_mse, structural_similarity
 from skimage import measure
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+import tifffile
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -24,6 +25,22 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 '''
 
 IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.tif']
+
+
+def write_tiff(image, output_path, ret=False):
+    """
+    saves a tiff from numpy array.
+
+    Args:
+        input_path (str): Path to the input 3D TIFF file.
+        output_path (str): Path to save the TIFF file.
+    """
+
+    tifffile.imwrite(output_path, image.astype(image.dtype))
+    print(f"Saved downsampled image to: {output_path}")
+
+    if ret:
+        return image
 
 
 def is_image_file(filename):
