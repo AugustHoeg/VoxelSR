@@ -230,9 +230,9 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
 
     elif dataset_type == "ZarrDataset":
         print("ZarrDataset is not implemented yet. Please implement it if needed.")
-        from data.ZarrDataset import ZarrDataset
+        from data.ZarrIterableDataset import ZarrDataset
         group_name = 'HR'
-        ome_levels = ['0', '1', '2']  # Example levels, adjust as needed
+        ome_levels = ['0', '2']  # Example levels, adjust as needed
         patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
 
         train_dataset = ZarrDataset(ome_levels,
@@ -240,30 +240,27 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                     paths=train_files,
                                     patch_shape=patch_shape,
                                     patch_transform=transforms,
-                                    num_producers=16,
-                                    num_workers=1,
-                                    queue_size=16,
-                                    use_LRU_cache=False)
+                                    num_workers=4,
+                                    queue_size=256,
+                                    store_type='DirectoryStore')
 
         test_dataset = ZarrDataset(ome_levels,
-                                   group_name,
-                                   paths=test_files,
-                                   patch_shape=patch_shape,
-                                   patch_transform=test_transforms,
-                                   num_producers=16,
-                                   num_workers=1,
-                                   queue_size=16,
-                                   use_LRU_cache=False)
+                                    group_name,
+                                    paths=test_files,
+                                    patch_shape=patch_shape,
+                                    patch_transform=transforms,
+                                    num_workers=4,
+                                    queue_size=256,
+                                    store_type='DirectoryStore')
 
         baseline_dataset = ZarrDataset(ome_levels,
-                                   group_name,
-                                   paths=test_files,
-                                   patch_shape=patch_shape,
-                                   patch_transform=test_transforms,
-                                   num_producers=16,
-                                   num_workers=1,
-                                   queue_size=16,
-                                   use_LRU_cache=False)
+                                    group_name,
+                                    paths=test_files,
+                                    patch_shape=patch_shape,
+                                    patch_transform=transforms,
+                                    num_workers=4,
+                                    queue_size=256,
+                                    store_type='DirectoryStore')
 
     else:
         raise NotImplementedError('Dataset type %s is not found.' % dataset_type)
