@@ -51,13 +51,13 @@ class Dataset_OME():
         pdata.pad_size = get_context_pad_size(p)
 
         trans_list = []
-        trans_list.append(mt.LoadImaged(keys=["H", "L"], dtype=None))  # Load the image
-        trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=pdata.channel_dim))  # Load the image
-        trans_list.append(mt.SignalFillEmptyd(keys=["H", "L"], replacement=0))
+        #trans_list.append(mt.LoadImaged(keys=["H", "L"], dtype=None))  # Load the image
+        #trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=pdata.channel_dim))  # Load the image
+        #trans_list.append(mt.SignalFillEmptyd(keys=["H", "L"], replacement=0))
 
         # Normalization and scaling
         if pdata.norm_type == "scale_intensity":
-            trans_list.append(mt.ScaleIntensityd(keys=["H", "L"], minv=0.0, maxv=1.0))
+            trans_list.append(mt.ScaleIntensityRanged(keys=["H", "L"], a_min=-0.001, b_min=0.001, a_max=0, b_max=1.0, clip=True))
         elif pdata.norm_type == "znormalization":
             trans_list.append(mt.NormalizeIntensityd(keys=["H", "L"]))
 
@@ -87,11 +87,11 @@ class Dataset_OME():
             trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=0, prob=0.5))
             trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=1, prob=0.5))
             trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=2, prob=0.5))
-            trans_list.append(mt.RandRotated(keys=["H", "L"], prob=0.50, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True))
+            # trans_list.append(mt.RandRotated(keys=["H", "L"], prob=0.50, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True))
             # trans_list.append(mt.Rand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
             # trans_list.append(CustomRand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
 
-            trans_list.append(mt.RandZoomd(keys=["H", "L"], prob=0.50, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
+            # trans_list.append(mt.RandZoomd(keys=["H", "L"], prob=0.50, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
             # trans_list.append(mt.RandGaussianNoised(keys=["L"], prob=0.2, mean=0.0, std=0.005))
 
         return mt.Compose(trans_list)
