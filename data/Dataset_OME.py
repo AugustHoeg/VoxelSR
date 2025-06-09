@@ -2,7 +2,7 @@ import os
 import torch
 import glob
 import numpy as np
-from data.train_transforms import BasicSRTransforms
+from data.train_transforms import BasicSRTransforms, GlobalScaleIntensityd
 import monai.transforms as mt
 from data.train_transforms import GaussianblurImaged, KspaceTruncd, \
     RandomCropPairImplicitd, RandomCropUniform, RandomCropForeground, \
@@ -62,8 +62,8 @@ class Dataset_OME():
 
         # Normalization and scaling
         if pdata.norm_type == "scale_intensity":
-            trans_list.append(mt.ScaleIntensityRanged(keys=["H"], a_min=-0.000936, b_min=0.000998, a_max=0, b_max=1.0, clip=True))
-            trans_list.append(mt.ScaleIntensityRanged(keys=["L"], a_min=-0.002063, b_min=0.002476, a_max=0, b_max=1.0, clip=True))
+            trans_list.append(GlobalScaleIntensityd(keys=["H"], global_min=-0.000936, global_max=0.000998))
+            trans_list.append(GlobalScaleIntensityd(keys=["L"], global_min=-0.002063, global_max=0.002476))
         elif pdata.norm_type == "znormalization":
             trans_list.append(mt.NormalizeIntensityd(keys=["H", "L"]))
 

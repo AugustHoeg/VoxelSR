@@ -169,6 +169,18 @@ def get_context_pad_size(opt):
     return pad_size
 
 
+class GlobalScaleIntensityd(MapTransform):
+    def __init__(self, keys, global_min, global_max):
+        super().__init__(keys)
+        self.global_min = global_min
+        self.global_max = global_max
+
+    def __call__(self, data):
+        d = dict(data)
+        for key in self.keys:
+            d[key] = (d[key] - self.global_min) / (self.global_max - self.global_min)
+        return d
+
 class RandomCropOld(Randomizable):
     """ Randomly crops a uniform region from both LR and HR images (supports 2D & 3D). """
 
