@@ -22,15 +22,15 @@ class Dataset_OME():
         elif opt['cluster'] == "TITANS":
             self.data_path = "/scratch/aulho/Python/3D_datasets/datasets/danmax/binning_bone"
         else:  # Default is opt['cluster'] = "DTU_HPC"
-            self.data_path = "../3D_datasets/datasets/danmax/binning"
+            self.data_path = "../3D_datasets/datasets/danmax"
 
-        self.OME_train = sorted(glob.glob(os.path.join(self.data_path, "train/", "bone_1_ome.zarr")))
+        self.OME_train = sorted(glob.glob(os.path.join(self.data_path, "bone_1_ome.zarr")))
         #self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/", "*.zarr")))
 
         # if self.synthetic:
         #     self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/HR_chunks_down4/", "*.npy")))
 
-        self.OME_test = sorted(glob.glob(os.path.join(self.data_path, "test/", "bone_2_ome.zarr")))
+        self.OME_test = sorted(glob.glob(os.path.join(self.data_path, "bone_2_ome.zarr")))
         # self.LR_test = sorted(glob.glob(os.path.join(self.data_path, "test/", "*.zarr")))
 
         # if self.synthetic:
