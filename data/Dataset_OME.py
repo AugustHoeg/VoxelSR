@@ -19,10 +19,13 @@ class Dataset_OME():
 
         if opt['run_type'] == "HOME PC":
             self.data_path = "../Vedrana_master_project/3D_datasets/datasets/danmax/binning_bone"
+            self.group_name = "volume"
         elif opt['cluster'] == "TITANS":
             self.data_path = "/scratch/aulho/Python/3D_datasets/datasets/danmax/binning_bone"
+            self.group_name = "HR"
         else:  # Default is opt['cluster'] = "DTU_HPC"
             self.data_path = "../3D_datasets/datasets/danmax"
+            self.group_name = "HR"
 
         self.OME_train = sorted(glob.glob(os.path.join(self.data_path, "bone_1_ome.zarr")))
         #self.LR_train = sorted(glob.glob(os.path.join(self.data_path, "train/", "*.zarr")))

@@ -232,7 +232,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
 
     elif dataset_type == "ZarrDataset":
         from data.ZarrIterableDataset import ZarrIterableDataset
-        group_name = 'volume'
+        group_name = dataset.group_name
         ome_levels = ['0', '2']  # Example levels, adjust as needed
         patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
 
