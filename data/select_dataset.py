@@ -49,12 +49,14 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         data_path = dataset.data_path
 
     elif dataset_name == "Binning_Bone":
-        from data.Dataset_Binning_Bone import Dataset_Binning_Bone as D
-        dataset = D(opt, apply_split)
+        # from data.Dataset_Binning_Bone import Dataset_Binning_Bone as D
+        # dataset = D(opt, apply_split)
+        from data.Dataset_OME import Dataset_OME as D
+        dataset = D(opt)
         train_files, test_files = dataset.get_file_paths()
         transforms = dataset.get_transforms(mode="train")
         test_transforms = dataset.get_transforms(mode="test")
-        baseline_transforms = dataset.get_baseline_transforms(mode="test")
+        baseline_transforms = dataset.get_transforms(mode="test", baseline=True)
         data_path = dataset.data_path
 
     elif dataset_name == "Synthetic_2022_QIM_52_Bone":
@@ -229,13 +231,12 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         baseline_dataset = monai.data.Dataset(test_files, transform=baseline_transforms)
 
     elif dataset_type == "ZarrDataset":
-        print("ZarrDataset is not implemented yet. Please implement it if needed.")
-        from data.ZarrIterableDataset import ZarrDataset
-        group_name = 'HR'
+        from data.ZarrIterableDataset import ZarrIterableDataset
+        group_name = 'volume'
         ome_levels = ['0', '2']  # Example levels, adjust as needed
         patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
 
-        train_dataset = ZarrDataset(ome_levels,
+        train_dataset = ZarrIterableDataset(ome_levels,
                                     group_name,
                                     paths=train_files,
                                     patch_shape=patch_shape,
@@ -244,23 +245,25 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                     queue_size=256,
                                     store_type='DirectoryStore')
 
-        test_dataset = ZarrDataset(ome_levels,
+        test_dataset = ZarrIterableDataset(ome_levels,
                                     group_name,
                                     paths=test_files,
                                     patch_shape=patch_shape,
                                     patch_transform=transforms,
                                     num_workers=4,
                                     queue_size=256,
-                                    store_type='DirectoryStore')
+                                    store_type='DirectoryStore',
+                                    num_samples=opt.train_opt.validation_iterations)
 
-        baseline_dataset = ZarrDataset(ome_levels,
+        baseline_dataset = ZarrIterableDataset(ome_levels,
                                     group_name,
                                     paths=test_files,
                                     patch_shape=patch_shape,
                                     patch_transform=transforms,
-                                    num_workers=4,
+                                    num_workers=1,
                                     queue_size=256,
-                                    store_type='DirectoryStore')
+                                    store_type='DirectoryStore',
+                                    num_samples=opt.train_opt.validation_iterations)
 
     else:
         raise NotImplementedError('Dataset type %s is not found.' % dataset_type)

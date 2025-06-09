@@ -1,13 +1,13 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: LUND       # Default dataset config
+  - dataset_opt: Binning_Bone       # Default dataset config
   - model_opt: mDCSRN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 4  # upscaling factor
+up_factor: 2  # upscaling factor
 
 # Profile
 run_profile: false
@@ -52,15 +52,15 @@ dataset_opt:
   patch_size: 32
 
   train_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 1
+    dataloader_batch_size: 8
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 0
-    persist_workers: false
+    dataloader_batch_size: 8
+    num_load_workers: 2
+    persist_workers: true
     pin_memory: false
 
 # Hydra configuration

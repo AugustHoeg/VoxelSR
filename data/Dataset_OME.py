@@ -18,9 +18,9 @@ class Dataset_OME():
         self.degradation_type = opt['dataset_opt']['degradation_type']
 
         if opt['run_type'] == "HOME PC":
-            self.data_path = "../Vedrana_master_project/3D_datasets/datasets/danmax/binning"
+            self.data_path = "../Vedrana_master_project/3D_datasets/datasets/danmax/binning_bone"
         elif opt['cluster'] == "TITANS":
-            self.data_path = "/scratch/aulho/Python/3D_datasets/datasets/danmax/binning"
+            self.data_path = "/scratch/aulho/Python/3D_datasets/datasets/danmax/binning_bone"
         else:  # Default is opt['cluster'] = "DTU_HPC"
             self.data_path = "../3D_datasets/datasets/danmax/binning"
 
@@ -52,12 +52,13 @@ class Dataset_OME():
 
         trans_list = []
         #trans_list.append(mt.LoadImaged(keys=["H", "L"], dtype=None))  # Load the image
-        #trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=pdata.channel_dim))  # Load the image
+        trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=pdata.channel_dim))  # Load the image
         #trans_list.append(mt.SignalFillEmptyd(keys=["H", "L"], replacement=0))
 
         # Normalization and scaling
         if pdata.norm_type == "scale_intensity":
-            trans_list.append(mt.ScaleIntensityRanged(keys=["H", "L"], a_min=-0.001, b_min=0.001, a_max=0, b_max=1.0, clip=True))
+            trans_list.append(mt.ScaleIntensityRanged(keys=["H"], a_min=-0.000936, b_min=0.000998, a_max=0, b_max=1.0, clip=True))
+            trans_list.append(mt.ScaleIntensityRanged(keys=["L"], a_min=-0.002063, b_min=0.002476, a_max=0, b_max=1.0, clip=True))
         elif pdata.norm_type == "znormalization":
             trans_list.append(mt.NormalizeIntensityd(keys=["H", "L"]))
 
@@ -67,17 +68,17 @@ class Dataset_OME():
         # Pad for MTVNet
         trans_list.append(mt.BorderPadd(keys=["L"], spatial_border=[pdata.pad_size, pdata.pad_size, pdata.pad_size], mode='constant'))
 
-        # Random crop
-        if not baseline:
-            if p.model_opt.model == "implicit":
-                trans_list.append(RandomCropPairImplicitd(pdata.patch_size, p.up_factor, pdata.foreground_thresh, mode))
-            else:
-                if pdata.patch_crop_type == "random_spatial":
-                    trans_list.append(RandomCropUniform(pdata.patch_size, p.up_factor, pdata.pad_size, p.input_type))
-                elif pdata.patch_crop_type == "random_foreground":
-                    trans_list.append(RandomCropForeground(pdata.patch_size, p.up_factor, pdata.foreground_thresh, pdata.pad_size, p.input_type))
-                elif pdata.patch_crop_type == "random_label":
-                    trans_list.append(RandomCropLabel(pdata.patch_size, p.up_factor, pdata.pad_size, p.input_type, p.mask_mode))
+        # # Random crop
+        # if not baseline:
+        #     if p.model_opt.model == "implicit":
+        #         trans_list.append(RandomCropPairImplicitd(pdata.patch_size, p.up_factor, pdata.foreground_thresh, mode))
+        #     else:
+        #         if pdata.patch_crop_type == "random_spatial":
+        #             trans_list.append(RandomCropUniform(pdata.patch_size, p.up_factor, pdata.pad_size, p.input_type))
+        #         elif pdata.patch_crop_type == "random_foreground":
+        #             trans_list.append(RandomCropForeground(pdata.patch_size, p.up_factor, pdata.foreground_thresh, pdata.pad_size, p.input_type))
+        #         elif pdata.patch_crop_type == "random_label":
+        #             trans_list.append(RandomCropLabel(pdata.patch_size, p.up_factor, pdata.pad_size, p.input_type, p.mask_mode))
 
         # Augmentations after crop
         if mode == "train":
