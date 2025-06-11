@@ -49,11 +49,15 @@ def main(opt: DictConfig):
     zarr_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/danmax/bone_2_ome.zarr"
     out_path = "/dtu/3d-imaging-center/projects/2024_DANFIX_130_ExtremeCT/analysis/binning/bone_2_ome_super.zarr"
 
+    # Define dataset
+    from data.Dataset_OME import Dataset_OME
+    dataset = Dataset_OME(opt)
+
     run_strided_inference_zarr(
         model=model,
         zarr_path=zarr_path,
         out_path=out_path,
-        group_name="HR",
+        group_name="volume",  # "HR"
         level_L='2',
         level_H='0',
         f=4,

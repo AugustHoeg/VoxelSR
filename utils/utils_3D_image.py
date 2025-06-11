@@ -101,6 +101,10 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
 
 def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, level_H, f, size_lr, border, batch_size, overlap_mode="hann"):
 
+    print("TODO: Fix hardcoded global min/max values for bone_2_ome.zarr/HR/2")
+    global_min = -0.002063  # min value for bone_2_ome.zarr/HR/2
+    global_max = 0.002476  # max value for bone_2_ome.zarr/HR/2
+
     # Open input Zarr
     z = zarr.open(zarr_path, mode='r')
     img_L = z[group_name][level_L]
@@ -141,7 +145,12 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, 
             for j, (z0, y0, x0) in enumerate(batch_coords_lr):
                 patch = torch.zeros((1, size_lr, size_lr, size_lr), dtype=torch.float32)
                 data_L = img_L[z0:z0+size_lr, y0:y0+size_lr, x0:x0+size_lr]
-                patch[:, :data_L.shape[0], :data_L.shape[1], :data_L.shape[2]] = torch.from_numpy(data_L).unsqueeze(0)
+
+                # Only for binning bone...
+                data_L = data_L.astype(np.float32)  # Ensure data is float32
+                data_L = (data_L - global_min) / (global_max - global_min)
+
+                patch[:, :data_L.shape[0], :data_L.shape[1], :data_L.shape[2]] = torch.from_numpy(data_L)
                 patch_batch[j] = patch
 
             model.L = patch_batch.to(model.device)
