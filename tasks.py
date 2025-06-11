@@ -49,3 +49,8 @@ def runtest(ctx, experiment_id):
 def runtestid(ctx, model, dataset, experiment_id):
     """Run the testing script."""
     ctx.run(f"python -u run_test.py experiment_id={model}_{dataset}_{experiment_id}")
+
+@task
+def inferencezarr(ctx, model, dataset, experiment_id):
+    """Run the testing script."""
+    ctx.run(f"python -u inference_zarr.py experiment_id={model}_{dataset}_{experiment_id}")
