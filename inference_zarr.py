@@ -47,7 +47,8 @@ def main(opt: DictConfig):
     # out_path = "../PyHPC/ome_array_pyramid_inference.zarr"
 
     zarr_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/danmax/bone_2_ome.zarr"
-    out_path = "/dtu/3d-imaging-center/projects/2024_DANFIX_130_ExtremeCT/analysis/binning/bone_2_ome_super.zarr"
+    out_path = "/work2/aulho/bone_2_ome_super.zarr"
+    #out_path = "/dtu/3d-imaging-center/projects/2024_DANFIX_130_ExtremeCT/analysis/binning/bone_2_ome_super.zarr"
 
     # Define dataset
     from data.Dataset_OME import Dataset_OME
