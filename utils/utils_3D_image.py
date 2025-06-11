@@ -1,5 +1,8 @@
 import os
 import math
+import zarr
+from numcodecs import Blosc
+import dask.array as da
 from PIL import Image
 
 import numpy as np
@@ -8,6 +11,8 @@ import torch.nn.functional as F
 import torchio.transforms as tiotransforms
 from torchvision.utils import make_grid
 import matplotlib.pyplot as plt
+
+from tqdm import tqdm
 
 import h5py
 import monai.transforms as mt
@@ -92,6 +97,190 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
         weight[weight == 0] = 1
     img_E /= weight
     return img_E
+
+
+def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, level_H, f, size_lr, border, batch_size, overlap_mode="hann"):
+
+    # Open input Zarr
+    z = zarr.open(zarr_path, mode='r')
+    img_L = z[group_name][level_L]
+    img_H = z[group_name][level_H]
+    D, H, W = img_L.shape
+    size_hr = size_lr * f
+    stride = size_lr - border
+
+    chunks_L = img_L.chunks
+    chunks_H = tuple(int(c * f) for c in chunks_L)
+
+    # Prepare output Zarr store
+    compressor = Blosc(cname='lz4', clevel=3, shuffle=Blosc.BITSHUFFLE)
+    root_out = zarr.open(out_path, mode='w')
+    grp_out = root_out.create_group("temp")
+    grp_weight = root_out.create_group("weight")
+
+    grp_out.create_dataset(level_H, shape=(D*f, H*f, W*f), chunks=chunks_H, dtype=np.float32, compressor=compressor)
+    grp_weight.create_dataset(level_H, shape=(D*f, H*f, W*f), chunks=chunks_H, dtype=np.float32, compressor=compressor)
+
+    z_E = grp_out[level_H]
+    z_W = grp_weight[level_H]
+
+    coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
+    N = coords_lr.shape[0]
+    patch_batch = torch.empty((batch_size, 1, size_lr, size_lr, size_lr), dtype=torch.float32)
+
+    if overlap_mode == "hann":
+        hann_window = get_hann_window((size_hr, size_hr, size_hr))
+
+    model.netG.eval()
+    with torch.inference_mode():
+        for i in range(0, N, batch_size):
+            print(f"Processing batch {i}-{min(i+batch_size, N)}/{N}")
+            batch_coords_lr = coords_lr[i:i+batch_size]
+            batch_coords_hr = coords_hr[i:i+batch_size]
+
+            for j, (z0, y0, x0) in enumerate(batch_coords_lr):
+                patch = torch.zeros((1, size_lr, size_lr, size_lr), dtype=torch.float32)
+                data_L = img_L[z0:z0+size_lr, y0:y0+size_lr, x0:x0+size_lr]
+                patch[:, :data_L.shape[0], :data_L.shape[1], :data_L.shape[2]] = torch.from_numpy(data_L).unsqueeze(0)
+                patch_batch[j] = patch
+
+            model.L = patch_batch.to(model.device)
+            model.netG_forward()
+            upsampled_batch = model.E.float().cpu()
+
+            for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
+                dz = min(z_hr+size_hr, D*f) - z_hr
+                dy = min(y_hr+size_hr, H*f) - y_hr
+                dx = min(x_hr+size_hr, W*f) - x_hr
+                patch_E = upsampled_batch[j, 0, :dz, :dy, :dx].numpy()
+
+                if overlap_mode == "hann":
+                    window = hann_window[:dz, :dy, :dx].numpy()
+                    z_E[z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += patch_E * window
+                    z_W[z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += window
+                else:  # mean
+                    z_E[z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += patch_E
+                    z_W[z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += 1
+
+    # Normalize with Dask (in memory-safe way)
+    print("Normalizing output by overlap weights...")
+
+    data_E = da.from_zarr(z_E)
+    data_W = da.from_zarr(z_W)
+
+    if overlap_mode == "mean":
+        data_W = da.where(data_W == 0, 1, data_W)
+
+    data_norm = (data_E / data_W).astype(np.float16)
+
+    # Create image pyramid using downscale_local_mean
+    image_pyramid = [data_norm]
+    for i in range(2):
+        image_pyramid.append(da.coarsen(np.mean, image_pyramid[i], axes={0: 2, 1: 2, 2: 2}))
+
+    # Create image group for the volume
+    image_group = root_out.create_group(group_name)
+
+    from utils.utils_zarr import write_ome_pyramid
+    write_ome_pyramid(
+        image_group=image_group,
+        image_pyramid=image_pyramid,
+        label_pyramid=None,  # No labels
+        chunk_size=chunks_H,
+        cname='lz4'  # Compression codec
+    )
+
+    # Remove image and weight groups
+    del root_out["temp"]
+    del root_out["weight"]
+
+    print(f"Done writing {out_path} to OME-Zarr format at {image_group.name}")
+
+    # # Save normalized result to a new group
+    # norm_grp = root_out.require_group("upscaled")
+    # norm_grp.array(name=level_H, data=da_norm, chunks=chunks_H, dtype=np.float16, compressor=compressor)
+
+    print("Done.")
+    return 0
+
+# def run_strided_inference_zarr(model, zarr_path, group_name, weight_name, level_L, level_H, f, size_lr, border, batch_size, overlap_mode="hann"):
+#
+#     # We assume img_L is a zarr array
+#     z = zarr.open(zarr_path, mode='r')
+#     img_L = z[group_name][level_L]
+#     img_H = z[group_name][level_H]
+#
+#     chunks_L = img_L.chunks
+#     chunks_H = img_H.chunks
+#
+#     C, D, H, W = img_L.shape
+#     size_hr = size_lr * f
+#     stride = size_lr - border
+#
+#     # Create zarr for super-resolution output
+#     z_out = zarr.open(f"E_{path}", mode='w', shape=(C, int(D * f), int(H * f), int(W * f)), chunks=chunks_L, dtype=np.float16)
+#     root = zarr.group(store=z_out)
+#     image_group = root.create_group(group_name)
+#     weight_group = root.create_group(weight_name)
+#
+#     coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
+#     N = coords_lr.shape[0]
+#
+#     patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=img_L.dtype)
+#
+#     if overlap_mode == "hann":
+#         hann_window = get_hann_window((size_hr, size_hr, size_hr))
+#         hann_window = hann_window.reshape(1, size_hr, size_hr, size_hr)
+#
+#     model.netG.eval()
+#     with torch.inference_mode():
+#         for i in range(0, N, batch_size):
+#             if i % 10 == 0:
+#                 print("Processing batch %d-%d/%d" % (i, i+batch_size, N))
+#             batch_coords_lr = coords_lr[i:i+batch_size]
+#             batch_coords_hr = coords_hr[i:i+batch_size]
+#
+#             for j, (z, y, x) in enumerate(batch_coords_lr):
+#                 patch = torch.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
+#                 data_L = img_L[:, z:z+size_lr, y:y+size_lr, x:x+size_lr]  # Extract data
+#                 patch[:, :data_L.shape[1], :data_L.shape[2], :data_L.shape[3]] = data_L  # Fill patch with data
+#                 patch_batch[j] = patch  # Fill batch with patch
+#
+#             #upsampled_batch = np.ones((batch_size, C, size_hr, size_hr, size_hr))  # dummy initialization
+#             model.L = patch_batch.to(model.device)
+#             model.netG_forward()
+#             upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
+#
+#             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
+#                 dz = min(z_hr+size_hr, D*f) - z_hr
+#                 dy = min(y_hr+size_hr, H*f) - y_hr
+#                 dx = min(x_hr+size_hr, W*f) - x_hr
+#                 if overlap_mode == "hann":
+#                     z_out[group_name][level_H][:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += upsampled_batch[j, :, :dz, :dy, :dx] * hann_window[:, :dz, :dy, :dx]
+#                     z_out[weight_name][level_H][:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += hann_window[:, :dz, :dy, :dx]
+#                 elif overlap_mode == "mean":
+#                     z_out[group_name][level_H][:, z_hr:z_hr + dz, y_hr:y_hr + dy, x_hr:x_hr + dx] += upsampled_batch[j, :, :dz, :dy, :dx]
+#                     z_out[weight_name][level_H][:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += 1
+#                 #weight[:, z_hr:z_hr+size_hr, y_hr:y_hr+size_hr, x_hr:x_hr+size_hr] += 1
+#
+#     # Normalize the output by the weight
+#     #for idx in z_out[group_name][level_H].chunk_grid:
+#     for idx in tqdm(z_out[group_name][level_H].chunk_grid, desc="Writing SR output", mininterval=2):
+#         chunk_E = z_out[group_name][level_H].get_chunk(idx)
+#         chunk_W = z_out[weight_name][level_H].get_chunk(idx)
+#         if overlap_mode == "mean":
+#             chunk_W[chunk_W == 0] = 1
+#         z_out[group_name][level_H].set_chunk(idx, chunk_E / chunk_W)
+#
+#     # # Normalize the output by the weight using dask
+#     # img_E_da = da.from_array(z_out[group_name][level_H], chunks=chunks_H)
+#     # weight_da = da.from_array(z_out[weight_name][level_H], chunks=chunks_H)
+#
+#     # if overlap_mode == "mean":
+#     #     weight_da[weight_da == 0] = 1
+#     # img_E_da = img_E_da / weight_da
+#
+#     return 0
 
 
 def rescale_array_(arr, mina, maxa, new_min=0.0, new_max=1.0, dtype=np.float32):
