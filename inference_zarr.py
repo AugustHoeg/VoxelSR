@@ -57,7 +57,7 @@ def main(opt: DictConfig):
         model=model,
         zarr_path=zarr_path,
         out_path=out_path,
-        group_name="volume",  # "HR"
+        group_name="HR",  # "HR"
         level_L='2',
         level_H='0',
         f=4,
