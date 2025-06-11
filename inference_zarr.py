@@ -43,8 +43,11 @@ def main(opt: DictConfig):
     model = define_Model(opt)
     model.init_test(experiment_id)
 
-    zarr_path = "../PyHPC/ome_array_pyramid.zarr"
-    out_path = "../PyHPC/ome_array_pyramid_inference.zarr"
+    # zarr_path = "../PyHPC/ome_array_pyramid.zarr"
+    # out_path = "../PyHPC/ome_array_pyramid_inference.zarr"
+
+    zarr_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/danmax/bone_2_ome.zarr"
+    out_path = "/dtu/3d-imaging-center/projects/2024_DANFIX_130_ExtremeCT/analysis/binning/bone_2_ome_super.zarr"
 
     run_strided_inference_zarr(
         model=model,
@@ -56,7 +59,7 @@ def main(opt: DictConfig):
         f=4,
         size_lr=32,
         border=4,
-        batch_size=6,
+        batch_size=18,
         overlap_mode="hann"
     )
 
