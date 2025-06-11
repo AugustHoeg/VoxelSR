@@ -33,7 +33,7 @@ G_regularizer_clipstep: null
 G_param_strict: true
 E_param_strict: true
 
-manual_seed: 8338
+manual_seed: 8400 # 8338
 
 checkpoint_test: 5000
 checkpoint_save: 10000

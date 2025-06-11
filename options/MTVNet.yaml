@@ -1,7 +1,7 @@
 defaults:
   - train_opt: default          # Default training config
   - dataset_opt: CTSpine1K       # Default dataset config
-  - model_opt: MTVNet_L3_64              # Default model config
+  - model_opt: MTVNet_L3              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -36,7 +36,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
+  iterations: 200000
   validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 10000
@@ -50,7 +50,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 64  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
+  patch_size: 128  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
 
   train_dataloader_params:
     dataloader_batch_size: 8
@@ -60,7 +60,7 @@ dataset_opt:
 
   test_dataloader_params:
     dataloader_batch_size: 8
-    num_load_workers: 0
+    num_load_workers: 2
     persist_workers: false
     pin_memory: false
 
