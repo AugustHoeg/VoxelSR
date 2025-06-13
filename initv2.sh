@@ -9,6 +9,8 @@ VENV_DIR=.             # Where to store your virtualenv (default: current direct
 PYTHON_VERSION=3.11.9  # Python version (default: 3.9.19)
 CUDA_VERSION=12.4      # CUDA version (default: 11.6)
 
+export PATH="${VENV_NAME}/nodejs/bin:$PATH"
+
 # Load modules
 module load python3/$PYTHON_VERSION
 module load $(module avail -o modulepath -t -C "python-${PYTHON_VERSION}" 2>&1 | grep "numpy/")

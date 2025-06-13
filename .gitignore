@@ -13,6 +13,8 @@ batch_jobs/**
 dxchange/
 
 old_versions/
+node_modules/
+*.json
 
 saved_models/
 figures/**
