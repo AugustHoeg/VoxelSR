@@ -417,18 +417,19 @@ class RandomCropLabel(Randomizable):
             crop_start_hr = crop_start_lr * self.up_factor
             crop_start_lr += self.size_lr // 2
             crop_start_hr += self.size_hr // 2
+
+            # Correct for padding of LR image, if any
+            if self.pad_size > 0:
+                pred_area_lr = self.size_hr // self.up_factor
+                crop_start_lr = [x + self.pad_size + pred_area_lr // 2 for x in crop_start_lr]
+
         else:
             crop_start_lr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_lr))
 
             # Correct indexes to be divisible by up_factor
-            crop_start_hr = crop_start_lr * self.up_factor
+            crop_start_hr = (crop_start_lr + 2 * self.pad_size) * self.up_factor
             crop_start_lr += self.size_lr // 2
             crop_start_hr += self.size_hr // 2
-
-        # Correct for padding of LR image, if any
-        if self.pad_size > 0:
-            pred_area_lr = self.size_hr//self.up_factor
-            crop_start_lr = [x + self.pad_size + pred_area_lr//2 for x in crop_start_lr]
 
         # Extract patches
         if self.spatial_dims == 2:  # 2D (H, W)
