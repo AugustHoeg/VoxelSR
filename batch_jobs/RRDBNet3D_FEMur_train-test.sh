@@ -5,27 +5,28 @@
 
 # Configuration
 # This is what you should change for your setup
-VENV_NAME=femursr      # Name of your virtualenv (default: venv)
+VENV_NAME=femursr         # Name of your virtualenv (default: venv)
 VENV_DIR=.             # Where to store your virtualenv (default: current directory)
 PYTHON_VERSION=3.11.9  # Python version (default: 3.9.14)
 CUDA_VERSION=12.4      # CUDA version (default: 11.6)
 
 #BSUB -q gpua100
-#BSUB -J Speed
+#BSUB -J RRDBNet3D_FEMur
 ### -- ask for number of cores (default: 1) --
 #BSUB -n 8
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 8:00
+#BSUB -W 18:00
 # request 40GB of system-memory rusage=40
 #BSUB -R "select[gpu40gb]"
-#BSUB -R "rusage[mem=12GB]"
+#BSUB -R "span[hosts=1]"
+#BSUB -R "rusage[mem=70GB]"
 #BSUB -u "soeba@dtu.dk"
 #BSUB -B
 #BSUB -N
-#BSUB -oo batch_outputs/output_august_XtremeCT_%J.out
-#BSUB -eo batch_errors/error_august_XtremeCT_%J.out
+#BSUB -oo batch_outputs/output_soeba_FEMurSR_%J.out
+#BSUB -eo batch_errors/error_soeba_FEMurSR_%J.out
 
 # Exits if any errors occur at any point (non-zero exit code)
 set -e
@@ -56,6 +57,8 @@ source "${VENV_DIR}/${VENV_NAME}/bin/activate"
 
 echo "About to run scripts"
 
-invoke trainid MODELNAME DATASETNAME ID00000
+invoke trainid RRDBNet3D FEMur ID000012
+
+invoke runtestid RRDBNet3D FEMur ID000012
 
 echo "Finished scripts"

@@ -16,8 +16,8 @@ run_profile: false
 wandb_mode: online
 wandb_entity: phialosophy
 wandb_project: ${dataset_opt.name}_${up_factor} # <--- change project
-experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000006
-run_name: ${model_opt.model_architecture}_0006
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000007
+run_name: ${model_opt.model_architecture}
 note: Note
 
 # GPU configuration
@@ -36,7 +36,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
+  iterations: 100000
   validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 10000

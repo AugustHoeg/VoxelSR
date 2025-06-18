@@ -18,8 +18,14 @@ LAM_3d/Figures/**
 
 *.log
 
+batch_outputs/
+batch_errors/
+
+lund_data/
+
 logs/2022_QIM_52_Bone/**
 logs/Synthetic_2022_QIM_52_Bone/**
+logs/FEMur/**
 logs/HCP_1200/**
 logs/IXI/**
 logs/BRATS2023/**

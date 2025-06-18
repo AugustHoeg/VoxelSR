@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: phialosophy
 wandb_project: ${dataset_opt.name}_${up_factor} # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000003
-run_name: ${model_opt.model_architecture}_0003
+run_name: ${model_opt.model_architecture}
 note: Note
 
 # GPU configuration
@@ -31,12 +31,12 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: mDCSRN_ID000000  # "mDCSRN_ID000000"
+  pretrained_experiment_id: mDCSRN_ID000000  # mDCSRN_ID000000
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
+  iterations: 200000
   validation_iterations: 100
   checkpoint_test: 100
   checkpoint_save: 10000

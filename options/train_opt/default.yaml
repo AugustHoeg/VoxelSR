@@ -10,8 +10,8 @@ num_accum_steps_G: 1
 early_stop_patience: 100
 
 G_loss_weights:
-  MSE: 0
-  L1: 1.0
+  MSE: 0                    # 0, 1.0
+  L1: 1.0                   # 0, 1.0
   BCE_Logistic: 0
   BCE: 0
 

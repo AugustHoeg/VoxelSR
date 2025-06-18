@@ -365,7 +365,7 @@ def main(opt: DictConfig):
                         sr_patch = upscale_slices(model, patches_batch_lr['L']['data'], patches_batch_hr['H']['data'], batch_size_2D=16)
                 else:
                     model.feed_data({'H': patches_batch_hr['H'], 'L': patches_batch_lr['L']}, add_key='data')
-                    print("Input patch size:", patches_batch_lr['L'].shape)
+                    print("Input patch size:", patches_batch_lr['L']['data'].shape)
                     model.netG_forward()
                     #model.E = torch.randn_like(patches_batch_hr['H'])
                     sr_patch = model.E

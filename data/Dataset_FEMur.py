@@ -55,20 +55,26 @@ class Dataset_FEMur():
         self.degradation_type = opt['dataset_opt']['degradation_type']
 
         if opt['run_type'] == "HOME PC":
-            self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
-            base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
+            #self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
+            self.data_path = "/work3/soeba/FEMurSR/lund_data/CAD*"
+            #base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
+            base_path = "/work3/soeba/FEMurSR/lund_data/"
+            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045_masked.npy", "CAD050_masked.npy", "CAD054_masked.npy"]
         elif opt['cluster'] == "TITANS":
-            self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
-            base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
+            #self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
+            self.data_path = "/work3/soeba/FEMurSR/lund_data/CAD*"
+            #base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
+            base_path = "/work3/soeba/FEMurSR/lund_data/"
+            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045_masked.npy", "CAD050_masked.npy", "CAD054_masked.npy"]
         else:  # Default is opt['cluster'] = "DTU_HPC"
-            self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
-            base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
-            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045.nii", "CAD050.nii", "CAD054.nii"]
+            #self.data_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/CAD*"
+            self.data_path = "/work3/soeba/FEMurSR/lund_data/CAD*"
+            #base_path = "/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/"
+            base_path = "/work3/soeba/FEMurSR/lund_data/"
+            test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045_masked.npy", "CAD050_masked.npy", "CAD054_masked.npy"]
 
-        images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD*.npy")))
-        images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "CAD*.nii")))
+        images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD*_masked.npy")))
+        images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "CAD*.npy")))
         masks = sorted(glob.glob(os.path.join(self.data_path, "MS/", "CAD[0-9][0-9][0-9].npy")))
 
         #print("masks", masks)
