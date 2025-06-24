@@ -234,6 +234,7 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
 
     # save as pdf
     plt.savefig(f'figures/{filename_prefix}.pdf', dpi=600, bbox_inches='tight')
+    plt.close()
 
 
 
