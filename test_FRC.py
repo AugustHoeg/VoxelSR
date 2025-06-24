@@ -11,7 +11,23 @@ from utils.fourier_ring_correlation import frc, smooth, find_intersect, plot_frc
 import torch.nn.functional as F
 
 
+def plot_images():
 
+    from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
+    comp_tool = comparison_tool(patch_size_hr=slice_H.shape[1:],
+                                upscaling_methods=["tio_nearest", "tio_linear"],
+                                unnorm=False,
+                                div_max=False,
+                                out_dtype=np.uint8)
+
+    grid_image = comp_tool.get_comparison_image(img_dict={'H': slice_H, 'E': slice_E, 'L': slice_L})
+    height, width = grid_image.shape[:2]
+    plt.figure(figsize=(4 * width / 100, 4 * height / 100), dpi=100)
+    plt.imshow(grid_image, vmin=0, vmax=255)
+    plt.title("Comparison image")
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig("figures/comparison_image.png", bbox_inches='tight', pad_inches=0.1)
 
 
 if __name__ == "__main__":
@@ -55,25 +71,22 @@ if __name__ == "__main__":
     slice_E = slice_E.astype(np.float32)
     slice_L = slice_L.astype(np.float32)
 
-    # Interpolate using torch interpolation
+    # Interpolate using torch interpolation / ndimage zoom
     #slice_L_up = F.interpolate(torch.from_numpy(slice_L), scale_factor=up_factor, align_corners=True, mode='bilinear').numpy()
     slice_L_up = ndimage.zoom(slice_L, up_factor, order=2)
 
-    from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
-    comp_tool = comparison_tool(patch_size_hr=slice_H.shape[1:],
-                                upscaling_methods=["tio_nearest", "tio_linear"],
-                                unnorm=False,
-                                div_max=False,
-                                out_dtype=np.uint8)
-
-    grid_image = comp_tool.get_comparison_image(img_dict={'H': slice_H, 'E': slice_E, 'L': slice_L})
-    height, width = grid_image.shape[:2]
-    plt.figure(figsize=(4 * width / 100, 4 * height / 100), dpi=100)
-    plt.imshow(grid_image, vmin=0, vmax=255)
-    plt.title("Comparison image")
-    plt.xticks([])
-    plt.yticks([])
-    plt.savefig("figures/comparison_image.png", bbox_inches='tight', pad_inches=0.1)
+    plt.figure(figsize=(12, 4), dpi=600)
+    plt.subplot(1, 3, 1)
+    plt.imshow(slice_H, cmap='gray')
+    plt.title("HR Slice")
+    plt.subplot(1, 3, 2)
+    plt.imshow(slice_E, cmap='gray')
+    plt.title("SR Slice")
+    plt.subplot(1, 3, 3)
+    plt.imshow(slice_L_up, cmap='gray')
+    plt.title("Upscaled LR Slice")
+    plt.tight_layout()
+    plt.savefig("figures/slice_comparison.png", bbox_inches='tight', pad_inches=0.1)
 
     p_eff = 0.5  # Effective pixel size in micrometers
 
