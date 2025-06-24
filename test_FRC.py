@@ -50,7 +50,7 @@ if __name__ == "__main__":
     slice_L = slice_L.astype(np.float32)
 
     # Interpolate using torch interpolation
-    slice_L_up = F.interpolate(slice_L, scale_factor=up_factor, align_corners=True, mode='bilinear')
+    slice_L_up = F.interpolate(torch.from_numpy(slice_L), scale_factor=up_factor, align_corners=True, mode='bilinear').numpy()
 
     from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
     comp_tool = comparison_tool(patch_size_hr=slice_H.shape[1:],
