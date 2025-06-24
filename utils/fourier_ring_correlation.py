@@ -212,7 +212,7 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     :param thl_label:   Label of the THL curve as str. Default: '1-bit threshold'.
     :return:
     """
-    plt.rcParams.update({'font.family': 'serif'})
+    plt.rcParams.update({'font.family': 'DejaVu Serif'})  # default installed serif font
 
     plt.figure(figsize=(12, 6))
     plt.plot(np.linspace(0, 2, len(corr)), corr, label=label)
@@ -222,7 +222,13 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     plt.plot(x_thl, thl, '--', label='{}'.format(thl_label))
     # plt.plot(x_thl[idx+1], thl[idx+1], 'go', label='intersect')
     plt.axvline(x_thl[intersect], linestyle='--', color='black', label="Resolution limit")
-    plt.text(x_thl[intersect] + 0.02, thl[intersect] + 0.02, "{:.2f} {} ({:.2f} pixels)".format(res_limit, p_unit, res_limit_pix))
+
+    # plot intersection point
+    intersect_x = x_thl[intersect]
+    intersect_y = thl[intersect]
+    if intersect_x <= 1: # Check that the intersection point in x is within the plot limits
+        plt.text(intersect_x + 0.02, intersect_y + 0.02, "{:.2f} {} ({:.2f} pixels)".format(res_limit, p_unit, res_limit_pix))
+
     plt.xlim(0, 1)
     plt.legend()
     plt.grid()
