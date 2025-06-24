@@ -212,7 +212,7 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     :param thl_label:   Label of the THL curve as str. Default: '1-bit threshold'.
     :return:
     """
-    plt.rcParams.update({'font.family': 'Times'})
+    plt.rcParams.update({'font.family': 'serif'})
 
     plt.figure(figsize=(12, 6))
     plt.plot(np.linspace(0, 2, len(corr)), corr, label=label)
