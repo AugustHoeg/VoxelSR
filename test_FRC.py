@@ -4,8 +4,14 @@ import torch
 import numpy as np
 import tifffile
 
+import matplotlib.pyplot as plt
+
 from utils.fourier_ring_correlation import frc, smooth, find_intersect, plot_frc
 import torch.nn.functional as F
+
+
+
+
 
 if __name__ == "__main__":
 
@@ -46,6 +52,22 @@ if __name__ == "__main__":
     # Interpolate using torch interpolation
     slice_L_up = F.interpolate(slice_L, scale_factor=up_factor, align_corners=True, mode='bilinear')
 
+    from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
+    comp_tool = comparison_tool(patch_size_hr=slice_H.shape[1:],
+                                upscaling_methods=["tio_nearest", "tio_linear"],
+                                unnorm=False,
+                                div_max=False,
+                                out_dtype=np.uint8)
+
+    grid_image = comp_tool.get_comparison_image(img_dict={'H': slice_H, 'E': slice_E, 'L': slice_L})
+    height, width = grid_image.shape[:2]
+    plt.figure(figsize=(4 * width / 100, 4 * height / 100), dpi=100)
+    plt.imshow(grid_image, vmin=0, vmax=255)
+    plt.title("Comparison image")
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig("figures/comparison_image.png", bbox_inches='tight', pad_inches=0.1)
+
     p_eff = 0.5  # Effective pixel size in micrometers
 
     # Calculate FRC for HR and SR
@@ -55,7 +77,7 @@ if __name__ == "__main__":
     plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix="FRC_SR_vs_HR")
 
     # Calculate FRC for HR and LR
-    corr, thl = frc(slice_H, slice_L, thl_criterion='1bit')
+    corr, thl = frc(slice_H, slice_L_up, thl_criterion='1bit')
     smoothed = smooth(corr, 5)
     intersect = find_intersect(smoothed, thl)
     plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix="FRC_LR_vs_HR")
