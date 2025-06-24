@@ -200,7 +200,7 @@ def frc(img_1, img_2, thl_criterion='1bit'):
     return corr, thl
 
 
-def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix='frc_plot'):
+def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-bit threshold', label='SR vs HR', filename_prefix='frc_plot'):
     """
     Plot the FRC curve.
     :param corr:        FRC curve as 1D numpy array.
@@ -215,7 +215,7 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     plt.rcParams.update({'font.family': 'Times'})
 
     plt.figure(figsize=(12, 6))
-    plt.plot(np.linspace(0, 2, len(corr)), corr, label='SR vs HR')
+    plt.plot(np.linspace(0, 2, len(corr)), corr, label=label)
     plt.plot(np.linspace(0, 2, len(smoothed)), smoothed, 'r--', label='smoothed curve')
     x_thl = np.linspace(0, 2, len(thl))
     res_limit, res_limit_pix = calculate_resolution_limit(thl, p_eff, intersect)
