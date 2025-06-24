@@ -4,6 +4,7 @@ import torch
 import numpy as np
 import tifffile
 
+from scipy import ndimage
 import matplotlib.pyplot as plt
 
 from utils.fourier_ring_correlation import frc, smooth, find_intersect, plot_frc
@@ -21,6 +22,11 @@ if __name__ == "__main__":
     img_H = tifffile.imread(os.path.join(path, "full_HR_sample_0.tiff"))
     img_E = tifffile.imread(os.path.join(path, "full_SR_sample_0.tiff"))
     img_L = tifffile.imread(os.path.join(path, "full_LR_sample_0.tiff"))
+
+    # print shapes
+    print(f"Shape of HR image: {img_H.shape}")
+    print(f"Shape of SR image: {img_E.shape}")
+    print(f"Shape of LR image: {img_L.shape}")
 
     up_factor = 4
 
@@ -50,7 +56,8 @@ if __name__ == "__main__":
     slice_L = slice_L.astype(np.float32)
 
     # Interpolate using torch interpolation
-    slice_L_up = F.interpolate(torch.from_numpy(slice_L), scale_factor=up_factor, align_corners=True, mode='bilinear').numpy()
+    #slice_L_up = F.interpolate(torch.from_numpy(slice_L), scale_factor=up_factor, align_corners=True, mode='bilinear').numpy()
+    slice_L_up = ndimage.zoom(slice_L, up_factor, order=2)
 
     from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
     comp_tool = comparison_tool(patch_size_hr=slice_H.shape[1:],
