@@ -34,7 +34,7 @@ def FRC(img1, img2, label="SR vs HR", filename_prefix="FRC"):
     corr, thl = frc(img1, img2, thl_criterion='1bit')
     smoothed = smooth(corr, 5)
     intersect = find_intersect(smoothed, thl)
-    plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', label=label, filename_prefix=filename_prefix)
+    plot_frc(corr, smoothed, thl, intersect[0], p_eff, p_unit='µm', thl_label='1-bit threshold', label=label, filename_prefix=filename_prefix)
 
 
 if __name__ == "__main__":
