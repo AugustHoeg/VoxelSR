@@ -47,7 +47,7 @@ if __name__ == "__main__":
     up_factor = 4
 
     # pick ROI
-    roi_loc = [240, 700, 120]
+    roi_loc = [220, 700, 120]
     roi_size = [700, 700]
 
     # define roi in LR space
@@ -75,6 +75,21 @@ if __name__ == "__main__":
     #slice_L_up = F.interpolate(torch.from_numpy(slice_L), scale_factor=up_factor, align_corners=True, mode='bilinear').numpy()
     slice_L_up = ndimage.zoom(slice_L, up_factor, order=2)
 
+    p_eff = 0.5  # Effective pixel size in micrometers
+
+    # Calculate FRC for HR and SR
+    corr, thl = frc(slice_H, slice_E, thl_criterion='1bit')
+    smoothed = smooth(corr, 5)
+    intersect = find_intersect(smoothed, thl)
+    plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix="FRC_SR_vs_HR")
+
+    # Calculate FRC for HR and LR
+    corr, thl = frc(slice_H, slice_L_up, thl_criterion='1bit')
+    smoothed = smooth(corr, 5)
+    intersect = find_intersect(smoothed, thl)
+    plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix="FRC_LR_vs_HR")
+
+    # Plot images
     plt.figure(figsize=(12, 4), dpi=600)
     plt.subplot(1, 3, 1)
     plt.imshow(slice_H, cmap='gray')
@@ -90,19 +105,5 @@ if __name__ == "__main__":
     plt.title("Upscaled LR slice")
     plt.tight_layout()
     plt.savefig("figures/slice_comparison.png", bbox_inches='tight', pad_inches=0.1)
-
-    p_eff = 0.5  # Effective pixel size in micrometers
-
-    # Calculate FRC for HR and SR
-    corr, thl = frc(slice_H, slice_E, thl_criterion='1bit')
-    smoothed = smooth(corr, 5)
-    intersect = find_intersect(smoothed, thl)
-    plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix="FRC_SR_vs_HR")
-
-    # Calculate FRC for HR and LR
-    corr, thl = frc(slice_H, slice_L_up, thl_criterion='1bit')
-    smoothed = smooth(corr, 5)
-    intersect = find_intersect(smoothed, thl)
-    plot_frc(corr, smoothed, thl, intersect[-1], p_eff, p_unit='µm', thl_label='1-bit threshold', filename_prefix="FRC_LR_vs_HR")
 
     print("Done")
