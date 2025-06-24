@@ -10,7 +10,7 @@ input_type: 3D # Input type, 2D or 3D
 up_factor: 4  # upscaling factor
 
 # Profile
-run_profile: false
+run_profile: true
 
 # WandB parameters
 wandb_mode: online
@@ -36,7 +36,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 1000
+  iterations: 300
   validation_iterations: 100
   checkpoint_test: 100
   checkpoint_save: 100

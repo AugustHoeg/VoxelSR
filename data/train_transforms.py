@@ -404,7 +404,7 @@ class RandomCropLabel(Randomizable):
         img_H = img_dict['H']
 
         # Compute valid cropping range
-        valid_range_lr = torch.tensor(img_L.shape[1:]) - self.size_lr
+        # valid_range_lr = torch.tensor(img_L.shape[1:]) - self.size_lr
         valid_range_hr = torch.tensor(img_H.shape[1:]) - self.size_hr
 
         # sample uniformly within mask image
@@ -424,10 +424,12 @@ class RandomCropLabel(Randomizable):
                 crop_start_lr = [x + self.pad_size + pred_area_lr // 2 for x in crop_start_lr]
 
         else:
+            pred_area_lr = self.size_hr // self.up_factor
+            valid_range_lr = torch.tensor(img_L.shape[1:]) - 2 * self.pad_size - pred_area_lr
             crop_start_lr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_lr))
+            crop_start_hr = crop_start_lr * self.up_factor
 
-            # Correct indexes to be divisible by up_factor
-            crop_start_hr = (crop_start_lr + 2 * self.pad_size) * self.up_factor
+            # Convert to center coordinates, accounting for padding
             crop_start_lr += self.size_lr // 2
             crop_start_hr += self.size_hr // 2
 
@@ -702,7 +704,7 @@ class BasicSRTransforms:
         transforms = mt.Compose(
             [
                 # Deterministic Transforms
-                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=None),
+                mt.LoadImaged(keys=["H", "L", "seg_coords"], dtype=torch.uint8),
                 mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=self.channel_dim),
                 mt.SignalFillEmptyd(keys=["H", "L"], replacement=0),  # Remove any NaNs
                 self.norm_transform,

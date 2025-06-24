@@ -441,5 +441,11 @@ def main(opt: DictConfig):
 
     print("Done")
 
+
 if __name__ == "__main__":
     main()
+
+    # remove any .log files in root directory
+    for file in os.listdir(config.ROOT_DIR):
+        if file.endswith(".log"):
+            os.remove(os.path.join(config.ROOT_DIR, file))
