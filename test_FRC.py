@@ -47,7 +47,7 @@ if __name__ == "__main__":
     up_factor = 4
 
     # pick ROI
-    roi_loc = [250, 700, 120]
+    roi_loc = [240, 700, 120]
     roi_size = [700, 700]
 
     # define roi in LR space
