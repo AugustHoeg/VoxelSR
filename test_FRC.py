@@ -47,22 +47,22 @@ if __name__ == "__main__":
     up_factor = 4
 
     # pick ROI
-    roi_loc = [250, 700, 120]
-    roi_size = [1, 700, 700]
+    roi_loc = [240, 700, 120]
+    roi_size = [700, 700]
 
     # define roi in LR space
     roi_loc_lr = [val // up_factor for val in roi_loc]
     roi_size_lr = [val // up_factor for val in roi_size]
 
-    slice_H = img_H[roi_loc[0]:roi_loc[0] + roi_size[0],
+    slice_H = img_H[roi_loc[0],
                     roi_loc[1]:roi_loc[1] + roi_size[1],
                     roi_loc[2]:roi_loc[2] + roi_size[2]]
 
-    slice_E = img_E[roi_loc[0]:roi_loc[0] + roi_size[0],
+    slice_E = img_E[roi_loc[0],
                     roi_loc[1]:roi_loc[1] + roi_size[1],
                     roi_loc[2]:roi_loc[2] + roi_size[2]]
 
-    slice_L = img_L[roi_loc_lr[0]:roi_loc_lr[0] + roi_size_lr[0],
+    slice_L = img_L[roi_loc_lr[0],
                     roi_loc_lr[1]:roi_loc_lr[1] + roi_size_lr[1],
                     roi_loc_lr[2]:roi_loc_lr[2] + roi_size_lr[2]]
 
