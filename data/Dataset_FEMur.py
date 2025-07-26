@@ -73,8 +73,8 @@ class Dataset_FEMur():
             base_path = "/work3/soeba/FEMurSR/lund_data/"
             test_paths = ["CAD045.npy", "CAD050.npy", "CAD054.npy", "CAD045_masked.npy", "CAD050_masked.npy", "CAD054_masked.npy"]
 
-        images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD*_masked.npy")))
-        images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "CAD*.npy")))
+        images_HR = sorted(glob.glob(os.path.join(self.data_path, "HR/", "CAD[0-9][0-9][0-9].npy")))
+        images_LR = sorted(glob.glob(os.path.join(self.data_path, "LR/", "CAD[0-9][0-9][0-9]_masked.npy")))
         masks = sorted(glob.glob(os.path.join(self.data_path, "MS/", "CAD[0-9][0-9][0-9].npy")))
 
         #print("masks", masks)

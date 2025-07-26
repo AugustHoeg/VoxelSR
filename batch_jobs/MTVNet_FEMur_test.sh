@@ -11,7 +11,7 @@ CUDA_VERSION=12.4      # CUDA version (default: 11.6)
 ### -- Select the resources: 1 gpu in exclusive process mode --
 #BSUB -gpu "num=1:mode=exclusive_process"
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 24:00
+#BSUB -W 12:00
 # request 40GB of system-memory rusage=40
 #BSUB -R "select[gpu40gb]"
 #BSUB -R "span[hosts=1]"
@@ -50,8 +50,6 @@ fi
 source "${VENV_DIR}/${VENV_NAME}/bin/activate"
 
 echo "About to run scripts"
-
-invoke trainid MTVNet FEMur ID000001
 
 invoke runtestid MTVNet FEMur ID000001
 

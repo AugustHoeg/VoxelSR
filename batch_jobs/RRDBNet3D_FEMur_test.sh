@@ -57,6 +57,6 @@ source "${VENV_DIR}/${VENV_NAME}/bin/activate"
 
 echo "About to run scripts"
 
-invoke runtestid RRDBNet3D FEMur ID000007
+invoke runtestid RRDBNet3D FEMur ID000013
 
 echo "Finished scripts"

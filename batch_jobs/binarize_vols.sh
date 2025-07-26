@@ -1,26 +1,25 @@
+#!/bin/bash
+# Simple init script for Python on DTU HPC
+# Patrick M. Jensen, patmjen@dtu.dk, 2022
+# Modified by August Leander Hoeg, s173944@dtu.dk, 2023.
+
+# Configuration
 # This is what you should change for your setup
-VENV_NAME=femursr         # Name of your virtualenv (default: venv)
+VENV_NAME=femursr      # Name of your virtualenv (default: venv)
 VENV_DIR=.             # Where to store your virtualenv (default: current directory)
 PYTHON_VERSION=3.11.9  # Python version (default: 3.9.14)
 CUDA_VERSION=12.4      # CUDA version (default: 11.6)
 
-#BSUB -q gpua100
-#BSUB -J MTVNet_FEMur
+#BSUB -q hpc
+#BSUB -J bin_vols
 ### -- ask for number of cores (default: 1) --
-#BSUB -n 8
-### -- Select the resources: 1 gpu in exclusive process mode --
-#BSUB -gpu "num=1:mode=exclusive_process"
+#BSUB -n 1
 ### -- set walltime limit: hh:mm --  maximum 24 hours for GPU-queues right now
-#BSUB -W 24:00
-# request 40GB of system-memory rusage=40
-#BSUB -R "select[gpu40gb]"
-#BSUB -R "span[hosts=1]"
-#BSUB -R "rusage[mem=70GB]"
+#BSUB -W 2:00
+#BSUB -R "rusage[mem=200GB]"
 #BSUB -u "soeba@dtu.dk"
-#BSUB -B
-#BSUB -N
-#BSUB -oo batch_outputs/output_soeba_FEMurSR_%J.out
-#BSUB -eo batch_errors/error_soeba_FEMurSR_%J.out
+#BSUB -oo batch_outputs/output_%J.out
+#BSUB -eo batch_errors/error_%J.out
 
 # Exits if any errors occur at any point (non-zero exit code)
 set -e
@@ -51,8 +50,6 @@ source "${VENV_DIR}/${VENV_NAME}/bin/activate"
 
 echo "About to run scripts"
 
-invoke trainid MTVNet FEMur ID000001
-
-invoke runtestid MTVNet FEMur ID000001
+python binarize_vols.py
 
 echo "Finished scripts"

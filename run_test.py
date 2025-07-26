@@ -244,7 +244,6 @@ def apply_implicit_transform(batch, transform, out_dtype=torch.float32):
     else:
         return {'L': L, 'H': H, 'H_xyz': H_xyz}
 
-
 @hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
 
@@ -343,7 +342,7 @@ def main(opt: DictConfig):
                                       border=overlap_lr,
                                       batch_size=test_batch_size,
                                       overlap_mode="hann")
-        img_E = img_E.unsqueeze(0)
+        img_E = img_E.unsqueeze(0).type(torch.float16)
         time_end = time.time()
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')
         print("Full reconstruction size:", img_E.size())
@@ -351,10 +350,18 @@ def main(opt: DictConfig):
             os.makedirs(image_dir + "full_volumes/")
         if not os.path.exists(image_dir + "full_volumes/TIFF/" + str(sample_idx) + "/"):
             os.makedirs(image_dir + "full_volumes/TIFF/" + str(sample_idx) + "/")
-        np.save(image_dir + "full_volumes/volume_" + str(sample_idx),img_E)
+        #np.save(image_dir + "full_volumes/volume_" + str(sample_idx),img_E.astype(np.uint16))
+        if not os.path.exists('/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/SR_results/' + experiment_id + '/'):
+            os.makedirs('/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/SR_results/' + experiment_id + '/')
+        print("Image E shape: ", img_E.shape)
+        plt.imshow(img_E[0][0][img_E.shape[2]//2])
+        plt.savefig('/zhome/19/0/64415/Desktop/fig1.jpg')
+        print(f'img_E type: {type(img_E)}')
+        np.save('/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/SR_results/' + experiment_id + '/volume_' + str(sample_idx) + '.npy', img_E) #.cpu().numpy().astype(np.uint16)
         # qim3d.io.save(image_dir + "full_volumes/TIFF/" + str(sample_idx) + "/", img_E, basename="volume_" + str(sample_idx), sliced_dim=0)
-        tifffile.imwrite(image_dir + "full_volumes/TIFF/" + str(sample_idx) + ".tif", img_E.squeeze(0).squeeze(0).cpu().numpy())
-        print(f'Saved whole test volume at: {image_dir + "full_volumes/volume_" + str(sample_idx)} as numpy and tif')
+        #tifffile.imwrite(image_dir + "full_volumes/TIFF/" + str(sample_idx) + ".tif", img_E.squeeze(0).squeeze(0).cpu().numpy().astype(np.uint16))
+        tifffile.imwrite('/dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/SR_results/' + experiment_id + '/volume_' + str(sample_idx) + '.tif', img_E.numpy())
+        print(f'Saved whole test volume at: /dtu/3d-imaging-center/projects/2022_QIM_52_Bone/analysis/LUND_data/SR_results/{experiment_id}/volume_{sample_idx} as numpy and tif')
 
         if opt['model_opt']['model_architecture'] == "MTVNet":
             # Crop context if needed

@@ -53,6 +53,4 @@ echo "About to run scripts"
 
 invoke trainid MTVNet FEMur ID000001
 
-invoke runtestid MTVNet FEMur ID000001
-
 echo "Finished scripts"

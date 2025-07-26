@@ -235,10 +235,8 @@ class RandomCropLabel(Randomizable):
         img_H = img_dict['H']
 
         # Compute valid cropping range
-        valid_range_lr = torch.tensor(img_L.shape[1:]) - self.size_lr
+        # valid_range_lr = torch.tensor(img_L.shape[1:]) - self.size_lr
         valid_range_hr = torch.tensor(img_H.shape[1:]) - self.size_hr
-
-        print("img_L, img_L shape", img_L.shape, img_H.shape)
 
         # sample uniformly within mask image
         assert 'seg_coords' in img_dict, "seg_coords must be in img_dict for RandomCropLabel transform"
@@ -253,13 +251,16 @@ class RandomCropLabel(Randomizable):
 
             # Correct for padding of LR image, if any
             if self.pad_size > 0:
-                pred_area_lr = self.size_hr//self.up_factor
-                crop_start_lr = [x + self.pad_size + pred_area_lr//2 for x in crop_start_lr]
-        else:
-            crop_start_lr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_lr))
+                pred_area_lr = self.size_hr // self.up_factor
+                crop_start_lr = [x + self.pad_size + pred_area_lr // 2 for x in crop_start_lr]
 
-            # Correct indexes to be divisible by up_factor
-            crop_start_hr = (crop_start_lr + 2 * self.pad_size) * self.up_factor
+        else:
+            pred_area_lr = self.size_hr // self.up_factor
+            valid_range_lr = torch.tensor(img_L.shape[1:]) - 2 * self.pad_size - pred_area_lr
+            crop_start_lr = np.asarray(self.get_label_coords(img_dict['seg_coords'], valid_range_lr))
+            crop_start_hr = crop_start_lr * self.up_factor
+
+            # Convert to center coordinates, accounting for padding
             crop_start_lr += self.size_lr // 2
             crop_start_hr += self.size_hr // 2
 
@@ -283,21 +284,6 @@ class RandomCropLabel(Randomizable):
             H = img_H[:, crop_start_hr[0] - self.size_hr//2:crop_start_hr[0] + self.size_hr//2,
                          crop_start_hr[1] - self.size_hr//2:crop_start_hr[1] + self.size_hr//2,
                          crop_start_hr[2] - self.size_hr//2:crop_start_hr[2] + self.size_hr//2]
-
-        # # Plot slice
-        # plt.figure()
-        # plt.imshow(img_L[:,:,img_L.shape[-1]//2].squeeze())
-        # plt.figure()
-        # plt.imshow(img_H[:,:,img_H.shape[-1]//2].squeeze())
-        # plt.savefig("figures/FEMur_test_slice.png", dpi=300)
-
-        # plt.figure()
-        # plt.imshow(L[:,:,L.shape[-1]//2].squeeze())
-        # plt.figure()
-        # plt.imshow(H[:,:,H.shape[-1]//2].squeeze())
-        # plt.savefig("figures/FEMur_test_crop.png", dpi=300)
-
-        print("L, H shape", L.shape, H.shape)
 
         return {'H': H.float(), 'L': L.float()}
 
