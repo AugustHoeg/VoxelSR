@@ -46,31 +46,33 @@ class Dataset_VoDaSuRe_OME():
             basedir_work2 = "/work2/aulho/"
             basedir_3dic = "/dtu/3d-imaging-center/projects/2025_DANFIX_163_VoDaSuRe/raw_data_extern/stitched/processed/"
 
-            VoDaSuRe_train_paths = [os.path.join(basedir_work2, "Vertebrae_A_80kV/processed/*.zarr"),
-                                    os.path.join(basedir_work2, "Vertebrae_B_80kV/processed/*.zarr"),
-                                    os.path.join(basedir_work2, "Vertebrae_C_80kV/processed/*.zarr"),
-                                    os.path.join(basedir_work2, "Femur_01_80kV/processed/*.zarr"),
-                                    os.path.join(basedir_work2, "Femur_15_80kV/processed/*.zarr"),
-                                    os.path.join(basedir_work2, "Femur_21_80kV/processed/*.zarr"),
-                                    os.path.join(basedir_work2, "processed/Oak_A_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_work2, "processed/Larch_B_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_3dic,  "Bamboo_A_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_3dic,  "Cardboard_A_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_3dic,  "Cypress_A_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_3dic,  "Elm_A_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_3dic,  "MDF_A_bin1x1/*ome_1.zarr"),
-                                    os.path.join(basedir_3dic,  "Ox_bone_A_bin1x1/*ome_1.zarr")]
+            VoDaSuRe_train_paths = [glob.glob(os.path.join(basedir_work2, "Vertebrae_A_80kV/processed/*.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "Vertebrae_B_80kV/processed/*.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "Vertebrae_C_80kV/processed/*.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "Femur_01_80kV/processed/*.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "Femur_15_80kV/processed/*.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "Femur_21_80kV/processed/*.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "processed/Oak_A_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_work2, "processed/Larch_B_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_3dic,  "Bamboo_A_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_3dic,  "Cardboard_A_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_3dic,  "Cypress_A_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_3dic,  "Elm_A_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_3dic,  "MDF_A_bin1x1/*ome_1.zarr")),
+                                    glob.glob(os.path.join(basedir_3dic,  "Ox_bone_A_bin1x1/*ome_1.zarr"))]
+            VoDaSuRe_train_paths = sum(VoDaSuRe_train_paths, [])
 
-            VoDaSuRe_test_paths = [os.path.join(basedir_work2, "Vertebrae_D_80kV/processed/*.zarr"),
-                                   os.path.join(basedir_work2, "Femur_74_80kV/processed/*.zarr"),
-                                   os.path.join(basedir_work2, "processed/Oak_A_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_work2, "processed/Larch_B_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_3dic,  "Bamboo_A_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_3dic,  "Cardboard_A_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_3dic,  "Cypress_A_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_3dic,  "Elm_A_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_3dic,  "MDF_A_bin1x1/*ome_0.zarr"),
-                                   os.path.join(basedir_3dic,  "Ox_bone_A_bin1x1/*ome_0.zarr")]
+            VoDaSuRe_test_paths = [glob.glob(os.path.join(basedir_work2, "Vertebrae_D_80kV/processed/*.zarr")),
+                                   glob.glob(os.path.join(basedir_work2, "Femur_74_80kV/processed/*.zarr")),
+                                   glob.glob(os.path.join(basedir_work2, "processed/Oak_A_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_work2, "processed/Larch_B_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_3dic,  "Bamboo_A_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_3dic,  "Cardboard_A_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_3dic,  "Cypress_A_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_3dic,  "Elm_A_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_3dic,  "MDF_A_bin1x1/*ome_0.zarr")),
+                                   glob.glob(os.path.join(basedir_3dic,  "Ox_bone_A_bin1x1/*ome_0.zarr"))]
+            VoDaSuRe_test_paths = sum(VoDaSuRe_test_paths, [])
 
             train_paths = {"HCP_1200":  glob.glob("/work2/aulho/HCP_1200/ome/train/*.zarr"),
                            "IXI":       glob.glob("/work2/aulho/IXI/ome/train/*.zarr"),
@@ -126,7 +128,7 @@ class Dataset_VoDaSuRe_OME():
             print(self.dataset_dict_train[dataset])
             print("Dataset dict test:")
             print(self.dataset_dict_test[dataset])
-            exit(0)
+        exit(0)
 
     def create_dataset_dict(self, paths, group_pairs, sampling_weight=1.0, store_type="DirectoryStore"):
 

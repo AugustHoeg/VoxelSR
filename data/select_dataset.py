@@ -286,7 +286,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                       num_workers=8,
                                       queue_size=128,
                                       store_type='DirectoryStore',
-                                      num_samples=1000,
+                                      num_samples=5000,
                                       sampling_method='random'  # 'random' or 'in_chunk'
                                       )
 
