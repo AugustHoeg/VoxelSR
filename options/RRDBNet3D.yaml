@@ -1,5 +1,5 @@
 defaults:
-  - train_opt: default          # Default training config
+  - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
   - model_opt: RRDBNet3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
