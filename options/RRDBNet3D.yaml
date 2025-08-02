@@ -59,7 +59,7 @@ dataset_opt:
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 8
+    dataloader_batch_size: 4
     num_load_workers: 2
     persist_workers: true
     pin_memory: false
