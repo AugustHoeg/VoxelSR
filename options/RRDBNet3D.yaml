@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: FEMur       # Default dataset config
+  - dataset_opt: VoDaSuRe_OME       # Default dataset config
   - model_opt: RRDBNet3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
@@ -15,7 +15,7 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_${up_factor} # <--- change project
+wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_000
 note: Note
@@ -43,9 +43,9 @@ train_opt:
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
-  G_optimizer_lr: 5e-5 # 1e-4
+  G_optimizer_lr: 1e-4 # 1e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 10
+  G_optimizer_clipgrad: 5
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -53,13 +53,13 @@ dataset_opt:
   patch_size: 32
 
   train_dataloader_params:
-    dataloader_batch_size: 12
-    num_load_workers: 2
+    dataloader_batch_size: 8
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 12
+    dataloader_batch_size: 8
     num_load_workers: 2
     persist_workers: true
     pin_memory: false
