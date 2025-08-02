@@ -623,16 +623,8 @@ class ModelPlain(ModelBase):
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
-        if False:
-            # Compute performance metrics
-            rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-            if self.opt['input_type'] == '2D':
-                compute_performance_metrics_2D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-            elif self.opt['input_type'] == '3D':
-                compute_performance_metrics_3D(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-        else:
-            rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-            compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
         # self.netG.eval()

@@ -1,6 +1,6 @@
 defaults:
   - train_opt: default          # Default training config
-  - dataset_opt: HCP_1200       # Default dataset config
+  - dataset_opt: VoDaSuRe_OME       # Default dataset config
   - model_opt: mDCSRN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
@@ -13,7 +13,7 @@ up_factor: 4  # upscaling factor
 run_profile: true
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_${up_factor} # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000

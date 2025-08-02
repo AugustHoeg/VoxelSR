@@ -19,7 +19,6 @@ from timm.layers import PatchEmbed
 import numpy as np
 from torchvision.models.video.mvit import PositionalEncoding
 from models.models_3D import SRBlock3D, ICNR3D, FusedMBConv
-from models.SwinT.AugustSwin3D_clean import AugustDRCTBlock, AugustSwinV2Layer
 
 from monai.networks.nets.swin_unetr import BasicLayer as monaibasiclayer
 
@@ -1598,7 +1597,7 @@ class MTVNet_no_CT(nn.Module):
             LX_x = self.patch_embedding_blks[level](LX_img)
 
             # CT initialization
-            LX_ct = None #self.test_ct_tokenizer_blks[level](LX_x)  # TODO: test creating CTs based on local token embeddings
+            LX_ct = None  #self.test_ct_tokenizer_blks[level](LX_x)  # TODO: test creating CTs based on local token embeddings
 
             # Window partition local tokens for AugustBlocks
             LX_x = window_partition3D(LX_x, window_size=self.attn_window_sizes[level])
@@ -1690,7 +1689,7 @@ if __name__ == "__main__":
 
     context_sizes = [32]
     num_levels = len(context_sizes)  # 3
-    shallow_feats = 128  # 128 normally
+    shallow_feats = [128]  # 128 normally
     pre_up_feats = [64, 64]
     num_blks = [3]  # [1, 1, 3]  # [6, 6, 6]
     blk_layers = [6]  # Number of transformer layers per block in each level

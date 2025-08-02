@@ -21,6 +21,16 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         baseline_transforms = dataset.get_transforms(mode="test", baseline=True)
         data_path = dataset.data_path
 
+    elif dataset_name == "VoDaSuRe_OME":
+        from data.Dataset_VoDaSuRe_OME import Dataset_VoDaSuRe_OME as D
+        dataset = D(opt)
+        dataset_dict_train, dataset_dict_test = dataset.get_dataset_dicts()
+        #train_files, test_files = dataset.get_file_paths()
+        transforms = dataset.get_transforms(mode="train")
+        test_transforms = dataset.get_transforms(mode="test")
+        #baseline_transforms = dataset.get_baseline_transforms(mode="test")
+        data_path = dataset.data_path
+
     elif dataset_name == "VoDaSuRe":
         from data.Dataset_VoDaSuRe import Dataset_VoDaSuRe as D
         dataset = D(opt)
@@ -264,6 +274,34 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                     queue_size=256,
                                     store_type='DirectoryStore',
                                     num_samples=opt.train_opt.validation_iterations)
+
+    elif dataset_type == "ZarrDatasetV2":
+        from data.ZarrIterableDatasetV2 import ZarrIterableDataset
+
+        patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
+        train_dataset = ZarrIterableDataset(dataset_dict_train,
+                                      patch_shape,
+                                      patch_transform=transforms,
+                                      up_factor=4,
+                                      num_workers=8,
+                                      queue_size=128,
+                                      store_type='DirectoryStore',
+                                      num_samples=1000,
+                                      sampling_method='random'  # 'random' or 'in_chunk'
+                                      )
+
+        test_dataset = ZarrIterableDataset(dataset_dict_test,
+                                            patch_shape,
+                                            patch_transform=transforms,
+                                            up_factor=4,
+                                            num_workers=8,
+                                            queue_size=128,
+                                            store_type='DirectoryStore',
+                                            num_samples=opt.train_opt.validation_iterations,
+                                            sampling_method='random'  # 'random' or 'in_chunk'
+                                            )
+
+        baseline_dataset = test_dataset
 
     else:
         raise NotImplementedError('Dataset type %s is not found.' % dataset_type)

@@ -880,6 +880,9 @@ class SuperFormer(nn.Module):
             self.SR1 = SRBlock3D(num_feat // 2, num_feat // 2, k_size=6, pad=2, upsample_method=upsampler, upscale_factor=2, use_checkpoint=False)
             recon_feats = num_feat // 2
 
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.HRconv = nn.Conv3d(recon_feats, recon_feats, 3, 1, 1, bias=True)
+
         # if upscale >= 2:
         #     self.SR0 = SRBlock3D(num_feat, num_feat//2, k_size=6, pad=2, upsample_method=upsampler, upscale_factor=2, use_checkpoint=False)
         #     recon_feats = num_feat//2
@@ -1008,7 +1011,9 @@ class SuperFormer(nn.Module):
                     elif self.upscale == 4:
                         res = self.SR0(res)
                         res = self.SR1(res)
-                    res = self.conv_last(res)
+
+                    #res = self.conv_last(res)
+                    res = self.conv_last(self.lrelu(self.HRconv(res)))
 
                 #x = self.conv_last(self.conv_before_last(res))  # Original
                 #res = self.conv_last(self.conv_before_last(res))

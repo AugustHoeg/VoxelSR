@@ -1956,7 +1956,7 @@ class MTVNet(nn.Module):
         self.conv_image = nn.Conv3d(in_channels=in_chans_last_conv,
                                     out_channels=shallow_feats[-1],
                                     kernel_size=3, stride=1, padding=1, bias=True)
-        self.act_image = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
         if self.layer_type == "swin" or self.layer_type == "fastervit_without_ct":
             self.up_final_feats = SRBlock3D(embed_dims[-1], embed_dims[-1], k_size=6, pad=2,
@@ -1979,6 +1979,8 @@ class MTVNet(nn.Module):
             self.SR0 = SRBlock3D(shallow_feats[-1], feats_2x, k_size=6, pad=2, upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
             self.SR1 = SRBlock3D(feats_2x, feats_4x, k_size=6, pad=2, upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
             recon_feats = feats_4x
+
+        self.HRconv = nn.Conv3d(recon_feats, recon_feats, 3, 1, 1, bias=True)
 
         self.conv_last = nn.Sequential(
             #nn.Conv3d(in_channels=recon_feats, out_channels=recon_feats//2, kernel_size=3, stride=1, padding=1, bias=True),
@@ -2046,7 +2048,7 @@ class MTVNet(nn.Module):
         # Long skip connection of highest-level image
         # out = LX_img + self.conv_image(final_feats)  # Without activation with skip without sfe-module
         # final_feats = self.conv_image(final_feats)  # Without activation
-        final_feats = self.act_image(self.conv_image(final_feats))  # With activation
+        final_feats = self.lrelu(self.conv_image(final_feats))  # With activation
 
         if self.enable_long_skip:
             out = LX_img + final_feats  # Works great
@@ -2062,7 +2064,8 @@ class MTVNet(nn.Module):
             out = self.SR0(out)
             out = self.SR1(out)
 
-        out = self.conv_last(out)
+        #out = self.conv_last(out)
+        out = self.conv_last(self.lrelu(self.HRconv(out)))
 
         return out
 
@@ -2072,7 +2075,7 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 64 * 1  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
+    img_size = 32 * 1  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).cuda()
     B, C, H, W, D = x.shape
@@ -2081,13 +2084,13 @@ if __name__ == "__main__":
     attn_window_size = 4  # 4  # The size of the window to perform local attention within, M in the swin papers. standard is 7
     embed_dim = patch_size ** 3  # set to patch_size**3 to keep same amount of information in embedding, emb_dim 96 is default for 4x4x3 = 48 (number of features in 1 4x4 patch)
 
-    context_sizes = [64, 32]
+    context_sizes = [32]
     num_levels = len(context_sizes)  # 3
-    shallow_feats = [128, 128]  # 128 normally
+    shallow_feats = [128]  # 128 normally
     pre_up_feats = [64, 64]
-    num_blks = [2, 3]  # [1, 1, 3]  # [6, 6, 6]
-    blk_layers = [6, 6, 6]  # Number of transformer layers per block in each level
-    patch_sizes = [4, 2]  # [16, 8, 2]
+    num_blks = [3]  # [1, 1, 3]  # [6, 6, 6]
+    blk_layers = [6]  # Number of transformer layers per block in each level
+    patch_sizes = [2]  # [16, 8, 2]
     ct_size = 4
     ct_pool_method = "conv"
     ct_embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
