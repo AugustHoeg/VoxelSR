@@ -122,6 +122,12 @@ class Dataset_VoDaSuRe_OME():
                                                                        sampling_weight=sampling_weights[dataset],
                                                                        store_type=store_type[dataset])
 
+            print("Dataset dict train:")
+            print(self.dataset_dict_train[dataset])
+            print("Dataset dict test:")
+            print(self.dataset_dict_test[dataset])
+            exit(0)
+
     def create_dataset_dict(self, paths, group_pairs, sampling_weight=1.0, store_type="DirectoryStore"):
 
         d = {
