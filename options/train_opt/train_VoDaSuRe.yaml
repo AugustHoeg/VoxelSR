@@ -17,7 +17,7 @@ G_loss_weights:
 
 E_decay: 0
 G_optimizer_type: adam
-G_optimizer_lr: 1e-4
+G_optimizer_lr: 2e-4
 G_optimizer_wd: 0
 G_optimizer_clipgrad: 15
 G_optimizer_reuse: true
