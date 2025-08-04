@@ -11,7 +11,7 @@ netG:
   embed_dim: 252         # Default is 252, tested 126 working, 192 working, 128 not working
   num_heads: [6, 6, 6]   # Default is [6, 6, 6]
   mlp_ratio: 2
-  upsampler: pixelshuffle3D  # Custom upsampling: "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
+  upsampler: nearest  # Custom upsampling: "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
 
   resi_connection: 1conv
   ape: false
