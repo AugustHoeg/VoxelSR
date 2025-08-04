@@ -1,4 +1,5 @@
 import os
+import copy
 import glob
 import queue
 from tqdm import tqdm
@@ -146,7 +147,6 @@ class ZarrProducer():
         p = w / np.sum(w)
         while not self.stop_event.is_set():
             name = np.random.choice(list(self.worker_data.keys()), p=p)
-            #name = random.choices(list(self.worker_data.keys()), weights=w)[0]  # random name
             z = random.choice(self.worker_data[name]['zarr_data'])  # Randomly select a zarr file in dataset
             group_pair = random.choice(self.worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
             patch = self._sample_data(z, group_pair, self.patch_shape, metadata={'name': name, 'group_pair': group_pair})
@@ -232,12 +232,20 @@ class ZarrIterableDataset(IterableDataset):
         else:
             self._sample_data = extract_patch_levels
 
-    def _load_data(self, worker_data):
+    def _load_data(self, worker_id, num_workers):
 
-        for name, dataset in worker_data.items():
-            dataset['zarr_data'] = []  # Create field for zarr file handles
+        worker_data = copy.deepcopy(self.dataset_dict)
+        for name, dataset in self.dataset_dict.items():
+            paths = dataset['paths'][worker_id::num_workers]
+            if paths:
+                worker_data[name]['paths'] = dataset['paths'][worker_id::num_workers]
+            else:
+                del worker_data[name]
+                continue
 
-            for path in dataset['paths']:
+            worker_data[name]['zarr_data'] = []  # Create field for zarr file handles
+
+            for path in paths:
                 if dataset['store_type'] == 'Numpy':
                     # TODO: fix NumPy method here.
                     data = zarr.open(path, mode='r', cache_attrs=True)
@@ -258,7 +266,7 @@ class ZarrIterableDataset(IterableDataset):
                 #if self.sampling_method == 'in_chunk' and self.store_type != 'Numpy':
                 #    self._assert_chunk_sampling(z, self.patch_shape)
 
-                dataset['zarr_data'].append(z)
+                worker_data[name]['zarr_data'].append(z)
 
                 if self.print_metadata:
                     store = parse_url(path, mode="r").store
@@ -267,7 +275,7 @@ class ZarrIterableDataset(IterableDataset):
                     print(root.info)  # Print the metadata of the Zarr group
                     print(root.tree())  # Print the structure of the Zarr group
 
-        return None
+        return worker_data
 
     def _assert_chunk_sampling(self, root, patch_shape):
         # TODO: Fix this method
@@ -333,12 +341,8 @@ class ZarrIterableDataset(IterableDataset):
             num_workers = worker_info.num_workers
             samples_per_worker = int(np.ceil(self.num_samples / float(worker_info.num_workers)))
 
-        worker_data = self.dataset_dict
-        for name, dataset in worker_data.items():
-            worker_data[name]['paths'] = dataset['paths'][worker_id::num_workers]
-
         # Load data
-        self._load_data(worker_data)
+        worker_data = self._load_data(worker_id, num_workers)
 
         if self.producer is None and self.num_workers > 0:
             self._init_producer(worker_id, worker_data)
@@ -408,13 +412,13 @@ def main():
                                   patch_transform,
                                   up_factor=4,
                                   num_workers=4,
-                                  queue_size=64,
+                                  queue_size=128,
                                   store_type='DirectoryStore',
                                   num_samples=1000,
                                   sampling_method='random'  # 'random' or 'in_chunk'
                                   )
 
-    num_workers = 1
+    num_workers = 4
     persistent_workers = True if num_workers > 0 else False
     dataloader = torch.utils.data.DataLoader(dataset,
                                             batch_size=batch_size,

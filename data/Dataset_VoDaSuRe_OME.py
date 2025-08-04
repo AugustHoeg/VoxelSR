@@ -19,13 +19,13 @@ class Dataset_VoDaSuRe_OME():
         self.degradation_type = opt['dataset_opt']['degradation_type']
 
         if opt['run_type'] == "HOME PC":
-            self.data_path = ""
+            self.data_path = "../Vedrana_master_project/3D_datasets/datasets/"
 
-            train_paths = {"HCP_1200": glob.glob("../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/train/*.zarr"),
-                           "IXI": glob.glob("../Vedrana_master_project/3D_datasets/datasets/IXI/ome/train/*.zarr")}
+            train_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr")),
+                           "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))}
 
-            test_paths = {"HCP_1200": glob.glob("../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/test/*.zarr"),
-                          "IXI": glob.glob("../Vedrana_master_project/3D_datasets/datasets/IXI/ome/test/*.zarr")}
+            test_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr")),
+                          "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))}
 
             sampling_weights = {"HCP_1200": 1.0,
                                 "IXI":      1.0}
@@ -41,52 +41,21 @@ class Dataset_VoDaSuRe_OME():
             raise NotImplementedError(f"Dataset VoDaSuRe not supported for run type: {opt['run_type']}")
 
         else:  # Default is opt['cluster'] = "DTU_HPC"
-            self.data_path = ""
+            self.data_path = "../3D_datasets/datasets/"
 
-            basedir_work2 = "/work2/aulho/"
-            basedir_3dic = "/dtu/3d-imaging-center/projects/2025_DANFIX_163_VoDaSuRe/raw_data_extern/stitched/processed/"
+            train_paths = {"HCP_1200":  glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr")),
+                           "IXI":       glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr")),
+                           "LITS":      glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr")),
+                           "CTSpine1K": glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/train/*.zarr")),
+                           "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/train/*.zarr")),
+                           "VoDaSuRe":  glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))}
 
-            VoDaSuRe_train_paths = [glob.glob(os.path.join(basedir_work2, "Vertebrae_A_80kV/processed/*.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "Vertebrae_B_80kV/processed/*.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "Vertebrae_C_80kV/processed/*.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "Femur_01_80kV/processed/*.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "Femur_15_80kV/processed/*.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "Femur_21_80kV/processed/*.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "processed/Oak_A_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_work2, "processed/Larch_B_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_3dic,  "Bamboo_A_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_3dic,  "Cardboard_A_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_3dic,  "Cypress_A_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_3dic,  "Elm_A_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_3dic,  "MDF_A_bin1x1/*ome_1.zarr")),
-                                    glob.glob(os.path.join(basedir_3dic,  "Ox_bone_A_bin1x1/*ome_1.zarr"))]
-            VoDaSuRe_train_paths = sum(VoDaSuRe_train_paths, [])
-
-            VoDaSuRe_test_paths = [glob.glob(os.path.join(basedir_work2, "Vertebrae_D_80kV/processed/*.zarr")),
-                                   glob.glob(os.path.join(basedir_work2, "Femur_74_80kV/processed/*.zarr")),
-                                   glob.glob(os.path.join(basedir_work2, "processed/Oak_A_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_work2, "processed/Larch_B_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_3dic,  "Bamboo_A_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_3dic,  "Cardboard_A_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_3dic,  "Cypress_A_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_3dic,  "Elm_A_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_3dic,  "MDF_A_bin1x1/*ome_0.zarr")),
-                                   glob.glob(os.path.join(basedir_3dic,  "Ox_bone_A_bin1x1/*ome_0.zarr"))]
-            VoDaSuRe_test_paths = sum(VoDaSuRe_test_paths, [])
-
-            train_paths = {"HCP_1200":  glob.glob("/work2/aulho/HCP_1200/ome/train/*.zarr"),
-                           "IXI":       glob.glob("/work2/aulho/IXI/ome/train/*.zarr"),
-                           "LITS":      glob.glob("/work2/aulho/LITS/ome/train/*.zarr"),
-                           "CTSpine1K": glob.glob("/work2/aulho/CTSpine1K/ome/train/*.zarr"),
-                           "LIDC-IDRI": glob.glob("/work2/aulho/LIDC_IDRI/ome/train/*.zarr"),
-                           "VoDaSuRe":  VoDaSuRe_train_paths}
-
-            test_paths = {"HCP_1200":   glob.glob("/work2/aulho/HCP_1200/ome/test/*.zarr"),
-                          "IXI":        glob.glob("/work2/aulho/IXI/ome/test/*.zarr"),
-                          "LITS":       glob.glob("/work2/aulho/LITS/ome/test/*.zarr"),
-                          "CTSpine1K":  glob.glob("/work2/aulho/CTSpine1K/ome/test/*.zarr"),
-                          "LIDC-IDRI":  glob.glob("/work2/aulho/LIDC_IDRI/ome/test/*.zarr"),
-                          "VoDaSuRe":   VoDaSuRe_test_paths}
+            test_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr")),
+                           "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr")),
+                           "LITS": glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr")),
+                           "CTSpine1K": glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/test/*.zarr")),
+                           "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr")),
+                           "VoDaSuRe": glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))}
 
             sampling_weights = {"HCP_1200":  1.0,
                                 "IXI":       1.0,
