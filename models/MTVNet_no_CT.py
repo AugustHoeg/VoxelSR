@@ -10,21 +10,21 @@ from datetime import datetime
 
 import torch
 import monai
-from torchvision.utils import make_grid, save_image
+#from torchvision.utils import make_grid, save_image
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, to_3tuple, trunc_normal_
-from timm.layers import PatchEmbed
+#from timm.layers import PatchEmbed
 import numpy as np
-from torchvision.models.video.mvit import PositionalEncoding
+#from torchvision.models.video.mvit import PositionalEncoding
 from models.models_3D import SRBlock3D, ICNR3D, FusedMBConv
 
-from monai.networks.nets.swin_unetr import BasicLayer as monaibasiclayer
+#from monai.networks.nets.swin_unetr import BasicLayer as monaibasiclayer
 
 from utils.utils_3D_image import numel
 
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 #from fft_conv_pytorch import FFTConv3d
 
@@ -1491,7 +1491,7 @@ class MTVNet_no_CT(nn.Module):
         for level in range(num_levels):
             self.blocks = nn.ModuleList()
             for i in range(num_blks[level]):
-                depths = self.blk_layers*num_blks[level]
+                depths = list(self.blk_layers)*num_blks[level]
                 dpr = [x.item() for x in torch.linspace(0, drop_path, sum(depths))]
                 self.blocks.append(
                     AugustBlock(self.blk_layers, level, self.embed_dims, self.ct_embed_dims, ct_size, self.context_sizes, self.patch_sizes,
@@ -1524,7 +1524,7 @@ class MTVNet_no_CT(nn.Module):
         self.conv_image = nn.Conv3d(in_channels=in_chans_last_conv,
                                     out_channels=shallow_feats[-1],
                                     kernel_size=3, stride=1, padding=1, bias=True)
-        self.act_image = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
         if self.layer_type == "swin" or self.layer_type == "fastervit_without_ct":
             self.up_final_feats = SRBlock3D(embed_dims[-1], embed_dims[-1], k_size=6, pad=2,
@@ -1548,18 +1548,7 @@ class MTVNet_no_CT(nn.Module):
             self.SR1 = SRBlock3D(feats_2x, feats_4x, k_size=6, pad=2, upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
             recon_feats = feats_4x
 
-        # recon_feats = shallow_feats
-        # if self.up_factor >= 2:
-        #     feats_2x = pre_up_feats[0]
-        #     self.SR0 = SRBlock3D(shallow_feats, feats_2x, k_size=6, pad=2,
-        #                          upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
-        #     recon_feats = feats_2x
-        #
-        # if self.up_factor >= 4:
-        #     feats_4x = pre_up_feats[1]
-        #     self.SR1 = SRBlock3D(feats_2x, feats_4x, k_size=6, pad=2,
-        #                          upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
-        #     recon_feats = feats_4x
+        self.HRconv = nn.Conv3d(recon_feats, recon_feats, 3, 1, 1, bias=True)
 
         self.conv_last = nn.Sequential(
             #nn.Conv3d(in_channels=recon_feats, out_channels=recon_feats//2, kernel_size=3, stride=1, padding=1, bias=True),
@@ -1627,7 +1616,7 @@ class MTVNet_no_CT(nn.Module):
         # Long skip connection of highest-level image
         # out = LX_img + self.conv_image(final_feats)  # Without activation with skip without sfe-module
         # final_feats = self.conv_image(final_feats)  # Without activation
-        final_feats = self.act_image(self.conv_image(final_feats))  # With activation
+        final_feats = self.lrelu(self.conv_image(final_feats))  # With activation
 
         if self.enable_long_skip:
             out = LX_img + final_feats  # Works great
@@ -1648,7 +1637,8 @@ class MTVNet_no_CT(nn.Module):
             out = self.SR0(out)
             out = self.SR1(out)
 
-        out = self.conv_last(out)
+        #out = self.conv_last(out)
+        out = self.conv_last(self.lrelu(self.HRconv(out)))
 
         return out
 

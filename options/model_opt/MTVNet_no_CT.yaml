@@ -11,8 +11,8 @@ netG:
   pre_up_feats: [ 64, 64 ]
   num_levels: 1
   context_sizes: [ 32 ]
-  num_blks: [ 1 ]  # New, 6 layers instead of 3
-  blk_layers: [ 3 ]
+  num_blks: [ 6 ]  # 6 blocks instead of 3
+  blk_layers: [ 6 ]  # 6 blocks
   ct_embed_dims: [ 128, 128, 128 ]
   embed_dims: [ 128, 128, 128 ]
   ct_size: 0
