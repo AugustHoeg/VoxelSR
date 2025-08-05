@@ -348,11 +348,40 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
+    #def define_scheduler(self):
+    #    self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
+    #                                                    self.opt_train['G_scheduler_milestones'],
+    #                                                    self.opt_train['G_scheduler_gamma']
+    #                                                    ))
+
     def define_scheduler(self):
-        self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        self.opt_train['G_scheduler_milestones'],
-                                                        self.opt_train['G_scheduler_gamma']
-                                                        ))
+        # MultiStep scheduler
+        multistep_scheduler = lr_scheduler.MultiStepLR(
+            self.G_optimizer,
+            milestones=self.opt_train['G_scheduler_milestones'],
+            gamma=self.opt_train['G_scheduler_gamma']
+        )
+
+        if self.opt_train.get('G_warmup_steps', 0) > 0:
+            # Linear warmup scheduler
+            warmup_scheduler = lr_scheduler.LinearLR(
+                self.G_optimizer,
+                start_factor=1e-8,  # or 0.0 if you want to start from 0
+                end_factor=1.0,
+                total_iters=self.opt_train['G_warmup_steps']
+            )
+
+            # Combine them with SequentialLR
+            scheduler = lr_scheduler.SequentialLR(
+                self.G_optimizer,
+                schedulers=[warmup_scheduler, multistep_scheduler],
+                milestones=[self.opt_train['G_warmup_steps']]  # when to switch
+            )
+        else:
+            # Fallback to MultiStepLR only
+            scheduler = multistep_scheduler
+
+        self.schedulers.append(scheduler)
 
     def define_visual_eval(self):
 

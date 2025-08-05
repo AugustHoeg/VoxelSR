@@ -22,6 +22,7 @@ G_optimizer_wd: 0
 G_optimizer_clipgrad: 15
 G_optimizer_reuse: true
 G_scheduler_type: MultiStepLR
+G_warmup_steps: 0
 G_scheduler_milestones:
   - 50000
   - 70000

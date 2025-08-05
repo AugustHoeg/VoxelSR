@@ -53,7 +53,7 @@ dataset_opt:
   patch_size: 32
 
   train_dataloader_params:
-    dataloader_batch_size: 8
+    dataloader_batch_size: 16
     num_load_workers: 8
     persist_workers: true
     pin_memory: false

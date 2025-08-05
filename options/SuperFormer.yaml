@@ -46,6 +46,7 @@ train_opt:
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 5
+  G_warmup_steps: 3000  # new
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -53,7 +54,7 @@ dataset_opt:
   patch_size: 32
 
   train_dataloader_params:
-    dataloader_batch_size: 8
+    dataloader_batch_size: 16
     num_load_workers: 8
     persist_workers: true
     pin_memory: false
