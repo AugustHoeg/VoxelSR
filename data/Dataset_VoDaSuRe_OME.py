@@ -62,7 +62,7 @@ class Dataset_VoDaSuRe_OME():
                                 "LITS":      1.0,
                                 "CTSpine1K": 1.0,
                                 "LIDC-IDRI": 1.0,
-                                "VoDaSuRe":  5.0}
+                                "VoDaSuRe":  4.0}
 
             group_pairs = {"HCP_1200":  [{"H": "HR/0", "L": "HR/2"}],
                            "IXI":       [{"H": "HR/0", "L": "HR/2"}],
