@@ -1681,8 +1681,8 @@ if __name__ == "__main__":
     num_levels = len(context_sizes)  # 3
     shallow_feats = [128]  # 128 normally
     pre_up_feats = [64, 64]
-    num_blks = [3]  # [1, 1, 3]  # [6, 6, 6]
-    blk_layers = [6]  # Number of transformer layers per block in each level
+    num_blks = [1]  # [1, 1, 3]  # [6, 6, 6]
+    blk_layers = [3]  # Number of transformer layers per block in each level
     patch_sizes = [2]  # [16, 8, 2]
     ct_size = 4
     ct_pool_method = "conv"
@@ -1699,7 +1699,7 @@ if __name__ == "__main__":
     layer_type = "fastervit"  # fastervit_without_ct, swin, fastervit
     patch_pe_method = "window_relative"  # "absolute", "window_relative"
     token_upsample_method = "deconv_nn_resize"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
-    upsample_method = "pixelshuffle3D"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
+    upsample_method = "nearest"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
 
     # TODO: implement overlapping patches
     overlap_patches = False

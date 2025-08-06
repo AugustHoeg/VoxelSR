@@ -381,9 +381,9 @@ class SRBlock3D(nn.Module):
         else:
             # Interpolation followed by convolution + activation
             # Supported modes are 'nearest' and 'trilinear'
-            align_corners = True if self.upsample_method == "trilinear" else None
-
-            self.interp = nn.Upsample(scale_factor=upscale_factor, mode=self.upsample_method, align_corners=align_corners)  # Supports 3D natively
+            # align_corners = True if self.upsample_method == "trilinear" else None
+            # self.interp = nn.Upsample(scale_factor=upscale_factor, mode=self.upsample_method, align_corners=align_corners)  # Supports 3D natively
+            self.align_corners = self.upsample_method == "trilinear"
             self.post_conv = nn.Conv3d(in_c, n, kernel_size=3, stride=1, padding=1, bias=True)
             if self.skip_act:
                 self.act0 = nn.Identity()
@@ -438,9 +438,13 @@ class SRBlock3D(nn.Module):
             out = self.sr_block(self.pre_conv(x))
             #out = self.sr_block(x)
 
+        elif self.upsample_method == 'nearest':
+            # Interpolation followed by convolution + activation
+            out = self.act0(self.post_conv(F.interpolate(x, scale_factor=2, mode=self.upsample_method)))
+
         else:
             # Interpolation followed by convolution + activation
-            out = self.act0(self.post_conv(self.interp(x)))
+            out = self.act0(self.post_conv(F.interpolate(x, scale_factor=2, mode=self.upsample_method, align_corners=self.align_corners)))
 
         return out
 
