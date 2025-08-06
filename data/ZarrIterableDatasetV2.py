@@ -149,7 +149,7 @@ class ZarrProducer():
             name = np.random.choice(list(self.worker_data.keys()), p=p)
             z = random.choice(self.worker_data[name]['zarr_data'])  # Randomly select a zarr file in dataset
             group_pair = random.choice(self.worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
-            patch = self._sample_data(z, group_pair, self.patch_shape, metadata={'name': name, 'group_pair': group_pair})
+            patch = self._sample_data(z, group_pair, self.patch_shape, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
             if self.patch_transform:
                 patch = self.patch_transform(patch)
             try:
@@ -322,7 +322,7 @@ class ZarrIterableDataset(IterableDataset):
         group_pair = random.choice(worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
 
         # Extract a patch from the selected dataset
-        patch = self._sample_data(z, group_pair, self.patch_shape, metadata={'name': name, 'group_pair': group_pair})
+        patch = self._sample_data(z, group_pair, self.patch_shape, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
 
         if self.patch_transform:
             patch = self.patch_transform(patch)

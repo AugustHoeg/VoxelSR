@@ -8,7 +8,7 @@ netG:
 
   in_channels: 1
   shallow_feats: [ 128 ]
-  pre_up_feats: [ 64, 64 ]
+  pre_up_feats: [ 63, 63 ]
   num_levels: 1
   context_sizes: [ 32 ]
   num_blks: [ 6 ]  # 6 blocks instead of 3
