@@ -87,43 +87,54 @@ def main(opt: DictConfig):
     dataset = D(opt)
     data_dict = dataset.dataset_dict_test
 
+    metric_vals = [{"avg_psnr_list": [], "avg_ssim_list": [], "avg_nrmse_list": [], "psnr_slice_list": [], "ssim_slice_list": [], "nrmse_slice_list": []}]
+
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
         paths = dataset['paths']
         group_pairs = dataset['group_pairs']
 
         group_pair = group_pairs[f"{opt['up_factor']}"][0]  # Assuming we want to use the first group pair for testing
+        # group_pair = {"H": "HR/0", "L": "HR/2"}
 
-    group_pair = {"H": "HR/0", "L": "HR/2"}
+        for zarr_path in paths:
+            out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
-    run_strided_inference_zarr(
-        model=model,
-        zarr_path=zarr_path,
-        out_path=out_path,
-        group_pair=group_pair,
-        f=opt['up_factor'],
-        size_lr=opt.dataset_opt.patch_size,
-        border=4,
-        batch_size=opt.dataset_opt.train_dataloader_params.dataloader_batch_size,
-        overlap_mode="hann"
-    )
+            run_strided_inference_zarr(
+                model=model,
+                zarr_path=zarr_path,
+                out_path=out_path,
+                group_pair=group_pair,
+                f=opt['up_factor'],
+                size_lr=opt.dataset_opt.patch_size,
+                border=4,
+                batch_size=opt.dataset_opt.train_dataloader_params.dataloader_batch_size,
+                overlap_mode="hann"
+            )
 
-    level_L = int(group_pair["L"].split("/")[-1])
-    level_H = int(group_pair["H"].split("/")[-1])
+            level_L = int(group_pair["L"].split("/")[-1])
+            level_H = int(group_pair["H"].split("/")[-1])
 
-    zarr_E = zarr.open(out_path, mode='r')
-    img_E = zarr_E[f"SR/{level_H}"]
+            zarr_E = zarr.open(out_path, mode='r')
+            img_E = zarr_E[f"SR/{level_H}"]
 
-    zarr_H = zarr.open(zarr_path, mode='r')
-    img_H = zarr_H[f"HR/{level_H}"]
+            zarr_H = zarr.open(zarr_path, mode='r')
+            img_H = zarr_H[f"HR/{level_H}"]
 
-    psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1)
+            psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1)
 
-    sample_psnr = np.mean(psnr_slice_list)
-    sample_ssim = np.mean(ssim_slice_list)
-    sample_nrmse = np.mean(nrmse_slice_list)
+            sample_psnr = np.mean(psnr_slice_list)
+            sample_ssim = np.mean(ssim_slice_list)
+            sample_nrmse = np.mean(nrmse_slice_list)
+            metric_vals[0]['avg_psnr_list'].append(sample_psnr)
+            metric_vals[0]['avg_ssim_list'].append(sample_ssim)
+            metric_vals[0]['avg_nrmse_list'].append(sample_nrmse)
+            print("Dimension %d, Sample PSNR: %0.4f, SSIM: %0.6f, NRMSE: %0.6f" % (0, sample_psnr, sample_ssim, sample_nrmse))
 
-    print(f"Sample PSNR: {sample_psnr:.2f}, SSIM: {sample_ssim:.4f}, NRMSE: {sample_nrmse:.4f}")
+        avg_psnr = np.mean(metric_vals[0]['avg_psnr_list'])
+        avg_ssim = np.mean(metric_vals[0]['avg_ssim_list'])
+        avg_nrmse = np.mean(metric_vals[0]['avg_nrmse_list'])
+        print(f"Performance metrics for dataset {name}: Average PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.6f}, NRMSE: {avg_nrmse:.6f}")
 
 if __name__ == "__main__":
     main()

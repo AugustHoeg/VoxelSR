@@ -2,7 +2,7 @@ import os
 import torch
 import glob
 import numpy as np
-from data.train_transforms import BasicSRTransforms, GlobalScaleIntensityd, RandSRFlipd, RandSRRotated, RandSRZoomd
+from data.train_transforms import BasicSRTransforms, GlobalScaleIntensityd, RandSRFlipd, RandSRRotated, RandSRZoomd, RandSRContrastd, RandSRCLAHEd
 import monai.transforms as mt
 from data.train_transforms import GaussianblurImaged, KspaceTruncd, \
     RandomCropPairImplicitd, RandomCropUniform, RandomCropForeground, \
@@ -141,6 +141,8 @@ class Dataset_VoDaSuRe_OME():
         # Augmentations after crop
         if mode == "train":
             # Random augmentations
+            #trans_list.append(RandSRCLAHEd(keys=["H", "L"], prob=0.5, clip_limit_range=(0.005, 0.02)))
+            trans_list.append(RandSRContrastd(keys=["H", "L"], prob=0.5, gamma_range=(0.4, 1.8)))
             trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=0, prob=0.5))
             trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=1, prob=0.5))
             trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=2, prob=0.5))

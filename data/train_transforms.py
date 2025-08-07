@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import monai.transforms as mt
 from monai.transforms import Randomizable, RandomizableTransform, Transform, MapTransform, Flip, Rotate, Zoom
+from skimage.exposure import equalize_adapthist
 
 from data.kspace import KspaceTruncd
 from utils.utils_3D_image import test_3d_gaussian_blur
@@ -270,6 +271,57 @@ class RandSRZoomd(Randomizable):
                     d[key] = zoomer(d[key])
 
         return d
+
+
+class RandSRContrastd(Randomizable):
+
+    def __init__(self, keys, prob=0.50, gamma_range=(0.5, 1.5)):
+        super().__init__()
+        self.keys = keys
+        self.prob = prob
+        self.gamma_range = gamma_range
+        self.epsilon = 1e-7
+
+    def __call__(self, data):
+
+        d = dict(data)
+        do_transform = np.random.rand() < self.prob
+
+        if do_transform:
+            gamma = np.random.uniform(*self.gamma_range)
+            for key in self.keys:
+                img = d[key]
+                if do_transform:
+                    img_min = img.min()
+                    img_range = img.max() - img_min
+                    d[key] = ((img - img_min) / (img_range + self.epsilon)) ** gamma * img_range + img_min
+
+        return d
+
+
+class RandSRCLAHEd(Randomizable):
+    # NOTE: This transform is quite slow
+    def __init__(self, keys, prob=0.50, clip_limit_range=(0.5, 1.5)):
+        super().__init__()
+        self.keys = keys
+        self.prob = prob
+        self.clip_limit_range = clip_limit_range
+
+    def __call__(self, data):
+
+        d = dict(data)
+        do_transform = np.random.rand() < self.prob
+
+        if do_transform:
+            clip_limit = np.random.uniform(*self.clip_limit_range)
+            for key in self.keys:
+                img = d[key]
+                if do_transform:
+                    for i in range(img.shape[1]):
+                        img[:, i, ...] = torch.as_tensor(equalize_adapthist(img[:, i, ...].numpy(), clip_limit=clip_limit))
+
+        return d
+
 
 
 class GlobalScaleIntensityd(MapTransform):

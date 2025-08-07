@@ -95,6 +95,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
 
             current_step += 1
             # idx_train += 1
+            test_plot(train_batch)
 
             # -------------------------------
             # 1) load batches of HR and LR images onto GPU and feed to model
