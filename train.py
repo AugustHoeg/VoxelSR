@@ -77,6 +77,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
     checkpoint_print = opt['train_opt']['checkpoint_print']
     checkpoint_save = opt['train_opt']['checkpoint_save']
     checkpoint_test = opt['train_opt']['checkpoint_test']
+    checkpoint_log = opt['train_opt']['checkpoint_log']
     if checkpoint_print == 0: checkpoint_print = n_train_batches
     if checkpoint_save == 0: checkpoint_save = n_train_batches
     if checkpoint_test == 0: checkpoint_test = n_train_batches
@@ -122,9 +123,9 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
                 print("Iteration %d / %d" % (current_step, iterations))
 
             # -------------------------------
-            # 5) record training log at the end of every epoch
+            # 5) record training log at checkpoint_print
             # -------------------------------
-            if current_step % len(train_loader) == 0 and opt['rank'] == 0:
+            if current_step % checkpoint_log == 0 and opt['rank'] == 0:
                 model.record_train_log(current_step)
 
             # -------------------------------
