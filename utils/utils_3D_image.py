@@ -99,22 +99,25 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
     return img_E
 
 
-def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, level_H, f, size_lr, border, batch_size, overlap_mode="hann"):
+def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, border, batch_size, overlap_mode="hann"):
 
-    print("TODO: Fix hardcoded global min/max values for bone_2_ome.zarr/HR/2")
-    global_min = -0.002063  # min value for bone_2_ome.zarr/HR/2
-    global_max = 0.002476  # max value for bone_2_ome.zarr/HR/2
+    # print("TODO: Fix hardcoded global min/max values for bone_2_ome.zarr/HR/2")
+    # global_min = -0.002063  # min value for bone_2_ome.zarr/HR/2
+    # global_max = 0.002476  # max value for bone_2_ome.zarr/HR/2
+
+    level_L = int(group_pair["L"].split("/")[-1])
+    level_H = int(group_pair["H"].split("/")[-1])
 
     # Open input Zarr
     z = zarr.open(zarr_path, mode='r')
-    img_L = z[group_name][level_L]
-    img_H = z[group_name][level_H]
+    img_L = z[group_pair["L"]]
+    img_H = z[group_pair["H"]]
     D, H, W = img_L.shape
     size_hr = size_lr * f
     stride = size_lr - border
 
     chunks_L = img_L.chunks
-    chunks_H = tuple(int(c * f) for c in chunks_L)
+    chunks_H = img_H.chunks # tuple(int(c * f) for c in chunks_L)
 
     # Prepare output Zarr store
     compressor = Blosc(cname='lz4', clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -148,7 +151,7 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, 
 
                 # Only for binning bone...
                 data_L = data_L.astype(np.float32)  # Ensure data is float32
-                data_L = (data_L - global_min) / (global_max - global_min)
+                # data_L = (data_L - global_min) / (global_max - global_min)
 
                 patch[:, :data_L.shape[0], :data_L.shape[1], :data_L.shape[2]] = torch.from_numpy(data_L)
                 patch_batch[j] = patch
@@ -188,7 +191,7 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, 
         image_pyramid.append(da.coarsen(np.mean, image_pyramid[i], axes={0: 2, 1: 2, 2: 2}))
 
     # Create image group for the volume
-    image_group = root_out.create_group(group_name)
+    image_group = root_out.create_group("SR")
 
     from utils.utils_zarr import write_ome_pyramid
     write_ome_pyramid(
@@ -209,7 +212,6 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_name, level_L, 
     # norm_grp = root_out.require_group("upscaled")
     # norm_grp.array(name=level_H, data=da_norm, chunks=chunks_H, dtype=np.float16, compressor=compressor)
 
-    print("Done.")
     return 0
 
 # def run_strided_inference_zarr(model, zarr_path, group_name, weight_name, level_L, level_H, f, size_lr, border, batch_size, overlap_mode="hann"):
