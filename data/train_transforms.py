@@ -1,9 +1,10 @@
 import math
+from typing import Any
 
 import numpy as np
 import torch
 import monai.transforms as mt
-from monai.transforms import Randomizable, Transform, MapTransform
+from monai.transforms import Randomizable, RandomizableTransform, Transform, MapTransform, Flip, Rotate, Zoom
 
 from data.kspace import KspaceTruncd
 from utils.utils_3D_image import test_3d_gaussian_blur
@@ -167,6 +168,108 @@ def get_context_pad_size(opt):
     else:
         pad_size = 0
     return pad_size
+
+class RandSRFlipd(Randomizable):
+    """
+    Custom random flip transform that applies the same random flip decision
+    to all specified keys in a dictionary.
+    """
+
+    def __init__(self, keys, prob=0.5, spatial_axis=0):
+        super().__init__()
+        self.keys = keys
+        self.prob = prob
+        self.spatial_axis = spatial_axis
+        self.flipper = Flip(spatial_axis=spatial_axis)
+
+    def __call__(self, data):
+
+        d = dict(data)
+        do_transform = np.random.rand() < self.prob
+
+        for key in self.keys:
+            if do_transform:
+                d[key] = self.flipper(d[key])
+
+        return d
+
+
+class RandSRRotated(Randomizable):
+    """
+    Custom random flip transform that applies the same random flip decision
+    to all specified keys in a dictionary.
+    """
+
+    def __init__(self, keys, prob=0.5, range_x=(0,0), range_y=(0,0), range_z=(0,0), mode="bilinear", align_corners=True, keep_size=True):
+        super().__init__()
+        self.keys = keys
+        self.prob = prob
+        self.mode = mode
+        self.range_x = range_x
+        self.range_y = range_y
+        self.range_z = range_z
+        self.align_corners = align_corners
+        self.keep_size = keep_size
+
+    def __call__(self, data):
+
+        d = dict(data)
+        do_transform = np.random.rand() < self.prob
+
+        if do_transform:
+            angle_x = np.random.uniform(*self.range_x)
+            angle_y = np.random.uniform(*self.range_y)
+            angle_z = np.random.uniform(*self.range_z)
+
+            rotator = Rotate(
+                angle=(angle_x, angle_y, angle_z),
+                mode=self.mode,
+                align_corners=self.align_corners,
+                keep_size=self.keep_size
+            )
+
+            for key in self.keys:
+                if do_transform:
+                    d[key] = rotator(d[key])
+
+        return d
+
+
+class RandSRZoomd(Randomizable):
+    """
+    Custom random flip transform that applies the same random flip decision
+    to all specified keys in a dictionary.
+    """
+
+    def __init__(self, keys, prob=0.50, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True):
+        super().__init__()
+        self.keys = keys
+        self.prob = prob
+        self.mode = mode
+        self.min_zoom = min_zoom
+        self.max_zoom = max_zoom
+        self.align_corners = align_corners
+        self.keep_size = keep_size
+
+    def __call__(self, data):
+
+        d = dict(data)
+        do_transform = np.random.rand() < self.prob
+
+        if do_transform:
+            zoom = np.random.uniform(self.min_zoom, self.max_zoom)
+            zoomer = Zoom(
+                zoom=zoom,
+                mode=self.mode,
+                align_corners=self.align_corners,
+                keep_size=self.keep_size
+            )
+
+            for key in self.keys:
+                if do_transform:
+                    d[key] = zoomer(d[key])
+
+        return d
 
 
 class GlobalScaleIntensityd(MapTransform):

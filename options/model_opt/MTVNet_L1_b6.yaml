@@ -11,11 +11,11 @@ netG:
   pre_up_feats: [ 63, 63 ]
   num_levels: 1
   context_sizes: [ 32 ]
-  num_blks: [ 6 ]  # 6 blocks instead of 3
+  num_blks: [ 3 ]
   blk_layers: [ 6, 6, 6 ]  # 6 blocks
   ct_embed_dims: [ 128, 128, 128 ]
   embed_dims: [ 128, 128, 128 ]
-  ct_size: 0
+  ct_size: 2
   ct_pool_method: conv
   patch_sizes: [ 2 ]
   num_heads: 4

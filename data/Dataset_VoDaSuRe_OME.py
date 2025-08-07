@@ -2,7 +2,7 @@ import os
 import torch
 import glob
 import numpy as np
-from data.train_transforms import BasicSRTransforms, GlobalScaleIntensityd
+from data.train_transforms import BasicSRTransforms, GlobalScaleIntensityd, RandSRFlipd, RandSRRotated, RandSRZoomd
 import monai.transforms as mt
 from data.train_transforms import GaussianblurImaged, KspaceTruncd, \
     RandomCropPairImplicitd, RandomCropUniform, RandomCropForeground, \
@@ -30,8 +30,8 @@ class Dataset_VoDaSuRe_OME():
             sampling_weights = {"HCP_1200": 1.0,
                                 "IXI":      1.0}
 
-            group_pairs = {"HCP_1200": [{"H": "HR/0", "L": "HR/2"}],
-                           "IXI":      [{"H": "HR/0", "L": "HR/2"}]}
+            group_pairs = {"HCP_1200": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+                           "IXI":      [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}]}
 
             store_type = {"HCP_1200": "DirectoryStore",
                           "IXI":      "DirectoryStore"}
@@ -141,14 +141,14 @@ class Dataset_VoDaSuRe_OME():
         # Augmentations after crop
         if mode == "train":
             # Random augmentations
-            # trans_list.append(mt.RandFlipd(keys=["H", "L"], prob=0.20, spatial_axis=[0, 1, 2]))  # Random flip
-            trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=0, prob=0.5))
-            trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=1, prob=0.5))
-            trans_list.append(mt.RandFlipd(keys=["H", "L"], spatial_axis=2, prob=0.5))
-            trans_list.append(mt.RandRotated(keys=["H", "L"], prob=0.50, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True))
+            trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=0, prob=0.5))
+            trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=1, prob=0.5))
+            trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=2, prob=0.5))
+
+            trans_list.append(RandSRRotated(keys=["H", "L"], prob=0.25, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True))
+            trans_list.append(RandSRZoomd(keys=["H", "L"], prob=0.25, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
+
             # trans_list.append(mt.Rand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
-            # trans_list.append(CustomRand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
-            trans_list.append(mt.RandZoomd(keys=["H", "L"], prob=0.50, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
             # trans_list.append(mt.RandGaussianNoised(keys=["L"], prob=0.2, mean=0.0, std=0.005))
 
         return mt.Compose(trans_list)
