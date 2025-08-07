@@ -533,6 +533,9 @@ class ModelPlain(ModelBase):
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
+        if self.opt['rank'] == 0:
+            print("G train loss:", self.G_train_loss.item())
+
         self.gen_loss.backward()  # backward-pass to compute gradients
 
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
