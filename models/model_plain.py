@@ -280,6 +280,8 @@ class ModelPlain(ModelBase):
         # Define losses for G and D
         self.G_train_loss = 0.0
         self.G_valid_loss = 0.0
+        self.G_train_grad_norm = 0.0
+        self.G_valid_grad_norm = 0.0
 
 
     # ----------------------------------------
@@ -448,7 +450,7 @@ class ModelPlain(ModelBase):
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
-        self.G_train_loss += self.gen_loss  # Add generator training loss to total loss
+        self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
 
         #self.G_optimizer.zero_grad()  # set parameter gradients to zero
         self.gen_scaler.scale(self.gen_loss).backward()  # backward-pass to compute gradients
@@ -463,9 +465,9 @@ class ModelPlain(ModelBase):
                 # Unscales the gradients of optimizer's assigned params in-place if AMP is enabled
                 self.gen_scaler.unscale_(self.G_optimizer)
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
-                if self.opt['rank'] == 0:
-                    print("G gradient norm:", grad_norm.item())
+                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
+                # if self.opt['rank'] == 0:
+                #     print("G gradient norm:", grad_norm.item())
 
             self.gen_scaler.step(self.G_optimizer)  # update weights
             self.gen_scaler.update()
@@ -530,7 +532,7 @@ class ModelPlain(ModelBase):
         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
-        self.G_train_loss += self.gen_loss  # Add generator training loss to total loss
+        self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
         self.gen_loss.backward()  # backward-pass to compute gradients
 
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
@@ -541,9 +543,9 @@ class ModelPlain(ModelBase):
             G_clipgrad_max = self.opt_train['G_optimizer_clipgrad']
             if G_clipgrad_max > 0:
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
-                if self.opt['rank'] == 0:
-                    print("G gradient norm:", grad_norm.item())
+                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
+                # if self.opt['rank'] == 0:
+                #     print("G gradient norm:", grad_norm.item())
 
             self.G_optimizer.step()  # update weights
             self.G_optimizer.zero_grad()  # set parameter gradients to zero
@@ -558,7 +560,22 @@ class ModelPlain(ModelBase):
         # # ------------------------------------
 
 
-    def record_train_log(self, current_step, idx_train):
+    def record_train_log(self, current_step):
+        # ------------------------------------
+        # record log
+        # ------------------------------------
+
+        # Record training losses using wandb
+        loss = self.G_train_loss.item() * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_loss": loss})
+
+        grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
+
+        if self.opt_train['E_decay'] > 0:
+            self.update_E(self.opt_train['E_decay'])
+
+    def record_avg_train_log(self, current_step, idx_train):
         # ------------------------------------
         # record log
         # ------------------------------------
@@ -569,14 +586,6 @@ class ModelPlain(ModelBase):
 
         # Reset training losses
         self.G_train_loss = 0.0
-
-        #self.log_dict['l_d_real'] = l_d_real.item()
-        #self.log_dict['l_d_fake'] = l_d_fake.item()
-
-        #  TODO update these four lines for use with wandb
-        print("TODO update these four lines for use with wandb")
-        #self.log_dict['D_real'] = torch.mean(self.prop_real.detach())
-        #self.log_dict['D_fake'] = torch.mean(self.prop_fake.detach())
 
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])

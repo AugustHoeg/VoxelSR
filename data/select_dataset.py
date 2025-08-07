@@ -292,7 +292,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
 
         test_dataset = ZarrIterableDataset(dataset_dict_test,
                                             patch_shape,
-                                            patch_transform=transforms,
+                                            patch_transform=test_transforms,
                                             up_factor=4,
                                             num_workers=8,
                                             queue_size=128,
