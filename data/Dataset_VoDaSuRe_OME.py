@@ -30,8 +30,16 @@ class Dataset_VoDaSuRe_OME():
             sampling_weights = {"HCP_1200": 1.0,
                                 "IXI":      1.0}
 
-            group_pairs = {"HCP_1200": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                           "IXI":      [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}]}
+            group_pairs = {
+                "HCP_1200": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+                "IXI": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+            }
 
             store_type = {"HCP_1200": "DirectoryStore",
                           "IXI":      "DirectoryStore"}
@@ -64,12 +72,33 @@ class Dataset_VoDaSuRe_OME():
                                 "LIDC-IDRI": 1.0,
                                 "VoDaSuRe":  4.0}
 
-            group_pairs = {"HCP_1200":  [{"H": "HR/0", "L": "HR/2"}],
-                           "IXI":       [{"H": "HR/0", "L": "HR/2"}],
-                           "LITS":      [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                           "CTSpine1K": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                           "LIDC-IDRI": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                           "VoDaSuRe":  [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}, {"H": "HR/0", "L": "REG/0"}]}
+
+            group_pairs = {
+                "HCP_1200": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+                "IXI": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+                "LITS": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+                "CTSpine1K": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+                "LIDC-IDRI": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                },
+                "VoDaSuRe": {
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}, {"H": "HR/0", "L": "REG/0"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/1", "L": "REG/0"}]
+                },
+            }
 
             store_type = {"HCP_1200":  "DirectoryStore",
                           "IXI":       "DirectoryStore",
@@ -102,9 +131,7 @@ class Dataset_VoDaSuRe_OME():
 
         d = {
             "paths": paths,
-            "group_pairs": {
-                "4": group_pairs,  # {"H": "HR/1", "L": "HR/3"}
-            },
+            "group_pairs": group_pairs,
             "sampling_weight": sampling_weight,
             "store_type": store_type
         }

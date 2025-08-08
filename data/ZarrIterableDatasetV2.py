@@ -198,7 +198,7 @@ class ZarrProducer():
             name = np.random.choice(list(self.worker_data.keys()), p=p)
             z = random.choice(self.worker_data[name]['zarr_data'])  # Randomly select a zarr file in dataset
             group_pair = random.choice(self.worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
-            patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
+            patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, self.up_factor, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
             if self.patch_transform:
                 patch = self.patch_transform(patch)
             try:
@@ -373,7 +373,7 @@ class ZarrIterableDataset(IterableDataset):
         group_pair = random.choice(worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
 
         # Extract a patch from the selected dataset
-        patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
+        patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, self.up_factor, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
 
         if self.patch_transform:
             patch = self.patch_transform(patch)
@@ -432,8 +432,9 @@ def main():
 
     # Example usage
     batch_size = 4
-    patch_shape = (64, 64, 64)
-    patch_shape_hr = (128, 128, 128)
+    up_factor = 2
+    patch_shape = (32, 32, 32)
+    patch_shape_hr = (64, 64, 64)
 
     HCP_1200_train_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
     HCP_1200_test_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
@@ -445,7 +446,8 @@ def main():
         "HCP_1200": {
             "paths": HCP_1200_train_paths,
             "group_pairs": {
-                "4": [{"H": "HR/1", "L": "HR/3"}],  # {"H": "HR/1", "L": "HR/3"}
+                "4": [{"H": "HR/0", "L": "HR/2"}],  # {"H": "HR/1", "L": "HR/3"}
+                "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
             },
             "sampling_weight": 1,
             "store_type": "DirectoryStore"
@@ -453,7 +455,8 @@ def main():
         "IXI": {
             "paths": IXI_train_paths,
             "group_pairs": {
-                "4": [{"H": "HR/1", "L": "HR/3"}],  # {"H": "HR/1", "L": "HR/3"}
+                "4": [{"H": "HR/0", "L": "HR/2"}],  # {"H": "HR/1", "L": "HR/3"}
+                "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
             },
             "sampling_weight": 1,
             "store_type": "DirectoryStore"
@@ -480,7 +483,7 @@ def main():
                                   patch_shape,
                                   patch_shape_hr,
                                   patch_transform,
-                                  up_factor=4,
+                                  up_factor=up_factor,
                                   num_workers=1,
                                   queue_size=128,
                                   store_type='DirectoryStore',
