@@ -28,8 +28,8 @@ G_scheduler_milestones:
 G_scheduler_gamma: 0.5
 G_regularizer_orthstep: null
 G_regularizer_clipstep: null
-G_param_strict: true
-E_param_strict: true
+G_param_strict: false
+E_param_strict: false
 
 manual_seed: 8400 # 8338
 

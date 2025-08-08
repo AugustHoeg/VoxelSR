@@ -131,9 +131,15 @@ class ModelPlain(ModelBase):
 
         if self.opt['train_mode'] == 'scratch':
             pretrained_experiment_id_G = None  # Do not load optimizer for training mode: 'scratch'
+
         elif self.opt['train_mode'] == 'finetune':
-            if self.opt['train_opt']['G_optimizer_reuse']:
-                assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']} when reusing optimizer states."
+            pretrained_experiment_id_G = None  # Do not load optimizer for training mode: 'finetune'
+            # if self.opt['train_opt']['G_optimizer_reuse']:
+            #     assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']} when reusing optimizer states."
+            #     if self.model_param_mismatch:
+            #         print("Warning: Model parameter mismatch detected, skipping loading of optimizer states...")
+            #         pretrained_experiment_id_G = None  # Do not load optimizer if model parameters do not match
+
         elif self.opt['train_mode'] == 'resume':
             assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
             self.opt['train_opt']['G_optimizer_reuse'] = True  # Always load optimizer for training mode: 'resume'
@@ -158,6 +164,10 @@ class ModelPlain(ModelBase):
 
         if self.opt['train_mode'] == 'scratch':
             pretrained_experiment_id_G = None
+
+        elif self.opt['train_mode'] == 'finetune':
+            pretrained_experiment_id_G = None
+
         elif self.opt['train_mode'] == 'resume':
             assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
 
@@ -179,6 +189,10 @@ class ModelPlain(ModelBase):
 
         if self.opt['train_mode'] == 'scratch':
             pretrained_experiment_id_G = None
+
+        elif self.opt['train_mode'] == 'finetune':
+            pretrained_experiment_id_G = None
+
         elif self.opt['train_mode'] == 'resume':
             assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
 

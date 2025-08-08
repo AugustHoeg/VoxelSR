@@ -15,6 +15,7 @@ class ModelBase():
         self.device = torch.device('cuda' if opt['gpu_ids'] is not None else 'cpu')
         self.train_mode = opt['train_mode']        # training mode
         self.schedulers = []                   # schedulers
+        self.model_param_mismatch = False  # Flag to indicate if model parameters mismatch during loading
 
     """
     # ----------------------------------------
@@ -162,22 +163,56 @@ class ModelBase():
     # ----------------------------------------
     # load the state_dict of the network
     # ----------------------------------------
+    # def load_network(self, load_path, network, strict=True, param_key='params', weights_only=True):
+    #     network = self.get_bare_model(network)
+    #     if strict:
+    #         state_dict = torch.load(load_path, weights_only=weights_only)
+    #         if param_key in state_dict.keys():
+    #             state_dict = state_dict[param_key]
+    #         network.load_state_dict(state_dict, strict=strict)
+    #     else:
+    #         state_dict_old = torch.load(load_path, weights_only=weights_only)
+    #         if param_key in state_dict_old.keys():
+    #             state_dict_old = state_dict_old[param_key]
+    #         state_dict = network.state_dict()
+    #         for ((key_old, param_old),(key, param)) in zip(state_dict_old.items(), state_dict.items()):
+    #             state_dict[key] = param_old
+    #         network.load_state_dict(state_dict, strict=True)
+    #         del state_dict_old, state_dict
+
     def load_network(self, load_path, network, strict=True, param_key='params', weights_only=True):
         network = self.get_bare_model(network)
+        state_dict_old = torch.load(load_path, weights_only=weights_only)
+
+        if param_key in state_dict_old:
+            state_dict_old = state_dict_old[param_key]
+
+        state_dict_new = network.state_dict()
+
+        print("Checking for model parameter mismatch...")
+        model_param_mismatch = False
+        for k, v in state_dict_old.items():
+            if k not in state_dict_new or state_dict_new[k].shape != v.shape:
+                model_param_mismatch = True
+                break
+        for k in state_dict_new.keys():
+            if k not in state_dict_old:
+                model_param_mismatch = True
+                break
+        self.model_param_mismatch = model_param_mismatch
+
         if strict:
-            state_dict = torch.load(load_path, weights_only=weights_only)
-            if param_key in state_dict.keys():
-                state_dict = state_dict[param_key]
-            network.load_state_dict(state_dict, strict=strict)
+            network.load_state_dict(state_dict_old, strict=True)
         else:
-            state_dict_old = torch.load(load_path, weights_only=weights_only)
-            if param_key in state_dict_old.keys():
-                state_dict_old = state_dict_old[param_key]
             state_dict = network.state_dict()
-            for ((key_old, param_old),(key, param)) in zip(state_dict_old.items(), state_dict.items()):
-                state_dict[key] = param_old
-            network.load_state_dict(state_dict, strict=True)
-            del state_dict_old, state_dict
+            matched_params = {}
+            for k, v in state_dict_old.items():
+                if k in state_dict and state_dict[k].shape == v.shape:
+                    matched_params[k] = v  # only load matching shape + same key
+
+            # Update only the matched parameters
+            state_dict.update(matched_params)
+            network.load_state_dict(state_dict, strict=False)  # strict=False avoids errors
 
     # ----------------------------------------
     # save the state_dict of the optimizer

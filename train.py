@@ -303,7 +303,11 @@ def main(opt: DictConfig):
 if __name__ == "__main__":
     main()
 
+    time.sleep(5)  # sleep before attempting removing .log files
     # remove any .log files in root directory
     for file in os.listdir(config.ROOT_DIR):
         if file.endswith(".log"):
-            os.remove(os.path.join(config.ROOT_DIR, file))
+            try:
+                os.remove(os.path.join(config.ROOT_DIR, file))
+            except Exception as e:
+                print(f"Could not remove file {file}: {e}")
