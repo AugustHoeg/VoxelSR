@@ -71,7 +71,6 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
     save_time = opt['save_time']
 
     while current_step < iterations:
-        # idx_train = 0
 
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
@@ -79,8 +78,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
         for batch_idx, train_batch in enumerate(train_loader):
 
             current_step += 1
-            # idx_train += 1
-            test_plot(train_batch)
+            # test_plot(train_batch)
 
             # -------------------------------
             # 1) load batches of HR and LR images onto GPU and feed to model
