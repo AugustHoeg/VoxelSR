@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_bs16
+run_name: ${model_opt.model_architecture}_L1_emb192_000_bs16
 note: Note
 
 # GPU configuration
