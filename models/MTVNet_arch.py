@@ -2093,10 +2093,10 @@ if __name__ == "__main__":
     patch_sizes = [2]  # [16, 8, 2]
     ct_size = 4
     ct_pool_method = "conv"
-    ct_embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
-    embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    ct_embed_dims = [192, 192, 192]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    embed_dims = [192, 192, 192]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
     attn_window_sizes = [8, 8, 8]  # [4, 4, 4]
-    num_heads = 4
+    num_heads = 8
     enable_ape_ct = True
     enable_ape_x = False
     enable_ct_rpb = True
