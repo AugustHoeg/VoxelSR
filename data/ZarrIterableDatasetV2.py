@@ -3,6 +3,7 @@ import copy
 import glob
 import queue
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 import sys
 import random
 import numpy as np
@@ -20,6 +21,44 @@ from queue import Empty
 #from torch.multiprocessing import Process, Queue, Event
 from threading import Thread
 
+def sample(volume, patch, center, patch_size):
+    """
+    volume: 3D numpy array of shape (D, H, W)
+    center: tuple (cz, cy, cx) specifying cube center in array coordinates
+    patch_size: tuple (d, h, w) specifying desired cube size
+    """
+    D, H, W = volume.shape
+    d, h, w = patch_size
+    cz, cy, cx = center
+
+    # Compute cube boundaries in array coordinates
+    z0 = cz - d // 2
+    y0 = cy - h // 2
+    x0 = cx - w // 2
+    z1 = z0 + d
+    y1 = y0 + h
+    x1 = x0 + w
+
+    # Compute the valid overlap in the source array
+    src_z0 = max(z0, 0)
+    src_y0 = max(y0, 0)
+    src_x0 = max(x0, 0)
+    src_z1 = min(z1, D)
+    src_y1 = min(y1, H)
+    src_x1 = min(x1, W)
+
+    # Compute where to paste that in the target cube
+    dst_z0 = src_z0 - z0
+    dst_y0 = src_y0 - y0
+    dst_x0 = src_x0 - x0
+    dst_z1 = dst_z0 + (src_z1 - src_z0)
+    dst_y1 = dst_y0 + (src_y1 - src_y0)
+    dst_x1 = dst_x0 + (src_x1 - src_x0)
+
+    # Copy the overlapping region
+    patch[dst_z0:dst_z1, dst_y0:dst_y1, dst_x0:dst_x1] = volume[src_z0:src_z1, src_y0:src_y1, src_x0:src_x1]
+
+    return patch
 
 def extract_patch(data, group_name, ome_level, patch_size=(32, 32, 32)):
     # TODO: Fix this method
@@ -59,28 +98,37 @@ def extract_patch_levels(data, group_pair, patch_size=(32, 32, 32), f=4, metadat
 
     return out_dict
 
-def extract_patch_levels_prealloc(data, group_pair, patch_size=(32, 32, 32), f=4, metadata=None):
+def extract_patch_levels_prealloc(data, group_pair, patch_size=(32, 32, 32), patch_size_hr=(128, 128, 128), f=4, metadata=None):
     volume_L = data[group_pair['L']]
     volume_H = data[group_pair['H']]
 
-    patch_size_hr = np.multiply(patch_size, f)
-    patch_L = np.zeros(patch_size)
-    patch_H = np.zeros(patch_size_hr)
+    patch_size_lr = np.floor_divide(patch_size_hr, f)
 
-    valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size), (1, 1, 1))
-    d0, h0, w0 = np.random.randint(0, valid_shape)
-    d1, h1, w1 = np.add((d0, h0, w0), patch_size)
+    valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size_lr), (1, 1, 1))
+    c0, c1, c2 = np.random.randint(0, valid_shape) + patch_size_lr // 2
+    C0, C1, C2 = np.multiply((c0, c1, c2), f)
 
-    D0, H0, W0 = np.multiply((d0, h0, w0), f)
-    D1, H1, W1 = np.multiply((d1, h1, w1), f)
-
-    data_L = volume_L[d0:d1, h0:h1, w0:w1]
-    data_H = volume_H[D0:D1, H0:H1, W0:W1]
-
-    patch_L[:data_L.shape[0], :data_L.shape[1], :data_L.shape[2]] = data_L
-    patch_H[:data_H.shape[0], :data_H.shape[1], :data_H.shape[2]] = data_H
+    # Create an empty cube filled with zeros
+    patch_L = np.zeros(patch_size, dtype=volume_L.dtype)
+    patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
+    patch_H = np.zeros(patch_size_hr, dtype=volume_H.dtype)
+    patch_H = sample(volume_H, patch_H, center=(C0, C1, C2), patch_size=patch_size_hr)
 
     out_dict = {'L': patch_L, 'H': patch_H}
+
+    # # test that it works:
+    # plt.figure()
+    # plt.subplot(1, 3, 1)
+    # extra = (patch_size - patch_size_lr) // 2
+    # plt.imshow(patch_H[patch_size_hr[0] // 2, :, :])
+    # plt.axis("off")
+    # plt.subplot(1, 3, 2)
+    # plt.imshow(patch_L[patch_size[0]//2, extra[1]:-extra[1], extra[2]:-extra[2]])
+    # plt.axis("off")
+    # plt.subplot(1, 3, 3)
+    # plt.imshow(patch_L[patch_size[0] // 2, :, :])
+    # plt.axis("off")
+    # plt.show()
 
     if metadata:
         for key, val in metadata.items():
@@ -114,12 +162,13 @@ def extract_patch_levels_from_chunk(data, group_name, ome_levels, patch_size=(32
 
 
 class ZarrProducer():
-    def __init__(self, worker_data, patch_shape, patch_transform, up_factor, queue_size: int = 64, num_workers: int = 1, sampling_method='random', seed=8338):
+    def __init__(self, worker_data, patch_shape, patch_shape_hr, patch_transform, up_factor, queue_size: int = 64, num_workers: int = 1, sampling_method='random', seed=8338):
         super().__init__()
 
         # Define data
         self.worker_data = worker_data
         self.patch_shape = patch_shape
+        self.patch_shape_hr = patch_shape_hr
         self.patch_transform = patch_transform
         self.up_factor = up_factor
 
@@ -136,7 +185,7 @@ class ZarrProducer():
         if sampling_method == 'in_chunk':
             self._sample_data = extract_patch_levels_from_chunk
         else:
-            self._sample_data = extract_patch_levels
+            self._sample_data = extract_patch_levels_prealloc
 
     def _worker_process(self, id):
 
@@ -149,7 +198,7 @@ class ZarrProducer():
             name = np.random.choice(list(self.worker_data.keys()), p=p)
             z = random.choice(self.worker_data[name]['zarr_data'])  # Randomly select a zarr file in dataset
             group_pair = random.choice(self.worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
-            patch = self._sample_data(z, group_pair, self.patch_shape, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
+            patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
             if self.patch_transform:
                 patch = self.patch_transform(patch)
             try:
@@ -201,9 +250,10 @@ class ZarrProducer():
 
 class ZarrIterableDataset(IterableDataset):
 
-    def __init__(self, dataset_dict, patch_shape, patch_transform, up_factor, num_workers, queue_size, base_seed=8338, store_type='Numpy', num_samples=1000, sampling_method='random', print_metadata=False):
+    def __init__(self, dataset_dict, patch_shape, patch_shape_hr, patch_transform, up_factor, num_workers, queue_size, base_seed=8338, store_type='Numpy', num_samples=1000, sampling_method='random', print_metadata=False):
         self.dataset_dict = dataset_dict
         self.patch_shape = patch_shape
+        self.patch_shape_hr = patch_shape_hr
         self.patch_transform = patch_transform
         self.up_factor = up_factor
         self.num_workers = num_workers  # Number of worker processes per queue
@@ -230,7 +280,7 @@ class ZarrIterableDataset(IterableDataset):
         if sampling_method == 'in_chunk':
             self._sample_data = extract_patch_levels_from_chunk
         else:
-            self._sample_data = extract_patch_levels
+            self._sample_data = extract_patch_levels_prealloc
 
     def _load_data(self, worker_id, num_workers):
 
@@ -288,6 +338,7 @@ class ZarrIterableDataset(IterableDataset):
 
         self.producer = ZarrProducer(worker_data=worker_data,
                                      patch_shape=self.patch_shape,
+                                     patch_shape_hr=self.patch_shape_hr,
                                      patch_transform=self.patch_transform,
                                      up_factor=self.up_factor,
                                      queue_size=self.queue_size,
@@ -322,7 +373,7 @@ class ZarrIterableDataset(IterableDataset):
         group_pair = random.choice(worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
 
         # Extract a patch from the selected dataset
-        patch = self._sample_data(z, group_pair, self.patch_shape, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
+        patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
 
         if self.patch_transform:
             patch = self.patch_transform(patch)
@@ -360,11 +411,29 @@ class ZarrIterableDataset(IterableDataset):
         return self.num_samples
 
 
+def test_plot(train_batch):
+    size_hr = train_batch['H'].shape[-1]
+    size_lr = train_batch['L'].shape[-1]
+    batch_size = len(train_batch['H'])
+    plt.figure(figsize=(2*batch_size, 8))
+    c = 0
+    for i in range(batch_size):
+        plt.subplot(2, batch_size, 1 + c)
+        plt.imshow(train_batch['H'][i, 0, :, :, size_hr//2])
+        plt.axis("off")
+        plt.subplot(2, batch_size, 2 + c)
+        plt.imshow(train_batch['L'][i, 0, :, :, size_lr//2])
+        plt.axis("off")
+        c += 2
+    plt.tight_layout()
+    plt.show()
+
 def main():
 
     # Example usage
-    batch_size = 8
-    patch_shape = (32, 32, 32)
+    batch_size = 4
+    patch_shape = (64, 64, 64)
+    patch_shape_hr = (128, 128, 128)
 
     HCP_1200_train_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
     HCP_1200_test_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
@@ -409,16 +478,17 @@ def main():
 
     dataset = ZarrIterableDataset(dataset_dict,
                                   patch_shape,
+                                  patch_shape_hr,
                                   patch_transform,
                                   up_factor=4,
-                                  num_workers=4,
+                                  num_workers=1,
                                   queue_size=128,
                                   store_type='DirectoryStore',
                                   num_samples=1000,
                                   sampling_method='random'  # 'random' or 'in_chunk'
                                   )
 
-    num_workers = 4
+    num_workers = 1
     persistent_workers = True if num_workers > 0 else False
     dataloader = torch.utils.data.DataLoader(dataset,
                                             batch_size=batch_size,
@@ -429,7 +499,7 @@ def main():
 
     no_epochs = 10
     plot_counter = 0
-    plot_interval = 1000000
+    plot_interval = 100
     start_time = time()
     for i in range(no_epochs):
         print(f"Epoch {i + 1}/{no_epochs}")
@@ -441,14 +511,7 @@ def main():
             # for key in batch.keys():
             #     print(f"Key: {key}, Shape: {batch[key].shape}")
             if plot_counter % plot_interval == 0:
-                import matplotlib.pyplot as plt
-                plt.figure()
-                plt.subplot(1, 2, 1)
-                plt.imshow(batch['L'][0, 0, 16, :, :])
-                plt.subplot(1, 2, 2)
-                plt.imshow(batch['H'][0, 0, 64, :, :])
-                plt.show()
-                plot_counter = 0
+                test_plot(batch)
             plot_counter += 1
 
 

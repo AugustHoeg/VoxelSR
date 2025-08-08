@@ -129,14 +129,8 @@ class Dataset_VoDaSuRe_OME():
         # Normalization and scaling
         if pdata.norm_type == "scale_intensity":
             pass
-            #trans_list.append(GlobalScaleIntensityd(keys=["H"], global_min=-0.000936, global_max=0.000998))
-            #trans_list.append(GlobalScaleIntensityd(keys=["L"], global_min=-0.002063, global_max=0.002476))
         elif pdata.norm_type == "znormalization":
             pass
-            #trans_list.append(mt.NormalizeIntensityd(keys=["H", "L"]))
-
-        # Pad for MTVNet
-        trans_list.append(mt.BorderPadd(keys=["L"], spatial_border=[pdata.pad_size, pdata.pad_size, pdata.pad_size], mode='constant'))
 
         # Augmentations after crop
         if mode == "train":

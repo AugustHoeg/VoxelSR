@@ -11,21 +11,6 @@ from monai.data import SmartCacheDataset, DataLoader
 import config
 from utils.load_options import save_yaml, init_options
 
-
-def test_plot(train_batch):
-    size_hr = train_batch['H'].shape[-1]
-    size_lr = train_batch['L'].shape[-1]
-    plt.figure()
-    batch_size = len(train_batch['H'])
-    c = 0
-    for i in range(batch_size):
-        plt.subplot(2, batch_size, 1 + c)
-        plt.imshow(train_batch['H'][i, 0, :, :, size_hr//2])
-        plt.subplot(2, batch_size, 2 + c)
-        plt.imshow(train_batch['L'][i, 0, :, :, size_lr//2])
-        plt.show()
-        c += 1
-
 def test_plot(train_batch):
     size_hr = train_batch['H'].shape[-1]
     size_lr = train_batch['L'].shape[-1]

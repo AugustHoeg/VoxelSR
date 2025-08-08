@@ -279,27 +279,30 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         from data.ZarrIterableDatasetV2 import ZarrIterableDataset
 
         patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
+        patch_shape_hr = (opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr)
         train_dataset = ZarrIterableDataset(dataset_dict_train,
-                                      patch_shape,
-                                      patch_transform=transforms,
-                                      up_factor=4,
-                                      num_workers=8,
-                                      queue_size=128,
-                                      store_type='DirectoryStore',
-                                      num_samples=5000,
-                                      sampling_method='random'  # 'random' or 'in_chunk'
-                                      )
-
-        test_dataset = ZarrIterableDataset(dataset_dict_test,
                                             patch_shape,
-                                            patch_transform=test_transforms,
+                                            patch_shape_hr,
+                                            patch_transform=transforms,
                                             up_factor=4,
                                             num_workers=8,
                                             queue_size=128,
                                             store_type='DirectoryStore',
-                                            num_samples=opt.train_opt.validation_iterations,
+                                            num_samples=5000,
                                             sampling_method='random'  # 'random' or 'in_chunk'
                                             )
+
+        test_dataset = ZarrIterableDataset(dataset_dict_test,
+                                           patch_shape,
+                                           patch_shape_hr,
+                                           patch_transform=test_transforms,
+                                           up_factor=4,
+                                           num_workers=8,
+                                           queue_size=128,
+                                           store_type='DirectoryStore',
+                                           num_samples=opt.train_opt.validation_iterations,
+                                           sampling_method='random'  # 'random' or 'in_chunk'
+                                           )
 
         baseline_dataset = test_dataset
 

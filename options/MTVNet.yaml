@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: MTVNet_no_CT             # Default model config
+  - model_opt: MTVNet_L3_64             # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -13,7 +13,7 @@ up_factor: 4  # upscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
@@ -51,17 +51,17 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 32  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
+  patch_size: 64  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 8
+    dataloader_batch_size: 2
+    num_load_workers: 1
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 2
+    dataloader_batch_size: 2
+    num_load_workers: 1
     persist_workers: true
     pin_memory: false
 
