@@ -31,6 +31,12 @@ def trainid(ctx, model, dataset, experiment_id):
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id}")
 
 @task
+def finetune(ctx, model, dataset, experiment_id, pretrained_experiment_id):
+    """Run the training script."""
+    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={experiment_id} train_mode='finetune' path.pretrained_experiment_id={pretrained_experiment_id}")
+
+
+@task
 def finetuneid(ctx, model, dataset, experiment_id, pretrained_experiment_id):
     """Run the training script."""
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id} train_mode='finetune' path.pretrained_experiment_id={model}_{dataset}_{pretrained_experiment_id}")
