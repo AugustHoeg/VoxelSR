@@ -51,7 +51,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 32  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
+  patch_size: 64  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
 
   train_dataloader_params:
     dataloader_batch_size: 16
