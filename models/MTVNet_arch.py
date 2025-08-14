@@ -2084,19 +2084,19 @@ if __name__ == "__main__":
     attn_window_size = 4  # 4  # The size of the window to perform local attention within, M in the swin papers. standard is 7
     embed_dim = patch_size ** 3  # set to patch_size**3 to keep same amount of information in embedding, emb_dim 96 is default for 4x4x3 = 48 (number of features in 1 4x4 patch)
 
-    context_sizes = [32]
+    context_sizes = [img_size]
     num_levels = len(context_sizes)  # 3
     shallow_feats = [128]  # 128 normally
     pre_up_feats = [64, 64]
     num_blks = [3]  # [1, 1, 3]  # [6, 6, 6]
     blk_layers = [6]  # Number of transformer layers per block in each level
     patch_sizes = [2]  # [16, 8, 2]
-    ct_size = 4
+    ct_size = 2
     ct_pool_method = "conv"
-    ct_embed_dims = [192, 192, 192]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
-    embed_dims = [192, 192, 192]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    ct_embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
     attn_window_sizes = [8, 8, 8]  # [4, 4, 4]
-    num_heads = 8
+    num_heads = 4
     enable_ape_ct = True
     enable_ape_x = False
     enable_ct_rpb = True
@@ -2109,7 +2109,7 @@ if __name__ == "__main__":
     upsample_method = "pixelshuffle3D"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
 
     # TODO: implement overlapping patches
-    overlap_patches = False
+    patch_overlap = False
 
     up_factor = 4
 

@@ -551,24 +551,39 @@ class ImageComparisonTool3D():
         else:
             raise NotImplementedError('Upsampling method %s not implemented.' % method)
 
+    def get_slice(self, image, slice_idx, axis=0):
 
-    def get_comparison_image(self, img_dict, slice_idx=None):
+        if axis == 0:
+            return image[:, slice_idx, :, :]
+        elif axis == 1:
+            return image[:, :, slice_idx, :]
+        elif axis == 2:
+            return image[:, :, :, slice_idx]
+        else:
+            raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
+
+    def get_comparison_image(self, img_dict, slice_idx=None, axis=2):
         if slice_idx is None:
-            slice_idx = img_dict['H'].shape[-1] // 2
+            slice_idx = img_dict['H'].shape[1 + axis] // 2
 
         # Upscale LR volumes and extract slice
         img_list = []
         for key, func in self.upscale_func_dict.items():
+
+            for key in img_dict:
+                if isinstance(img_dict[key], torch.Tensor):
+                    img_dict[key] = img_dict[key].cpu()
+
             if img_dict['H'].shape != img_dict['L'].shape:  # upscale LR volume to match HR
-                up_lr_slice = func(img_dict['L'].cpu())[:, :, :, slice_idx]
+                up_lr_slice = self.get_slice(func(img_dict['L']), slice_idx, axis)
 
             else:
-                up_lr_slice = img_dict['L'].cpu()[:, :, :, slice_idx]
+                up_lr_slice = self.get_slice(img_dict['L'], slice_idx, axis)
 
             img_list.append(up_lr_slice)
 
-        hr_slice = img_dict['H'][:, :, :, slice_idx].cpu()  # C, H, W, D -> C, H, W
-        sr_slice = img_dict['E'][:, :, :, slice_idx].cpu()
+        hr_slice = self.get_slice(img_dict['H'], slice_idx, axis)  # C, H, W, D -> C, H, W
+        sr_slice = self.get_slice(img_dict['E'], slice_idx, axis)
 
         img_list.append(sr_slice)
         img_list.append(hr_slice)

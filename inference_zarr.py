@@ -1,5 +1,6 @@
 import datetime
 import os
+import shutil
 import time
 import zarr
 
@@ -20,6 +21,68 @@ from utils import utils_3D_image
 from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nrmse_2D
 from utils.utils_3D_image import run_strided_inference_zarr
 from utils.load_options import load_options_from_experiment_id
+
+def get_mean_and_ci(data_sequence, confidence=0.95):
+
+    data = np.array(data_sequence)
+    n = len(data)
+    mean, se = np.mean(data), stats.sem(data)
+    h = se * stats.t.ppf((1 + confidence) / 2., n - 1)
+    return mean, h
+
+def create_metric_file(wandb_path, opt, dataset_name):
+
+    # Create a file with performance metric statistics
+    file_dir = os.path.join(wandb_path, "files/")
+    if not os.path.exists(file_dir + "performance_statistics/"):
+        os.makedirs(file_dir + "performance_statistics/")
+
+    performance_statistics_dir = os.path.join(file_dir, "performance_statistics/")
+
+    # Specify the file name
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    file_name = f"metrics_{dataset_name}_{opt['experiment_id']}_{current_time}.txt"
+    file_path = performance_statistics_dir + file_name
+
+    # Open the file in write mode and write the contents
+    with open(file_path, 'w') as file:
+        file.write("MODEL ARCHITECTURE: " + opt['model_opt']['model_architecture'] + "\n")
+        file.write("DATASET: " + opt['dataset_opt']['name'] + " NAME: " + dataset_name + "\n")
+        file.write("EXPERIMENT ID: " + opt['experiment_id'] + "\n")
+        file.write("RUN NAME: " + opt['run_name'] + "\n")
+        file.write("MAX ITERATIONS: " + str(opt['train_opt']['iterations']) + "\n")
+
+        file.write("PATCH SIZE: " + str(opt['dataset_opt']['patch_size']) + "\n")
+        file.write("UP FACTOR: " + str(opt['up_factor']) + "\n")
+        file.write("LEARNING RATE: " + str(opt['train_opt']['G_optimizer_lr']) + "\n")
+
+    print(f"File '{file_name}' has been created and saved.")
+
+    return file_path
+
+
+def write_metric_statistics(file_path, psnr_vals, ssim_vals, nrmse_vals, text=None):
+
+    psnr_slice_mean, ci_psnr = get_mean_and_ci(psnr_vals['slice_vals'])
+    ssim_slice_mean, ci_ssim = get_mean_and_ci(ssim_vals['slice_vals'])
+    nrmse_slice_mean, ci_nrmse = get_mean_and_ci(nrmse_vals['slice_vals'])
+
+    # Open the file in write mode and write the contents
+    with open(file_path, 'a+') as file:
+        if text is not None:
+            file.write("\n" + "METRICS: " + text.upper() + "\n")
+
+        file.write("SAMPLE PERFORMANCE METRICS \n")
+        file.write("PSNR SAMPLE LIST: " + str(torch.tensor(psnr_vals['sample_means']).numpy()) + "\n")
+        file.write("SSIM SAMPLE LIST: " + str(torch.tensor(ssim_vals['sample_means']).numpy()) + "\n")
+        file.write("NRMSE SAMPLE LIST: " + str(torch.tensor(nrmse_vals['sample_means']).numpy()) + "\n")
+
+        # Write the individual values to the file
+        file.write("AVERAGE SLICE-WISE PERFORMANCE METRICS \n")
+        file.write("AVERAGE SLICE-WISE PSNR: " + str(psnr_slice_mean) + "+-" + str(ci_psnr) + "\n")
+        file.write("AVERAGE SLICE-WISE SSIM: " + str(ssim_slice_mean) + "+-" + str(ci_ssim) + "\n")
+        file.write("AVERAGE SLICE-WISE NRSME: " + str(nrmse_slice_mean) + "+-" + str(ci_nrmse) + "\n")
+
 
 def get_full_sample_metrics(img_H, img_E, slice_dim=3, slice_step=1):
 
@@ -76,65 +139,122 @@ def main(opt: DictConfig):
     model = define_Model(opt)
     model.init_test(experiment_id)
 
-    zarr_path = "../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/test/volume_826353.zarr"
-    out_path = f"{wandb_path}/files/model_outputs/volume_826353.zarr"
-
-    # zarr_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/danmax/bone_2_ome.zarr"
-    # out_path = "/work2/aulho/bone_2_ome_super.zarr"
-
     # Define dataset
     from data.Dataset_VoDaSuRe_OME import Dataset_VoDaSuRe_OME as D
     dataset = D(opt)
     data_dict = dataset.dataset_dict_test
 
-    metric_vals = [{"avg_psnr_list": [], "avg_ssim_list": [], "avg_nrmse_list": [], "psnr_slice_list": [], "ssim_slice_list": [], "nrmse_slice_list": []}]
+    # Create directory for test patch comparisons
+    image_path = os.path.join(wandb_path, "files/", "media/", "images/")
+    print("Saving image comparisons to:", image_path)
+    if not os.path.exists(image_path + "patch_comparisons/"):
+        os.makedirs(image_path + "patch_comparisons/")
+    if not os.path.exists(image_path + "full_slice_comparisons/"):
+        os.makedirs(image_path + "full_slice_comparisons/")
 
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
         paths = dataset['paths']
         group_pairs = dataset['group_pairs']
 
-        group_pair = group_pairs[f"{opt['up_factor']}"][0]  # Assuming we want to use the first group pair for testing
-        # group_pair = {"H": "HR/0", "L": "HR/2"}
+        # Create metrics file
+        metric_file_path = create_metric_file(wandb_path, opt, dataset_name=name)
 
-        for zarr_path in paths:
-            out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
+        psnr_sample_means = []
+        ssim_sample_means = []
+        nrmse_sample_means = []
 
-            run_strided_inference_zarr(
-                model=model,
-                zarr_path=zarr_path,
-                out_path=out_path,
-                group_pair=group_pair,
-                f=opt['up_factor'],
-                size_lr=opt.dataset_opt.patch_size,
-                border=4,
-                batch_size=opt.dataset_opt.train_dataloader_params.dataloader_batch_size,
-                overlap_mode="hann"
-            )
+        for group_pair in group_pairs[f"{opt['up_factor']}"]:
+            print(f"Group pair: {group_pair}")
 
-            level_L = int(group_pair["L"].split("/")[-1])
-            level_H = int(group_pair["H"].split("/")[-1])
+            # Create metric lists
+            psnr_vals = {"sample_means": [], "slice_vals": []}
+            ssim_vals = {"sample_means": [], "slice_vals": []}
+            nrmse_vals = {"sample_means": [], "slice_vals": []}
 
-            zarr_E = zarr.open(out_path, mode='r')
-            img_E = zarr_E[f"SR/{level_H}"]
+            for zarr_path in paths:
+                out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
-            zarr_H = zarr.open(zarr_path, mode='r')
-            img_H = zarr_H[f"HR/{level_H}"]
+                run_strided_inference_zarr(
+                    model=model,
+                    zarr_path=zarr_path,
+                    out_path=out_path,
+                    group_pair=group_pair,
+                    f=opt['up_factor'],
+                    size_lr=opt.dataset_opt.patch_size,
+                    border=4,
+                    batch_size=opt.dataset_opt.train_dataloader_params.dataloader_batch_size,
+                    overlap_mode="hann"
+                )
 
-            psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1)
+                zarr_H = zarr.open(zarr_path, mode='r')
+                img_H = zarr_H[group_pair["H"]]
+                img_L = zarr_H[group_pair["L"]]
 
-            sample_psnr = np.mean(psnr_slice_list)
-            sample_ssim = np.mean(ssim_slice_list)
-            sample_nrmse = np.mean(nrmse_slice_list)
-            metric_vals[0]['avg_psnr_list'].append(sample_psnr)
-            metric_vals[0]['avg_ssim_list'].append(sample_ssim)
-            metric_vals[0]['avg_nrmse_list'].append(sample_nrmse)
-            print("Dimension %d, Sample PSNR: %0.4f, SSIM: %0.6f, NRMSE: %0.6f" % (0, sample_psnr, sample_ssim, sample_nrmse))
+                zarr_E = zarr.open(out_path, mode='r')
+                img_E = zarr_E[group_pair["H"].replace("HR", "SR")]
 
-        avg_psnr = np.mean(metric_vals[0]['avg_psnr_list'])
-        avg_ssim = np.mean(metric_vals[0]['avg_ssim_list'])
-        avg_nrmse = np.mean(metric_vals[0]['avg_nrmse_list'])
+                psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1)
+
+                sample_psnr = np.mean(psnr_slice_list)
+                sample_ssim = np.mean(ssim_slice_list)
+                sample_nrmse = np.mean(nrmse_slice_list)
+                print("Dimension %d, Sample PSNR: %0.4f, SSIM: %0.6f, NRMSE: %0.6f" % (0, sample_psnr, sample_ssim, sample_nrmse))
+
+                psnr_vals['slice_vals'].extend(psnr_slice_list)
+                ssim_vals['slice_vals'].extend(ssim_slice_list)
+                nrmse_vals['slice_vals'].extend(nrmse_slice_list)
+
+                psnr_vals['sample_means'].append(sample_psnr)
+                ssim_vals['sample_means'].append(sample_ssim)
+                nrmse_vals['sample_means'].append(sample_nrmse)
+
+                # Save full slice comparisons over whole sample
+                baseline_comparison_tool = utils_3D_image.ImageComparisonTool3D(
+                    patch_size_hr=img_H.shape,
+                    upscaling_methods=["tio_nearest"],  ## or tio_linear
+                    unnorm=False,
+                    div_max=False,
+                    out_dtype=np.uint8)
+
+                # img_dict = {'H': img_H, 'E': img_E, 'L': img_L}
+                # comp_path = os.path.join(image_path, "full_slice_comparisons")
+                # for axis in range(3):
+                #     slice_idx_list = np.linspace(img_H.shape[axis] // 4, img_H.shape[axis] - img_H.shape[axis] // 4, 5)
+                #     for slice_idx in slice_idx_list:
+                #         grid_image = baseline_comparison_tool.get_comparison_image(img_dict, slice_idx=int(slice_idx), axis=axis)
+                #         grid_image = Image.fromarray(grid_image)
+                #
+                #         file_name = f"comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
+                #         path = os.path.join(comp_path, file_name)
+                #         grid_image.save(path)
+
+                # Delete SR zarr to save space
+                if os.path.exists(out_path):
+                    shutil.rmtree(out_path)
+
+            # Save sample metrics
+            psnr_sample_means.extend(psnr_vals['sample_means'])
+            ssim_sample_means.extend(ssim_vals['sample_means'])
+            nrmse_sample_means.extend(nrmse_vals['sample_means'])
+
+            # Save group pair metrics
+            text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
+            write_metric_statistics(metric_file_path, psnr_vals, ssim_vals, nrmse_vals, text=text)
+
+        # Average metrics across group pairs
+        avg_psnr = np.mean(psnr_sample_means)
+        avg_ssim = np.mean(ssim_sample_means)
+        avg_nrmse = np.mean(nrmse_sample_means)
         print(f"Performance metrics for dataset {name}: Average PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.6f}, NRMSE: {avg_nrmse:.6f}")
+
+        # Write final dataset metric averages
+        with open(metric_file_path, 'a+') as file:
+            file.write("\n DATASET SAMPLE AVERAGES \n")
+            file.write("PSNR AVERAGE: " + str(avg_psnr) + "\n")
+            file.write("SSIM AVERAGE: " + str(avg_ssim) + "\n")
+            file.write("NRMSE AVERAGE: " + str(avg_nrmse) + "\n")
+
 
 if __name__ == "__main__":
     main()
