@@ -136,7 +136,7 @@ def main(opt: DictConfig):
     print("Cuda device name", torch.cuda.get_device_name(0))
 
     from models.select_model import define_Model
-    model = define_Model(opt)
+    model = define_Model(opt, mode='test')
     model.init_test(experiment_id)
 
     # Define dataset

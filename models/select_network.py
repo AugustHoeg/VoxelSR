@@ -21,7 +21,7 @@ class DummyNetwork(nn.Module):
 # --------------------------------------------
 # Generator, netG, G
 # --------------------------------------------
-def define_G(opt):
+def define_G(opt, mode='train'):
     opt_net = opt['model_opt']['netG']
     model_architecture = opt['model_opt']['model_architecture']
 
@@ -59,6 +59,7 @@ def define_G(opt):
                    mlp_ratio=opt_net['mlp_ratio'],
                    upsampler=opt_net['upsample_method'],
                    resi_connection='1conv',
+                   drop_path_rate=0.1 if mode == 'train' else 0.0,
                    use_checkpoint=opt_net['use_checkpoint'])
 
     # ----------------------------------------
@@ -81,6 +82,7 @@ def define_G(opt):
                    mlp_ratio=opt_net['mlp_ratio'],
                    upsampler=opt_net['upsample_method'],
                    resi_connection='1conv',
+                   drop_path_rate=0.1 if mode == 'train' else 0.0,
                    use_checkpoint=opt_net['use_checkpoint'])
 
     # ----------------------------------------
@@ -103,6 +105,7 @@ def define_G(opt):
                    mlp_ratio=opt_net['mlp_ratio'],
                    upsampler=opt_net['upsample_method'],
                    resi_connection='1conv',
+                   drop_path_rate=0.1 if mode == 'train' else 0.0,
                    use_checkpoint=opt_net['use_checkpoint'])
 
 
@@ -162,11 +165,7 @@ def define_G(opt):
                    window_size=opt_net['window_size'],
                    mlp_ratio=opt_net['mlp_ratio'],
                    qkv_bias=True,
-                   qk_scale=None,
-                   drop_rate=0.,
-                   attn_drop_rate=0.,
-                   drop_path_rate=0.1,
-                   norm_layer=torch.nn.LayerNorm,
+                   drop_path_rate=0.1 if mode == 'train' else 0.0,
                    ape=opt_net['ape'],
                    rpb=opt_net['rpb'],
                    patch_norm=True,
@@ -217,7 +216,7 @@ def define_G(opt):
                   qkv_bias=True,
                   drop=0.,
                   attn_drop=0.,
-                  drop_path=opt_net['drop_path'],
+                  drop_path=0.1 if mode == 'train' else 0.0,
                   token_upsample_method=opt_net["token_upsample_method"],
                   upsample_method=opt_net["upsample_method"],
                   use_checkpoint=opt_net["use_checkpoint"],

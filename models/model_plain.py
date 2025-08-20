@@ -21,14 +21,14 @@ from performance_metrics.performance_metrics import compute_performance_metrics,
 
 class ModelPlain(ModelBase):
     """Train with pixel-VGG-GAN loss"""
-    def __init__(self, opt):
+    def __init__(self, opt, mode='train'):
         super(ModelPlain, self).__init__(opt)
         # ------------------------------------
         # define network
         # ------------------------------------
         self.last_iteration = 0  # last iteration
         self.opt_train = self.opt['train_opt']    # training option
-        self.netG = define_G(opt)
+        self.netG = define_G(opt, mode=mode)
         self.netG = self.model_to_device(self.netG)
         if self.opt_train['E_decay'] > 0:
             self.netE = define_G(opt).to(self.device).eval()

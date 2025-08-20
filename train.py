@@ -238,7 +238,7 @@ def main(opt: DictConfig):
 
     # Define universal SR model using the KAIR define_Model framework
     from models.select_model import define_Model
-    model = define_Model(opt)
+    model = define_Model(opt, mode='train')
 
     # Define wandb run
     model.define_wandb_run()
