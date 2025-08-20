@@ -538,30 +538,42 @@ class ImageComparisonTool3D():
 
         self.upscale_func_dict = {}
         for method in upscaling_methods:
-            self.upscale_func_dict[method] = self.get_upscaling_func(method=method, size=patch_size_hr)
+            self.upscale_func_dict[method] = self.get_upscaling_func(method=method, shape=patch_size_hr)
 
 
-    def get_upscaling_func(self, method="tio_linear", size=None):
+    def get_upscaling_func(self, method="tio_linear", shape=None):
 
         if method == "tio_linear":
-            return tiotransforms.Resize(target_shape=size, image_interpolation='LINEAR')
+            return tiotransforms.Resize(target_shape=shape, image_interpolation='LINEAR')
         elif method == "tio_nearest":
-            return tiotransforms.Resize(target_shape=size, image_interpolation='NEAREST')
+            return tiotransforms.Resize(target_shape=shape, image_interpolation='NEAREST')
         elif method == "tio_bspline":
-            return tiotransforms.Resize(target_shape=size, image_interpolation='BSPLINE')
+            return tiotransforms.Resize(target_shape=shape, image_interpolation='BSPLINE')
         else:
             raise NotImplementedError('Upsampling method %s not implemented.' % method)
 
     def get_slice(self, image, slice_idx, axis=0):
 
-        if axis == 0:
-            return image[:, slice_idx, :, :]
-        elif axis == 1:
-            return image[:, :, slice_idx, :]
-        elif axis == 2:
-            return image[:, :, :, slice_idx]
+        if len(image.shape) == 3:
+            if axis == 0:
+                return image[slice_idx, :, :]
+            elif axis == 1:
+                return image[:, slice_idx, :]
+            elif axis == 2:
+                return image[:, :, slice_idx]
+            else:
+                raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
+        elif len(image.shape) == 4:
+            if axis == 0:
+                return image[:, slice_idx, :, :]
+            elif axis == 1:
+                return image[:, :, slice_idx, :]
+            elif axis == 2:
+                return image[:, :, :, slice_idx]
+            else:
+                raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
         else:
-            raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
+            raise ValueError(f"Length of image shape must 3 or 4, got {len(image.shape)}")
 
     def get_comparison_image(self, img_dict, slice_idx=None, axis=2):
         if slice_idx is None:
@@ -576,7 +588,10 @@ class ImageComparisonTool3D():
                     img_dict[key] = img_dict[key].cpu()
 
             if img_dict['H'].shape != img_dict['L'].shape:  # upscale LR volume to match HR
-                up_lr_slice = self.get_slice(func(img_dict['L']), slice_idx, axis)
+                if self.upscale_slice:
+                    up_lr_slice = func(self.get_slice(img_dict['L'], slice_idx, axis))  # index slice, then 2D upscale
+                else:
+                    up_lr_slice = self.get_slice(func(img_dict['L']), slice_idx, axis)  # 3D upscale, then index slice
 
             else:
                 up_lr_slice = self.get_slice(img_dict['L'], slice_idx, axis)

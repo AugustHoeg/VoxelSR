@@ -209,25 +209,29 @@ def main(opt: DictConfig):
                 ssim_vals['sample_means'].append(sample_ssim)
                 nrmse_vals['sample_means'].append(sample_nrmse)
 
-                # Save full slice comparisons over whole sample
-                baseline_comparison_tool = utils_3D_image.ImageComparisonTool3D(
-                    patch_size_hr=img_H.shape,
-                    upscaling_methods=["tio_nearest"],  ## or tio_linear
-                    unnorm=False,
-                    div_max=False,
-                    out_dtype=np.uint8)
+                for axis in range(3):
+                    target_shape = list(img_H.shape)
+                    target_shape[axis] = 1
+                    # Save full slice comparisons over whole sample
+                    baseline_comparison_tool = utils_3D_image.ImageComparisonTool3D(
+                        patch_size_hr=target_shape,
+                        upscaling_methods=["tio_nearest"],  ## or tio_linear
+                        unnorm=False,
+                        div_max=False,
+                        out_dtype=np.uint8,
+                        upscale_slice=True)
 
-                # img_dict = {'H': img_H, 'E': img_E, 'L': img_L}
-                # comp_path = os.path.join(image_path, "full_slice_comparisons")
-                # for axis in range(3):
-                #     slice_idx_list = np.linspace(img_H.shape[axis] // 4, img_H.shape[axis] - img_H.shape[axis] // 4, 5)
-                #     for slice_idx in slice_idx_list:
-                #         grid_image = baseline_comparison_tool.get_comparison_image(img_dict, slice_idx=int(slice_idx), axis=axis)
-                #         grid_image = Image.fromarray(grid_image)
-                #
-                #         file_name = f"comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
-                #         path = os.path.join(comp_path, file_name)
-                #         grid_image.save(path)
+                    img_dict = {'H': img_H, 'E': img_E, 'L': img_L}
+                    comp_path = os.path.join(image_path, "full_slice_comparisons")
+
+                    slice_idx_list = np.linspace(img_H.shape[axis] // 4, img_H.shape[axis] - img_H.shape[axis] // 4, 5)
+                    for slice_idx in slice_idx_list:
+                        grid_image = baseline_comparison_tool.get_comparison_image(img_dict, slice_idx=int(slice_idx), axis=axis)
+                        grid_image = Image.fromarray(grid_image)
+
+                        file_name = f"comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
+                        path = os.path.join(comp_path, file_name)
+                        grid_image.save(path)
 
                 # Delete SR zarr to save space
                 if os.path.exists(out_path):
