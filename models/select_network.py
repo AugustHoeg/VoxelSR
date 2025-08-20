@@ -216,7 +216,7 @@ def define_G(opt, mode='train'):
                   qkv_bias=True,
                   drop=0.,
                   attn_drop=0.,
-                  drop_path=0.1 if mode == 'train' else 0.0,
+                  drop_path=opt_net['drop_path'] if mode == 'train' else 0.0,
                   token_upsample_method=opt_net["token_upsample_method"],
                   upsample_method=opt_net["upsample_method"],
                   use_checkpoint=opt_net["use_checkpoint"],
