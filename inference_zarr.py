@@ -154,6 +154,7 @@ def main(opt: DictConfig):
 
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
+
         paths = dataset['paths']
         group_pairs = dataset['group_pairs']
 
@@ -164,7 +165,7 @@ def main(opt: DictConfig):
         ssim_sample_means = []
         nrmse_sample_means = []
 
-        for group_pair in group_pairs[f"{opt['up_factor']}"]:
+        for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
             print(f"Group pair: {group_pair}")
 
             # Create metric lists
@@ -172,8 +173,11 @@ def main(opt: DictConfig):
             ssim_vals = {"sample_means": [], "slice_vals": []}
             nrmse_vals = {"sample_means": [], "slice_vals": []}
 
-            for zarr_path in paths:
+            for image_idx, zarr_path in enumerate(paths):
                 out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
+
+                if "bone_2_cropped" in out_path:
+                    continue  # skip the very large danmax bone sample
 
                 run_strided_inference_zarr(
                     model=model,
@@ -192,7 +196,7 @@ def main(opt: DictConfig):
                 img_L = zarr_H[group_pair["L"]]
 
                 zarr_E = zarr.open(out_path, mode='r')
-                img_E = zarr_E[group_pair["H"].replace("HR", "SR")]
+                img_E = zarr_E['SR/0']  # Always read the top level
 
                 psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1)
 
@@ -211,7 +215,8 @@ def main(opt: DictConfig):
 
                 for axis in range(3):
                     target_shape = list(img_H.shape)
-                    target_shape[axis] = 1
+                    del target_shape[axis]  # remove slice axis
+                    target_shape.insert(0, 1)  # prepend 1
                     # Save full slice comparisons over whole sample
                     baseline_comparison_tool = utils_3D_image.ImageComparisonTool3D(
                         patch_size_hr=target_shape,
@@ -229,7 +234,8 @@ def main(opt: DictConfig):
                         grid_image = baseline_comparison_tool.get_comparison_image(img_dict, slice_idx=int(slice_idx), axis=axis)
                         grid_image = Image.fromarray(grid_image)
 
-                        file_name = f"comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
+                        os.makedirs(os.path.join(comp_path, name), exist_ok=True)
+                        file_name = f"{name}/image_{image_idx}_comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
                         path = os.path.join(comp_path, file_name)
                         grid_image.save(path)
 
@@ -254,7 +260,7 @@ def main(opt: DictConfig):
 
         # Write final dataset metric averages
         with open(metric_file_path, 'a+') as file:
-            file.write("\n DATASET SAMPLE AVERAGES \n")
+            file.write("\nDATASET SAMPLE AVERAGES\n")
             file.write("PSNR AVERAGE: " + str(avg_psnr) + "\n")
             file.write("SSIM AVERAGE: " + str(avg_ssim) + "\n")
             file.write("NRMSE AVERAGE: " + str(avg_nrmse) + "\n")

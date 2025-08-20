@@ -117,7 +117,7 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
     stride = size_lr - border
 
     chunks_L = img_L.chunks
-    chunks_H = img_H.chunks # tuple(int(c * f) for c in chunks_L)
+    chunks_H = img_H.chunks  # tuple(int(c * f) for c in chunks_L)
 
     # Prepare output Zarr store
     compressor = Blosc(cname='lz4', clevel=3, shuffle=Blosc.BITSHUFFLE)
@@ -556,20 +556,20 @@ class ImageComparisonTool3D():
 
         if len(image.shape) == 3:
             if axis == 0:
-                return image[slice_idx, :, :]
+                return torch.from_numpy(image[slice_idx, :, :]).unsqueeze(0)
             elif axis == 1:
-                return image[:, slice_idx, :]
+                return torch.from_numpy(image[:, slice_idx, :]).unsqueeze(0)
             elif axis == 2:
-                return image[:, :, slice_idx]
+                return torch.from_numpy(image[:, :, slice_idx]).unsqueeze(0)
             else:
                 raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
         elif len(image.shape) == 4:
             if axis == 0:
-                return image[:, slice_idx, :, :]
+                return torch.from_numpy(image[:, slice_idx, :, :])
             elif axis == 1:
-                return image[:, :, slice_idx, :]
+                return torch.from_numpy(image[:, :, slice_idx, :])
             elif axis == 2:
-                return image[:, :, :, slice_idx]
+                return torch.from_numpy(image[:, :, :, slice_idx])
             else:
                 raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
         else:
@@ -589,9 +589,11 @@ class ImageComparisonTool3D():
 
             if img_dict['H'].shape != img_dict['L'].shape:  # upscale LR volume to match HR
                 if self.upscale_slice:
-                    up_lr_slice = func(self.get_slice(img_dict['L'], slice_idx, axis))  # index slice, then 2D upscale
+                    img = self.get_slice(img_dict['L'], slice_idx // (img_dict['H'].shape[-1] // img_dict['L'].shape[-1]), axis).unsqueeze(0)
+                    up_lr_slice = func(img).squeeze(0)  # index slice, then 2D upscale
                 else:
-                    up_lr_slice = self.get_slice(func(img_dict['L']), slice_idx, axis)  # 3D upscale, then index slice
+                    img = func(img_dict['L'])
+                    up_lr_slice = self.get_slice(img, slice_idx, axis)  # 3D upscale, then index slice
 
             else:
                 up_lr_slice = self.get_slice(img_dict['L'], slice_idx, axis)
