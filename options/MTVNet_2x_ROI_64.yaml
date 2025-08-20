@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: mDCSRN              # Default model config
+  - model_opt: MTVNet_L3_128_96_64            # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -15,9 +15,9 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_synth_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001
+run_name: ${model_opt.model_architecture}_000_roi64_bs16
 note: Note
 
 # GPU configuration
@@ -31,35 +31,37 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: mDCSRN_ID000000  # "mDCSRN_ID000000"
+  pretrained_experiment_id: null  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 500
-  validation_iterations: 100
-  checkpoint_test: 100
-  checkpoint_save: 100
-  checkpoint_print: 100
-  checkpoint_save_visuals: 100
-  num_accum_steps_G: 1
-  G_optimizer_lr: 1e-4
+  iterations: 100000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
+  num_accum_steps_G: 2
+  G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 10
+  G_optimizer_clipgrad: 5
+  G_warmup_steps: 3000  # new
 
 # Overwrite default dataset parameters
 dataset_opt:
-  patch_size: 32
+  synthetic: true
+  patch_size: 128  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
 
   train_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 1
+    dataloader_batch_size: 16
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 1
+    dataloader_batch_size: 4
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 

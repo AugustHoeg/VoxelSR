@@ -528,12 +528,13 @@ def crop_context(image, L, level_ratio):
 
 
 class ImageComparisonTool3D():
-    def __init__(self, patch_size_hr, upscaling_methods, unnorm=True, div_max=False, out_dtype=np.uint8):
+    def __init__(self, patch_size_hr, upscaling_methods, unnorm=True, div_max=False, out_dtype=np.uint8, upscale_slice=False):
         self.patch_size_hr = patch_size_hr
         self.unnorm = unnorm
         self.div_max = div_max
         self.out_dtype = out_dtype
         self.upscaling_methods = upscaling_methods
+        self.upscale_slice = upscale_slice
 
         self.upscale_func_dict = {}
         for method in upscaling_methods:

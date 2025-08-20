@@ -65,38 +65,65 @@ class Dataset_VoDaSuRe_OME():
                            "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr")),
                            "VoDaSuRe": glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))}
 
-            sampling_weights = {"HCP_1200":  1.0,
+            sampling_weights = {"HCP_1200":  2.0,
                                 "IXI":       1.0,
-                                "LITS":      1.0,
-                                "CTSpine1K": 1.0,
-                                "LIDC-IDRI": 1.0,
-                                "VoDaSuRe":  4.0}
+                                "LITS":      2.0,
+                                "CTSpine1K": 3.0,
+                                "LIDC-IDRI": 2.0,
+                                "VoDaSuRe":  10.0}
 
 
-            group_pairs = {
+            # group_pairs = {
+            #     "HCP_1200": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+            #     },
+            #     "IXI": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+            #     },
+            #     "LITS": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+            #     },
+            #     "CTSpine1K": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+            #     },
+            #     "LIDC-IDRI": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+            #     },
+            #     "VoDaSuRe": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}, {"H": "HR/0", "L": "REG/0"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/1", "L": "REG/0"}]
+            #     },
+            # }
+
+            group_pairs = {  # only synthetic
                 "HCP_1200": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
                     "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
                 },
                 "IXI": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
                     "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
                 },
                 "LITS": {
                     "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
                 },
                 "CTSpine1K": {
                     "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
                 },
                 "LIDC-IDRI": {
                     "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
                 },
                 "VoDaSuRe": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}, {"H": "HR/0", "L": "REG/0"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/1", "L": "REG/0"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
                 },
             }
 

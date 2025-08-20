@@ -2075,7 +2075,7 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 64 * 1  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
+    img_size = 128 * 1  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).cuda()
     B, C, H, W, D = x.shape
@@ -2084,7 +2084,7 @@ if __name__ == "__main__":
     attn_window_size = 4  # 4  # The size of the window to perform local attention within, M in the swin papers. standard is 7
     embed_dim = patch_size ** 3  # set to patch_size**3 to keep same amount of information in embedding, emb_dim 96 is default for 4x4x3 = 48 (number of features in 1 4x4 patch)
 
-    context_sizes = [64, 48, 32]
+    context_sizes = [128, 96, 64]
     num_levels = len(context_sizes)  # 3
     shallow_feats = [32, 64, 128]  # 128 normally
     pre_up_feats = [64, 64]
@@ -2093,10 +2093,10 @@ if __name__ == "__main__":
     patch_sizes = [4, 3, 2]  # [16, 8, 2]
     ct_size = 2
     ct_pool_method = "conv"
-    ct_embed_dims = [192, 192, 192]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
-    embed_dims = [192, 192, 192]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    ct_embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
     attn_window_sizes = [8, 8, 8]  # [4, 4, 4]
-    num_heads = 8
+    num_heads = 4
     enable_ape_ct = True
     enable_ape_x = False
     enable_ct_rpb = True
@@ -2106,7 +2106,7 @@ if __name__ == "__main__":
     layer_type = "fastervit"  # fastervit_without_ct, swin, fastervit
     patch_pe_method = "window_relative"  # "absolute", "window_relative"
     token_upsample_method = "deconv_nn_resize"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
-    upsample_method = "pixelshuffle3D"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
+    upsample_method = "nearest"  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
 
     # TODO: implement overlapping patches
     patch_overlap = False
