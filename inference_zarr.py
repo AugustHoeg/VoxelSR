@@ -84,7 +84,7 @@ def write_metric_statistics(file_path, psnr_vals, ssim_vals, nrmse_vals, text=No
         file.write("AVERAGE SLICE-WISE NRSME: " + str(nrmse_slice_mean) + "+-" + str(ci_nrmse) + "\n")
 
 
-def get_full_sample_metrics(img_H, img_E, slice_dim=3, slice_step=1):
+def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1):
 
     num_slices = img_H.shape[slice_dim]
 
@@ -94,10 +94,10 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=3, slice_step=1):
     nrmse_slice_list = []
 
     for i in range(0, num_slices, slice_step):
-        if slice_dim == 1:
+        if slice_dim == 0:
             H_slice = img_H[i, :, :]
             E_slice = img_E[i, :, :]
-        elif slice_dim == 2:
+        elif slice_dim == 1:
             H_slice = img_H[:, i, :]
             E_slice = img_E[:, i, :]
         else:
