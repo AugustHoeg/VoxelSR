@@ -155,8 +155,8 @@ def main(opt: DictConfig):
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
 
-        if name == "HCP_1200":
-            continue  # Skip HCP_1200 dataset
+        # if name == "HCP_1200":
+        #     continue  # Skip HCP_1200 dataset
 
         paths = dataset['paths']
         group_pairs = dataset['group_pairs']
@@ -173,7 +173,7 @@ def main(opt: DictConfig):
             group_text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
 
             if "HR0" not in group_text:
-                pass  # skip group pairs that do not contain HR0
+                continue  # skip group pairs that do not contain HR0
 
             # Create metric lists
             psnr_vals = {"sample_means": [], "slice_vals": []}
