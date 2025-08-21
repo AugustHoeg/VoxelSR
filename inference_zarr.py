@@ -155,6 +155,9 @@ def main(opt: DictConfig):
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
 
+        if name == "HCP_1200" or name == "IXI"
+            continue
+
         paths = dataset['paths']
         group_pairs = dataset['group_pairs']
 
