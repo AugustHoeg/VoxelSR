@@ -174,9 +174,11 @@ def main(opt: DictConfig):
             nrmse_vals = {"sample_means": [], "slice_vals": []}
 
             for image_idx, zarr_path in enumerate(paths):
+                print(f"Processing image {image_idx + 1}/{len(paths)}: {zarr_path}")
                 out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
-                if "bone_2_cropped" in out_path:
+                if "bone_2_cropped" in zarr_path:
+                    print(f"Skipping very large bone sample: {zarr_path}. Please run inference on this sample separately if needed.")
                     continue  # skip the very large danmax bone sample
 
                 run_strided_inference_zarr(
