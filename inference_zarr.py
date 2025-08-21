@@ -155,6 +155,9 @@ def main(opt: DictConfig):
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
 
+        if name == "HCP_1200":
+            continue  # Skip HCP_1200 dataset
+
         paths = dataset['paths']
         group_pairs = dataset['group_pairs']
 
@@ -167,6 +170,10 @@ def main(opt: DictConfig):
 
         for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
             print(f"Group pair: {group_pair}")
+            group_text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
+
+            if "HR0" not in group_text:
+                pass  # skip group pairs that do not contain HR0
 
             # Create metric lists
             psnr_vals = {"sample_means": [], "slice_vals": []}
@@ -236,8 +243,8 @@ def main(opt: DictConfig):
                         grid_image = baseline_comparison_tool.get_comparison_image(img_dict, slice_idx=int(slice_idx), axis=axis)
                         grid_image = Image.fromarray(grid_image)
 
-                        os.makedirs(os.path.join(comp_path, name), exist_ok=True)
-                        file_name = f"{name}/image_{image_idx}_comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
+                        os.makedirs(os.path.join(comp_path, name, group_text), exist_ok=True)
+                        file_name = f"{name}/{group_text}/image_{image_idx}_comp_axis_{axis}_{slice_idx}_{opt['model_opt']['model_architecture']}_{opt['up_factor']}x.png"
                         path = os.path.join(comp_path, file_name)
                         grid_image.save(path)
 
@@ -251,8 +258,7 @@ def main(opt: DictConfig):
             nrmse_sample_means.extend(nrmse_vals['sample_means'])
 
             # Save group pair metrics
-            text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
-            write_metric_statistics(metric_file_path, psnr_vals, ssim_vals, nrmse_vals, text=text)
+            write_metric_statistics(metric_file_path, psnr_vals, ssim_vals, nrmse_vals, text=group_text)
 
         # Average metrics across group pairs
         avg_psnr = np.mean(psnr_sample_means)
