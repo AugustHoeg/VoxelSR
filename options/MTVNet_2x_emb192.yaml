@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: RRDBNet3D              # Default model config
+  - model_opt: MTVNet_L1_emb192             # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -43,14 +43,15 @@ train_opt:
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
-  G_optimizer_lr: 1e-4 # 1e-4
+  G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 1
+  G_optimizer_clipgrad: 4
+  G_warmup_steps: 3000  # new
 
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 32
+  patch_size: 64  # Change this to 128 for MTVNet L3, 64 for L2 and 32 for L1
 
   train_dataloader_params:
     dataloader_batch_size: 16
