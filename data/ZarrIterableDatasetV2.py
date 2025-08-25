@@ -11,7 +11,7 @@ import torch
 import monai.data
 import monai.transforms as mt
 import zarr
-from zarr.storage import LRUStoreCache, FSStore, MemoryStore, DirectoryStore
+from zarr.storage import LRUStoreCache, FSStore, MemoryStore, DirectoryStore  # from zarr.storage import LocalStore as DirectoryStore
 from ome_zarr.io import parse_url
 from monai.data import SmartCacheDataset, DataLoader, IterableDataset
 from time import sleep
@@ -298,7 +298,7 @@ class ZarrIterableDataset(IterableDataset):
             for path in paths:
                 if dataset['store_type'] == 'Numpy':
                     # TODO: fix NumPy method here.
-                    data = zarr.open(path, mode='r', cache_attrs=True)
+                    data = zarr.open(path, mode='r', cache_attrs=False)
                     z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
                 elif dataset['store_type'] == 'MemoryStore':
                     disk_store = DirectoryStore(path)
@@ -310,7 +310,7 @@ class ZarrIterableDataset(IterableDataset):
                     cached_store = LRUStoreCache(FSStore(path), max_size=store_size)
                     z = zarr.open(store=cached_store, mode='r', cache_attrs=True)
                 else:
-                    z = zarr.open(path, mode='r', cache_attrs=True)
+                    z = zarr.open(path, mode='r', cache_attrs=False)
 
                 # TODO fix check for in-chunk sampling
                 #if self.sampling_method == 'in_chunk' and self.store_type != 'Numpy':

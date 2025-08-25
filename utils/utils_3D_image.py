@@ -575,7 +575,7 @@ class ImageComparisonTool3D():
         else:
             raise ValueError(f"Length of image shape must 3 or 4, got {len(image.shape)}")
 
-        if not isinstance(img, torch.Tensor):
+        if not isinstance(im, torch.Tensor):
             im = torch.from_numpy(im)
 
         if len(image.shape) == 3:
