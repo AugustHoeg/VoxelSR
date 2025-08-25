@@ -65,12 +65,12 @@ class Dataset_VoDaSuRe_OME():
                            "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr")),
                            "VoDaSuRe": glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))}
 
-            sampling_weights = {"HCP_1200":  2.0,
+            sampling_weights = {"HCP_1200":  3.0,
                                 "IXI":       1.0,
                                 "LITS":      2.0,
-                                "CTSpine1K": 3.0,
-                                "LIDC-IDRI": 2.0,
-                                "VoDaSuRe":  10.0}
+                                "CTSpine1K": 5.0,
+                                "LIDC-IDRI": 5.0,
+                                "VoDaSuRe":  15.0}
 
 
             # group_pairs = {
@@ -102,28 +102,28 @@ class Dataset_VoDaSuRe_OME():
 
             group_pairs = {  # only synthetic
                 "HCP_1200": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}]
                 },
                 "IXI": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}]
                 },
                 "LITS": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}]
                 },
                 "CTSpine1K": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}]
                 },
                 "LIDC-IDRI": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}]
                 },
                 "VoDaSuRe": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/2", "L": "HR/3"}]
+                    "4": [{"H": "HR/0", "L": "HR/2"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}]
                 },
             }
 
