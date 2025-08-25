@@ -556,24 +556,33 @@ class ImageComparisonTool3D():
 
         if len(image.shape) == 3:
             if axis == 0:
-                return torch.from_numpy(image[slice_idx, :, :]).unsqueeze(0)
+                im = image[slice_idx, :, :]
             elif axis == 1:
-                return torch.from_numpy(image[:, slice_idx, :]).unsqueeze(0)
+                im = image[:, slice_idx, :]
             elif axis == 2:
-                return torch.from_numpy(image[:, :, slice_idx]).unsqueeze(0)
+                im = image[:, :, slice_idx]
             else:
                 raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
         elif len(image.shape) == 4:
             if axis == 0:
-                return torch.from_numpy(image[:, slice_idx, :, :])
+                im = image[:, slice_idx, :, :]
             elif axis == 1:
-                return torch.from_numpy(image[:, :, slice_idx, :])
+                im = image[:, :, slice_idx, :]
             elif axis == 2:
-                return torch.from_numpy(image[:, :, :, slice_idx])
+                im = image[:, :, :, slice_idx]
             else:
                 raise ValueError(f"Slice axis must be 0, 1, or 2 but got {axis}")
         else:
             raise ValueError(f"Length of image shape must 3 or 4, got {len(image.shape)}")
+
+        if not isinstance(img, torch.Tensor):
+            im = torch.from_numpy(im)
+
+        if len(image.shape) == 3:
+            im = im.unsqueeze(0)
+
+        return im
+
 
     def get_comparison_image(self, img_dict, slice_idx=None, axis=2):
         if slice_idx is None:
