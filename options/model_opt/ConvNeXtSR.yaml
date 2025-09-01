@@ -7,12 +7,12 @@ netG:
 
   in_channels: 1
   depths: [6, 6, 6, 6, 6, 6]  # [3, 3, 3, 3]
-  dims: [288, 288, 288, 288, 288, 288]  # [96, 96, 96, 96], original: [96, 192, 384, 768]
+  dims: [192, 192, 192, 192, 192, 192]  # [96, 96, 96, 96], original: [96, 192, 384, 768]
   drop_path_rate: 0.1
   layer_scale_init_value: 1e-6
   use_checkpoint: true
 
-  upsample_method: nearest
+  upsample_method: pixelshuffle3D
   init_type: kaiming_normal
   init_bn_type: uniform
   init_gain: 0.2
