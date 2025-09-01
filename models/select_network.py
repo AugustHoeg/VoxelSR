@@ -237,6 +237,20 @@ def define_G(opt, mode='train'):
                   decoder_depth=opt_net["decoder_depth"],
                   decoder_width=opt_net["decoder_width"])
 
+    # ----------------------------------------
+    # ConvNextSR
+    # ----------------------------------------
+    elif model_architecture == ("ConvNeXtSR"):
+        from models.ConvNeXtSR import ConvNeXtSR as net
+        netG = net(up_factor=opt['up_factor'],
+                   in_chans=opt_net['in_channels'],
+                   depths=opt_net['depths'],
+                   dims=opt_net['dims'],
+                   drop_path_rate=0.1 if mode == 'train' else 0.0,
+                   layer_scale_init_value=1e-6,
+                   upsample_method=opt_net['upsample_method'],
+                   use_checkpoint=opt_net['use_checkpoint'])
+
     else:
         raise NotImplementedError('netG [{:s}] is not found.'.format(model_architecture))
 

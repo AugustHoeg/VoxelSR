@@ -11,7 +11,8 @@ import torch
 import monai.data
 import monai.transforms as mt
 import zarr
-from zarr.storage import LRUStoreCache, FSStore, MemoryStore, DirectoryStore  # from zarr.storage import LocalStore as DirectoryStore
+#from zarr.storage import LRUStoreCache, FSStore, MemoryStore, DirectoryStore
+from zarr.storage import LocalStore, MemoryStore, FsspecStore
 from ome_zarr.io import parse_url
 from monai.data import SmartCacheDataset, DataLoader, IterableDataset
 from time import sleep
@@ -301,13 +302,14 @@ class ZarrIterableDataset(IterableDataset):
                     data = zarr.open(path, mode='r', cache_attrs=False)
                     z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
                 elif dataset['store_type'] == 'MemoryStore':
-                    disk_store = DirectoryStore(path)
+                    disk_store = LocalStore(path)
                     memory_store = MemoryStore()
                     zarr.copy_store(disk_store, memory_store)
                     z = zarr.open(memory_store, mode='r')
                 elif dataset['store_type'] == 'LRUStoreCache':
+                    raise NotImplementedError("LRUStoreCache is not implemented in this version.")
                     store_size = 2 ** 28  # 256 MB
-                    cached_store = LRUStoreCache(FSStore(path), max_size=store_size)
+                    cached_store = LRUStoreCache(FsspecStore(path), max_size=store_size)
                     z = zarr.open(store=cached_store, mode='r', cache_attrs=True)
                 else:
                     z = zarr.open(path, mode='r', cache_attrs=False)
