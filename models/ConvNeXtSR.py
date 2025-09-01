@@ -274,6 +274,9 @@ class ConvNeXtSR(nn.Module):
         for i in range(len(self.stages)):
             z = self.stages[i](z)
 
+        # long skip-connection
+        z = z + x
+
         # Upsampling
         if self.up_factor == 2:
             z = self.SR0(z)
