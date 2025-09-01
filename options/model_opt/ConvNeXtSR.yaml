@@ -6,8 +6,8 @@ netG:
   description: "ConvNeXtSR"
 
   in_channels: 1
-  depths: [3, 3, 3, 3] # [3, 3, 3, 3]
-  dims: [96, 96, 96, 96]
+  depths: [6, 6, 6, 6]  # [3, 3, 3, 3]
+  dims: [384, 384, 384, 384]  # [96, 96, 96, 96], original: [96, 192, 384, 768]
   drop_path_rate: 0.1
   layer_scale_init_value: 1e-6
   use_checkpoint: false

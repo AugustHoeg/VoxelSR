@@ -334,7 +334,12 @@ class ModelPlain(ModelBase):
             else:
                 print('Params [{:s}] will not optimize.'.format(k))
 
-        self.G_optimizer = Adam(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
+        if self.opt_train['G_optimizer_type'] == 'adam':
+            self.G_optimizer = Adam(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
+        elif self.opt_train['G_optimizer_type'] == 'adamw':
+            self.G_optimizer = torch.optim.AdamW(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
+        else:
+            raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['G_optimizer_type']))
 
     # ----------------------------------------
     # define gradient scaler for G and D
