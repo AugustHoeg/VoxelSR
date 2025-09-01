@@ -1,3 +1,4 @@
+import time
 import logging
 from functools import partial
 from typing import Dict, List, Optional, Sequence, Union
@@ -6,6 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.nn.init
+import torch.utils.checkpoint as checkpoint
 from torch import Tensor, nn
 
 from models.models_3D import SRBlock3D
@@ -166,6 +168,7 @@ class ConvNeXtSR(nn.Module):
         patch_size: int | None = None,
         # August SR arguments
         up_factor: int = 2,
+        use_checkpoint: bool = False,
         upsample_method: str = "nearest",
         **ignored_kwargs,
     ):
@@ -218,6 +221,7 @@ class ConvNeXtSR(nn.Module):
         # ==== August SR init =====
         self.up_factor = up_factor
         self.upsample_method = upsample_method
+        self.use_checkpoint = use_checkpoint
 
         # Shallow feature extraction block (SFE)
         self.sfe_blk = nn.Sequential(
@@ -272,7 +276,10 @@ class ConvNeXtSR(nn.Module):
         # deep feature extraction
         z = x
         for i in range(len(self.stages)):
-            z = self.stages[i](z)
+            if self.use_checkpoint:
+                z = checkpoint.checkpoint(self.stages[i], z)
+            else:
+                z = self.stages[i](z)
 
         # long skip-connection
         z = z + x
@@ -298,26 +305,42 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     in_chans = 1
-    net = ConvNeXtSR(depths=[6, 6, 6, 6],
-                     dims=[384, 384, 384, 384],  # [96, 192, 384, 768],
+    up_factor = 2
+    patch_size = 32
+
+    net = ConvNeXtSR(depths=[6, 6, 6, 6, 6, 6],
+                     dims=[288, 288, 288, 288, 288, 288],  # [96, 192, 384, 768],
                      in_chans=in_chans,
                      drop_path_rate=0.1,
                      layer_scale_init_value=1e-6,
-                     up_factor=1,
-                     upsample_method="nearest").to(device)
+                     up_factor=up_factor,
+                     upsample_method="nearest",
+                     use_checkpoint=True).to(device)
 
     #net.init_weights()
 
     print("Number of parameters", numel(net, only_trainable=True))
 
-    net.eval()  # inference mode
+    net.train()  # inference mode
 
     # Create a random input: batch size 1, 3 channels, 224x224 image
-    x = torch.randn(1, in_chans, 32, 32, 32).to(device)
+    x = torch.randn(1, in_chans, patch_size, patch_size, patch_size).to(device)
+
+    x_hr = torch.randn((1, 1, up_factor * patch_size,
+                        up_factor * patch_size,
+                        up_factor * patch_size)).cuda()
+
+    loss_func = nn.MSELoss()
 
     # Forward pass
-    with torch.no_grad():
+    start = time.time()
+    with torch.cuda.amp.autocast(dtype=torch.bfloat16):
         out = net(x)
+        loss = loss_func(out, x_hr)
+    stop = time.time()
+    print("Time elapsed:", stop - start)
+
+    loss.backward()
 
     print("Output shape:", out.shape)
 
