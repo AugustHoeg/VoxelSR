@@ -13,7 +13,7 @@ up_factor: 2  # upscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
@@ -55,14 +55,14 @@ dataset_opt:
   patch_size: 32
 
   train_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 1
+    dataloader_batch_size: 16
+    num_load_workers: 16 # 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 1
+    dataloader_batch_size: 4
+    num_load_workers: 4 # 2
     persist_workers: true
     pin_memory: false
 
