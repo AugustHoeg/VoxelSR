@@ -41,8 +41,8 @@ class Dataset_VoDaSuRe_OME():
                 },
             }
 
-            store_type = {"HCP_1200": "DirectoryStore",
-                          "IXI":      "DirectoryStore"}
+            store_type = {"HCP_1200": "LocalStore",
+                          "IXI":      "LocalStore"}
 
         elif opt['cluster'] == "TITANS":
             self.data_path = ""
@@ -127,12 +127,12 @@ class Dataset_VoDaSuRe_OME():
                 },
             }
 
-            store_type = {"HCP_1200":  "DirectoryStore",
-                          "IXI":       "DirectoryStore",
-                          "LITS":      "DirectoryStore",
-                          "CTSpine1K": "DirectoryStore",
-                          "LIDC-IDRI": "DirectoryStore",
-                          "VoDaSuRe":  "DirectoryStore"}
+            store_type = {"HCP_1200":  "LocalStore",
+                          "IXI":       "LocalStore",
+                          "LITS":      "LocalStore",
+                          "CTSpine1K": "LocalStore",
+                          "LIDC-IDRI": "LocalStore",
+                          "VoDaSuRe":  "LocalStore"}
 
 
         self.dataset_dict_train = {}
@@ -154,7 +154,7 @@ class Dataset_VoDaSuRe_OME():
             print(f"Sampling weight for {dataset} is {sampling_weights[dataset]}")
             print(f"Store type for {dataset} is {store_type[dataset]}")
 
-    def create_dataset_dict(self, paths, group_pairs, sampling_weight=1.0, store_type="DirectoryStore"):
+    def create_dataset_dict(self, paths, group_pairs, sampling_weight=1.0, store_type="LocalStore"):
 
         d = {
             "paths": paths,

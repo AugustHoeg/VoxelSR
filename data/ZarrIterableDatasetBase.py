@@ -1,0 +1,403 @@
+import os
+import copy
+import glob
+import queue
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import sys
+import random
+import numpy as np
+import torch
+import monai.data
+import monai.transforms as mt
+import zarr
+from zarr.storage import LocalStore, MemoryStore, FsspecStore
+from ome_zarr.io import parse_url
+from monai.data import SmartCacheDataset, DataLoader, IterableDataset
+from time import sleep
+from time import perf_counter as time
+from multiprocessing import Process, Queue, Event
+from queue import Empty
+#from torch.multiprocessing import Process, Queue, Event
+from threading import Thread
+
+def sample(volume, patch, center, patch_size):
+    """
+    volume: 3D numpy array of shape (D, H, W)
+    center: tuple (cz, cy, cx) specifying cube center in array coordinates
+    patch_size: tuple (d, h, w) specifying desired cube size
+    """
+    D, H, W = volume.shape
+    d, h, w = patch_size
+    cz, cy, cx = center
+
+    # Compute cube boundaries in array coordinates
+    z0 = cz - d // 2
+    y0 = cy - h // 2
+    x0 = cx - w // 2
+    z1 = z0 + d
+    y1 = y0 + h
+    x1 = x0 + w
+
+    # Compute the valid overlap in the source array
+    src_z0 = max(z0, 0)
+    src_y0 = max(y0, 0)
+    src_x0 = max(x0, 0)
+    src_z1 = min(z1, D)
+    src_y1 = min(y1, H)
+    src_x1 = min(x1, W)
+
+    # Compute where to paste that in the target cube
+    dst_z0 = src_z0 - z0
+    dst_y0 = src_y0 - y0
+    dst_x0 = src_x0 - x0
+    dst_z1 = dst_z0 + (src_z1 - src_z0)
+    dst_y1 = dst_y0 + (src_y1 - src_y0)
+    dst_x1 = dst_x0 + (src_x1 - src_x0)
+
+    # Copy the overlapping region
+    patch[dst_z0:dst_z1, dst_y0:dst_y1, dst_x0:dst_x1] = volume[src_z0:src_z1, src_y0:src_y1, src_x0:src_x1]
+
+    return patch
+
+def extract_patch(data, group_name, ome_level, patch_size=(32, 32, 32)):
+    # TODO: Fix this method
+    # We start with the first level
+    volume = data[group_name][ome_level]
+    start = np.random.randint(0, np.array(volume.shape) - patch_size)  # (0,0,0)
+    end = start + patch_size
+
+    patch = volume[start[0]:end[0], start[1]:end[1], start[2]:end[2]]
+    out_dict = {ome_level: patch}
+    return out_dict
+
+def extract_patch_levels(data, group_pair, patch_size=(32, 32, 32), f=4, metadata=None):
+    volume_L = data[group_pair['L']]
+    volume_H = data[group_pair['H']]
+
+    patch_size_hr = np.multiply(patch_size, f)
+    valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size), (1, 1, 1))
+    d0, h0, w0 = np.random.randint(0, valid_shape)
+    d1, h1, w1 = np.add((d0, h0, w0), patch_size)
+
+    patch_L = volume_L[d0:d1, h0:h1, w0:w1]
+    patch_L = np.pad(patch_L, ((0, patch_size[0] - patch_L.shape[0]),
+                               (0, patch_size[1] - patch_L.shape[1]),
+                               (0, patch_size[2] - patch_L.shape[2])))
+
+    patch_H = volume_H[d0*f:d1*f, h0*f:h1*f, w0*f:w1*f]
+    patch_H = np.pad(patch_H, ((0, patch_size_hr[0] - patch_H.shape[0]),
+                               (0, patch_size_hr[1] - patch_H.shape[1]),
+                               (0, patch_size_hr[2] - patch_H.shape[2])))
+
+    out_dict = {'L': patch_L, 'H': patch_H}
+
+    if metadata:
+        for key, val in metadata.items():
+            out_dict[key] = val
+
+    return out_dict
+
+def extract_patch_levels_prealloc(data, group_pair, patch_size=(32, 32, 32), patch_size_hr=(128, 128, 128), f=4, metadata=None):
+    volume_L = data[group_pair['L']]
+    volume_H = data[group_pair['H']]
+
+    patch_size_lr = np.floor_divide(patch_size_hr, f)
+
+    valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size_lr), (1, 1, 1))
+    c0, c1, c2 = np.random.randint(0, valid_shape) + patch_size_lr // 2
+    C0, C1, C2 = np.multiply((c0, c1, c2), f)
+
+    # Create an empty cube filled with zeros
+    patch_L = np.zeros(patch_size, dtype=volume_L.dtype)
+    patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
+    patch_H = np.zeros(patch_size_hr, dtype=volume_H.dtype)
+    patch_H = sample(volume_H, patch_H, center=(C0, C1, C2), patch_size=patch_size_hr)
+
+    out_dict = {'L': patch_L, 'H': patch_H}
+
+    # # test that it works:
+    # plt.figure()
+    # plt.subplot(1, 3, 1)
+    # extra = (patch_size - patch_size_lr) // 2
+    # plt.imshow(patch_H[patch_size_hr[0] // 2, :, :])
+    # plt.axis("off")
+    # plt.subplot(1, 3, 2)
+    # plt.imshow(patch_L[patch_size[0]//2, extra[1]:-extra[1], extra[2]:-extra[2]])
+    # plt.axis("off")
+    # plt.subplot(1, 3, 3)
+    # plt.imshow(patch_L[patch_size[0] // 2, :, :])
+    # plt.axis("off")
+    # plt.show()
+
+    if metadata:
+        for key, val in metadata.items():
+            out_dict[key] = val
+
+    return out_dict
+
+
+def extract_patch_levels_from_chunk(data, group_name, ome_levels, patch_size=(32, 32, 32)):
+    # TODO: Fix this method
+    volume = data[group_name][ome_levels[-1]]
+    c_shape = volume.cdata_shape
+    c_idx = tuple(np.random.randint(c_shape))
+
+    valid_range_lr = np.array(volume.chunks) - patch_size + 1
+    start = np.random.randint(0, valid_range_lr)
+    end = start + patch_size
+
+    patch = volume.blocks[c_idx][start[0]:end[0], start[1]:end[1], start[2]:end[2]]
+    out_dict = {ome_levels[-1]: patch}
+
+    for level in ome_levels[:-1]:
+        level_diff = int(ome_levels[-1]) - int(level)
+        start = start * 2 ** level_diff
+        end = end * 2 ** level_diff
+        volume = data[group_name][level]
+        patch = volume.blocks[c_idx][start[0]:end[0], start[1]:end[1], start[2]:end[2]]
+        out_dict[level] = patch
+
+    return out_dict
+
+class ZarrIterableDataset(IterableDataset):
+
+    def __init__(self, dataset_dict, patch_shape, patch_shape_hr, patch_transform, up_factor, base_seed=8338, store_type='Numpy', num_samples=1000, sampling_method='random', print_metadata=False):
+        self.dataset_dict = dataset_dict
+        self.patch_shape = patch_shape
+        self.patch_shape_hr = patch_shape_hr
+        self.patch_transform = patch_transform
+        self.up_factor = up_factor
+        self.base_seed = base_seed
+        self.num_samples = num_samples
+        self.sampling_method = sampling_method  # Method to sample patches, e.g., 'random', 'in_chunk'
+        self.store_type = store_type
+        self.print_metadata = print_metadata  # Print metadata of the Zarr group
+
+        self.dataset_names = list(dataset_dict.keys())
+
+        self.paths = []
+        for key in dataset_dict.keys():
+            self.paths += dataset_dict[key]['paths']
+        super().__init__(self.paths, patch_transform)
+
+        # Check if the paths are valid
+        for path in self.paths:
+            if not os.path.exists(path):
+                raise ValueError(f"Path {path} does not exist.")
+
+        if sampling_method == 'in_chunk':
+            self._sample_data = extract_patch_levels_from_chunk
+        else:
+            self._sample_data = extract_patch_levels_prealloc
+
+    def _load_data(self, worker_id, num_workers):
+
+        worker_data = copy.deepcopy(self.dataset_dict)
+        for name, dataset in self.dataset_dict.items():
+            paths = dataset['paths'][worker_id::num_workers]
+            if paths:
+                worker_data[name]['paths'] = dataset['paths'][worker_id::num_workers]
+            else:
+                del worker_data[name]
+                continue
+
+            worker_data[name]['zarr_data'] = []  # Create field for zarr file handles
+
+            for path in paths:
+                if dataset['store_type'] == 'Numpy':
+                    raise NotImplementedError("Numpy store not implemented yet for zarr v3.")
+                    # TODO: fix NumPy method here.
+                    data = zarr.open(path, mode='r')
+                    z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
+                elif dataset['store_type'] == 'MemoryStore':
+                    disk_store = LocalStore(path)
+                    memory_store = MemoryStore()
+                    zarr.copy_store(disk_store, memory_store)
+                    z = zarr.open(memory_store, mode='r')
+                elif dataset['store_type'] == 'LRUStoreCache':
+                    raise NotImplementedError("LRUStoreCache not implemented yet for zarr v3.")
+                    store_size = 2 ** 28  # 256 MB
+                    cached_store = LRUStoreCache(FSStore(path), max_size=store_size)
+                    z = zarr.open(store=cached_store, mode='r')
+                else:
+                    z = zarr.open(path, mode='r')
+
+                # TODO fix check for in-chunk sampling
+                #if self.sampling_method == 'in_chunk' and self.store_type != 'Numpy':
+                #    self._assert_chunk_sampling(z, self.patch_shape)
+
+                worker_data[name]['zarr_data'].append(z)
+
+                if self.print_metadata:
+                    store = parse_url(path, mode="r").store
+                    root = zarr.group(store=store)
+
+                    print(root.info)  # Print the metadata of the Zarr group
+                    print(root.tree())  # Print the structure of the Zarr group
+
+        return worker_data
+
+    def _assert_chunk_sampling(self, root, patch_shape):
+        # TODO: Fix this method
+        chunk_shape = root[self.group_name][self.ome_levels[-1]].chunks
+        if any(ps > cs for ps, cs in zip(patch_shape, chunk_shape)):
+            raise ValueError(
+                f"Patch shape {patch_shape} is larger than chunk shape {chunk_shape} in {root.store.path}.")
+
+
+    def _generate_patch(self, worker_data):
+
+        # Sample random dataset, volume and group pair
+        w = [worker_data[key]['sampling_weight'] for key in worker_data]  # sampling weights
+        p = w / np.sum(w)
+        name = np.random.choice(list(worker_data.keys()), p=p)  # random name
+        z = random.choice(worker_data[name]['zarr_data'])  # Randomly select a zarr file in dataset
+        group_pair = random.choice(worker_data[name]['group_pairs'][f'{self.up_factor}'])  # random group pair
+
+        # Extract a patch from the selected dataset
+        patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, self.up_factor, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
+
+        if self.patch_transform:
+            patch = self.patch_transform(patch)
+
+        return patch
+
+    def __iter__(self):
+
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:  # single-process data loading, return the full iterator
+            worker_id = 0
+            num_workers = 1
+            samples_per_worker = self.num_samples
+        else:  # in a worker process
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+            samples_per_worker = int(np.ceil(self.num_samples / float(worker_info.num_workers)))
+
+        # Load data
+        worker_data = self._load_data(worker_id, num_workers)
+
+        # Generate patches
+        for _ in range(samples_per_worker):
+            yield self._generate_patch(worker_data)
+
+    def __len__(self):
+        # Return a large number to ensure the dataset is infinite
+        return self.num_samples
+
+
+def test_plot(train_batch):
+    size_hr = train_batch['H'].shape[-1]
+    size_lr = train_batch['L'].shape[-1]
+    batch_size = len(train_batch['H'])
+    plt.figure(figsize=(2*batch_size, 8))
+    c = 0
+    for i in range(batch_size):
+        plt.subplot(2, batch_size, 1 + c)
+        plt.imshow(train_batch['H'][i, 0, :, :, size_hr//2])
+        plt.axis("off")
+        plt.subplot(2, batch_size, 2 + c)
+        plt.imshow(train_batch['L'][i, 0, :, :, size_lr//2])
+        plt.axis("off")
+        c += 2
+    plt.tight_layout()
+    plt.show()
+
+def main():
+
+    # Example usage
+    batch_size = 4
+    up_factor = 2
+    patch_shape = (32, 32, 32)
+    patch_shape_hr = (64, 64, 64)
+
+    HCP_1200_train_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
+    HCP_1200_test_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
+
+    IXI_train_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/IXI/ome/train/*.zarr")
+    IXI_test_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/IXI/ome/test/*.zarr")
+
+    dataset_dict = {
+        "HCP_1200": {
+            "paths": HCP_1200_train_paths,
+            "group_pairs": {
+                "4": [{"H": "HR/0", "L": "HR/2"}],  # {"H": "HR/1", "L": "HR/3"}
+                "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
+            },
+            "sampling_weight": 1,
+            "store_type": "LocalStore"
+        },
+        "IXI": {
+            "paths": IXI_train_paths,
+            "group_pairs": {
+                "4": [{"H": "HR/0", "L": "HR/2"}],  # {"H": "HR/1", "L": "HR/3"}
+                "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
+            },
+            "sampling_weight": 1,
+            "store_type": "LocalStore"
+        }
+    }
+
+    seed = 8883
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    # Define patch transforms
+    patch_transform = mt.Compose([
+        mt.Identityd(keys=['H', 'L'], allow_missing_keys=True),
+        mt.EnsureChannelFirstd(keys=['H', 'L'], channel_dim='no_channel'),
+        # mt.SignalFillEmptyd(keys=['H', 'L'], replacement=0),  # Remove any NaNs
+        # mt.ScaleIntensityd(keys=ome_levels, minv=0.0, maxv=1.0),
+        # #mt.Rand3DElasticd(keys=ome_levels, prob=0.5, sigma_range=(5, 10), magnitude_range=(0.1, 0.2), mode='bilinear'),
+        #mt.RandFlipd(keys=['H', 'L'], prob=0.5, spatial_axis=0),
+        #mt.RandFlipd(keys=['H', 'L'], prob=0.5, spatial_axis=1),
+        #mt.RandFlipd(keys=['H', 'L'], prob=0.5, spatial_axis=2)
+    ])
+
+    dataset = ZarrIterableDataset(dataset_dict,
+                                  patch_shape,
+                                  patch_shape_hr,
+                                  patch_transform,
+                                  up_factor=up_factor,
+                                  store_type='LocalStore',
+                                  num_samples=1000,
+                                  sampling_method='random'  # 'random' or 'in_chunk'
+                                  )
+
+    num_workers = 2
+    persistent_workers = True if num_workers > 0 else False
+    dataloader = torch.utils.data.DataLoader(dataset,
+                                            batch_size=batch_size,
+                                            shuffle=False,
+                                            num_workers=num_workers,
+                                            pin_memory=False,
+                                            persistent_workers=persistent_workers)
+
+    no_epochs = 10
+    plot_counter = 0
+    plot_interval = 100
+    start_time = time()
+    for i in range(no_epochs):
+        print(f"Epoch {i + 1}/{no_epochs}")
+        for batch in tqdm(dataloader, desc='Reconstructing patches\n', mininterval=2):
+            # for batch in dataloader:
+            pass
+            # sleep(0.1)  # Assuming some processing time
+            # print("Loaded batch...")
+            # for key in batch.keys():
+            #     print(f"Key: {key}, Shape: {batch[key].shape}")
+            if plot_counter % plot_interval == 0:
+                test_plot(batch)
+            plot_counter += 1
+
+
+    time_elapsed = time() - start_time
+    print(f"Time taken {time_elapsed} sec.")
+    print(f"Time taken per patch {time_elapsed / no_epochs / batch_size} sec. (average)")
+
+    print(f"Loaded {len(dataset)} items from Zarr dataset.")
+
+
+if __name__ == "__main__":
+    main()

@@ -11,7 +11,6 @@ import torch
 import monai.data
 import monai.transforms as mt
 import zarr
-#from zarr.storage import LRUStoreCache, FSStore, MemoryStore, DirectoryStore
 from zarr.storage import LocalStore, MemoryStore, FsspecStore
 from ome_zarr.io import parse_url
 from monai.data import SmartCacheDataset, DataLoader, IterableDataset
@@ -299,7 +298,7 @@ class ZarrIterableDataset(IterableDataset):
             for path in paths:
                 if dataset['store_type'] == 'Numpy':
                     # TODO: fix NumPy method here.
-                    data = zarr.open(path, mode='r', cache_attrs=False)
+                    data = zarr.open(path, mode='r')
                     z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
                 elif dataset['store_type'] == 'MemoryStore':
                     disk_store = LocalStore(path)
@@ -307,12 +306,12 @@ class ZarrIterableDataset(IterableDataset):
                     zarr.copy_store(disk_store, memory_store)
                     z = zarr.open(memory_store, mode='r')
                 elif dataset['store_type'] == 'LRUStoreCache':
-                    raise NotImplementedError("LRUStoreCache is not implemented in this version.")
+                    raise NotImplementedError("LRUStoreCache not implemented yet for zarr v3.")
                     store_size = 2 ** 28  # 256 MB
-                    cached_store = LRUStoreCache(FsspecStore(path), max_size=store_size)
-                    z = zarr.open(store=cached_store, mode='r', cache_attrs=True)
+                    cached_store = LRUStoreCache(FSStore(path), max_size=store_size)
+                    z = zarr.open(store=cached_store, mode='r')
                 else:
-                    z = zarr.open(path, mode='r', cache_attrs=False)
+                    z = zarr.open(path, mode='r')
 
                 # TODO fix check for in-chunk sampling
                 #if self.sampling_method == 'in_chunk' and self.store_type != 'Numpy':
@@ -452,7 +451,7 @@ def main():
                 "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
             },
             "sampling_weight": 1,
-            "store_type": "DirectoryStore"
+            "store_type": "LocalStore"
         },
         "IXI": {
             "paths": IXI_train_paths,
@@ -461,7 +460,7 @@ def main():
                 "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
             },
             "sampling_weight": 1,
-            "store_type": "DirectoryStore"
+            "store_type": "LocalStore"
         }
     }
 
@@ -488,7 +487,7 @@ def main():
                                   up_factor=up_factor,
                                   num_workers=1,
                                   queue_size=128,
-                                  store_type='DirectoryStore',
+                                  store_type='LocalStore',
                                   num_samples=1000,
                                   sampling_method='random'  # 'random' or 'in_chunk'
                                   )
