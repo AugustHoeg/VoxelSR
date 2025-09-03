@@ -82,7 +82,6 @@ class Block(nn.Module):
         x = input + self.drop_path(x)
         return x
 
-
 class ChannelAttention(nn.Module):
     """Channel attention used in RCAN.
     Args:
@@ -130,42 +129,23 @@ class BasicLayer(nn.Module):
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
 
-    def __init__(self, dim, growth_rate, depth, dp_rates, layer_scale_init_value, compress_ratio=3, squeeze_factor=30):
+    def __init__(self, dim, depth, dp_rates, layer_scale_init_value):
         super().__init__()
 
         self.blocks = nn.ModuleList(
-            Block(dim + i * growth_rate, dp_rates[i], layer_scale_init_value) for i in range(depth)
+            Block(dim, dp_rates[i], layer_scale_init_value) for i in range(depth)
         )
 
-        self.cab_blocks = nn.ModuleList(
-            CAB(dim + i * growth_rate, compress_ratio, squeeze_factor) for i in range(depth)
-        )
+        #self.cab_blocks = nn.ModuleList(
+        #    CAB(dim, compress_ratio=4, squeeze_factor=16) for i in range(depth)
+        #)
 
-        self.transitions = nn.ModuleList(
-            TransitionLayer(dim + i * growth_rate, growth_rate) for i in range(depth)
-        )
-
-    def forward_res(self, x):
+    def forward(self, x):
         z = self.blocks[0](x)
         for blk in self.blocks[1:]:
             z = blk(z)
 
         return z + x
-
-    def forward_dense(self, x):
-        for i in range(len(self.blocks)):
-            y = self.blocks[i](x)
-            y = self.cab_blocks[i](y)
-            y = self.transitions[i](y)
-            x = torch.cat((x, y), dim=1)
-
-        return x
-
-    def forward_rir(self, x):
-        ...
-
-    def forward(self, x):
-        return self.forward_dense(x)
 
 
 class TransitionLayer(nn.Module):
@@ -239,7 +219,6 @@ class ConvNeXtSR(nn.Module):
         in_chans: int = 3,
         depths: List[int] = [3, 3, 9, 3],
         dims: List[int] = [96, 192, 384, 768],
-        growth_rate: int = 48,
         drop_path_rate: float = 0.0,
         layer_scale_init_value: float = 1e-6,
         # DINO arguments
@@ -273,15 +252,13 @@ class ConvNeXtSR(nn.Module):
         dp_rates = [x for x in np.linspace(0, drop_path_rate, sum(depths))]
         cur = 0
         for i in range(len(depths)):
-            compress_ratio = 4 + 4*i
-            squeeze_factor = 16
-            # dim_ = dims[i + 1] if i < len(depths) - 1 else dims[0]
+            dim_ = dims[i + 1] if i < len(depths) - 1 else dims[0]
             dp = dp_rates[cur : cur + depths[i]]
             stage = nn.Sequential(
                 *[
-                    BasicLayer(dims[i], growth_rate, depths[i], dp, layer_scale_init_value, compress_ratio, squeeze_factor),
-                    # CAB(dims[i] + growth_rate * depths[i], dims[i] + growth_rate * depths[i] // 4, squeeze_factor=16),
-                    # TransitionLayer(dims[i] + growth_rate * depths[i], dim_)
+                    BasicLayer(dims[i], depths[i], dp, layer_scale_init_value),
+                    # CAB(dims[i]),
+                    TransitionLayer(dims[i], dim_)
                 ]
             )
 
@@ -314,13 +291,6 @@ class ConvNeXtSR(nn.Module):
         self.sfe_blk = nn.Sequential(
             nn.Conv3d(in_chans, dims[0], kernel_size=3, stride=1, padding=1),
             LayerNorm(dims[0], eps=1e-6, data_format="channels_first"),
-        )
-
-        self.transition_skip = nn.Sequential(
-            ChannelAttention(dims[-1] + growth_rate * depths[-1], squeeze_factor=16),
-            TransitionLayer(dims[-1] + growth_rate * depths[-1], dims[0]),
-            nn.GELU(),
-            TransitionLayer(dims[0], dims[0]),
         )
 
         # Transition layers between stages
@@ -378,13 +348,13 @@ class ConvNeXtSR(nn.Module):
         # deep feature extraction
         z = x
         for i in range(len(self.stages)):
-            if i % 1 == 0 and self.use_checkpoint:
+            if i % 2 == 0 and self.use_checkpoint:
                 z = checkpoint.checkpoint(self.stages[i], z)
             else:
                 z = self.stages[i](z)
 
         # long skip-connection
-        z = self.transition_skip(z) + x
+        z = z + x
 
         # Upsampling
         if self.up_factor == 2:
@@ -410,25 +380,8 @@ if __name__ == "__main__":
     up_factor = 2
     patch_size = 32
 
-    depths = [3, 3, 3, 3]
-    dims = [64]
-    growth_rate = 32  # 64
-
-    dim = dims[0]
-    for i, depth in enumerate(depths):
-        dim = dim + depth * growth_rate
-        dims.append(dim)
-    dims = dims[:-1]
-    print("Number of intermediate channels is:", dims)
-
-    # depths = [3, 3, 3, 3]
-    # dims = [64, 256, 448, 640]
-    # growth_rate = 64
-    # print("Number of intermediate channels is:", [dim + i * growth_rate for i, dim in enumerate(dims)])
-
-    net = ConvNeXtSR(depths=depths,
-                     dims=dims,  # [96, 192, 288, 384, 768],
-                     growth_rate=growth_rate,
+    net = ConvNeXtSR(depths=[3, 3, 3, 3],
+                     dims=[64, 192, 384, 768],  # [96, 192, 288, 384, 768],
                      in_chans=in_chans,
                      drop_path_rate=0.1,
                      layer_scale_init_value=1e-6,

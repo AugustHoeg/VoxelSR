@@ -2075,7 +2075,7 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 128 * 1  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
+    img_size = 32 * 1  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).cuda()
     B, C, H, W, D = x.shape
@@ -2084,13 +2084,13 @@ if __name__ == "__main__":
     attn_window_size = 4  # 4  # The size of the window to perform local attention within, M in the swin papers. standard is 7
     embed_dim = patch_size ** 3  # set to patch_size**3 to keep same amount of information in embedding, emb_dim 96 is default for 4x4x3 = 48 (number of features in 1 4x4 patch)
 
-    context_sizes = [128, 96, 64]
+    context_sizes = [32]
     num_levels = len(context_sizes)  # 3
-    shallow_feats = [32, 64, 128]  # 128 normally
+    shallow_feats = [128]  # 128 normally
     pre_up_feats = [64, 64]
-    num_blks = [1, 2, 3]  # [1, 1, 3]  # [6, 6, 6]
+    num_blks = [3]  # [1, 1, 3]  # [6, 6, 6]
     blk_layers = [6, 6, 6]  # Number of transformer layers per block in each level
-    patch_sizes = [4, 3, 2]  # [16, 8, 2]
+    patch_sizes = [2]  # [16, 8, 2]
     ct_size = 2
     ct_pool_method = "conv"
     ct_embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]

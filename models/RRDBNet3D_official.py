@@ -117,44 +117,46 @@ def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
-    up_factor = 4
+    patch_size = 32
+    up_factor = 2
     print("Test RRDBNet3D official")
-    generator = RRDBNet(up_factor=up_factor,
+    net = RRDBNet(up_factor=up_factor,
                    in_nc=1,
                    out_nc=1,
                    nf=64,
                    nb=12,
                    gc=32).to(device)
 
-    print("Number of parameters, G", numel(generator, only_trainable=True))
+    print("Number of parameters, G", numel(net, only_trainable=True))
 
-    patch_size = 32
-    x = torch.randn((1, 1, patch_size, patch_size, patch_size)).to(device)
+    net.train()  # inference mode
 
-    generator.train()
+    # Create a random input: batch size 1, 3 channels, 224x224 image
+    x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)
 
-    start = time.time()
-    # with torch.cuda.amp.autocast(dtype=torch.bfloat16):
-    gen_out = generator(x)
-    stop = time.time()
-    print("Time elapsed:", stop - start)
-    #discriminator.train()
-
-    x_hr = torch.randn((1, 1, patch_size * up_factor,
-                        patch_size * up_factor,
-                        patch_size * up_factor)).cuda()
+    x_hr = torch.randn((1, 1, up_factor * patch_size,
+                        up_factor * patch_size,
+                        up_factor * patch_size)).cuda()
 
     loss_func = nn.MSELoss()
-    loss = loss_func(gen_out, x_hr)
+
+    # Forward pass
+    start = time.time()
+    with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+        out = net(x)
+        loss = loss_func(out, x_hr)
+    stop = time.time()
+    print("Time elapsed:", stop - start)
+
     loss.backward()
 
-    #disc_out = discriminator(gen_out)
+    print("Output shape:", out.shape)
 
     max_memory_reserved = torch.cuda.max_memory_reserved()
     print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10 ** 9, total_gpu_mem))
 
-    print(gen_out.shape)
-    #print(disc_out.shape)
+    print("Done")
+
 
 if __name__ == "__main__":
     test()

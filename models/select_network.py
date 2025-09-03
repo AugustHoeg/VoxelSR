@@ -246,6 +246,7 @@ def define_G(opt, mode='train'):
                    in_chans=opt_net['in_channels'],
                    depths=opt_net['depths'],
                    dims=opt_net['dims'],
+                   growth_rate=opt_net['growth_rate'],
                    drop_path_rate=0.1 if mode == 'train' else 0.0,
                    layer_scale_init_value=1e-6,
                    upsample_method=opt_net['upsample_method'],

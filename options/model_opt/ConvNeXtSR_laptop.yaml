@@ -7,8 +7,8 @@ netG:
 
   in_channels: 1
   depths: [3, 3, 3, 3]  # [3, 3, 3, 3]
-  dims: [64, 256, 448, 640]  # original: [96, 192, 384, 768]
-  growth_rate: 64
+  dims: [64, 160, 256, 352]  # original: [96, 192, 384, 768]
+  growth_rate: 32
   drop_path_rate: 0.1
   layer_scale_init_value: 1e-6
   use_checkpoint: true
