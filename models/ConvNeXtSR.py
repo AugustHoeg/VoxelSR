@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import torch
+from torch import einsum
 import torch.nn.functional as F
 import torch.nn.init
 import torch.utils.checkpoint as checkpoint
@@ -118,6 +119,84 @@ class CAB(nn.Module):
 
     def forward(self, x):
         return self.cab(x)
+
+
+## Spatial Attention Fusion Module (SAFM)
+class SAFM(nn.Module):
+    def __init__(self, size, n_feats):
+        super(SAFM, self).__init__()
+
+        # Extra details obtained from FASR paper:
+        # https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9313377
+
+        # We compute spatial attention by global average/max pooling along the
+        # channel dimension, going from HxWxDxC to HxWxDx1
+        # spatial global avg/max pooling: pooling along channels
+        self.avg_pool = nn.AdaptiveAvgPool3d(size)
+        self.max_pool = nn.AdaptiveMaxPool3d(size)
+        # feature channel downscale and upscale --> channel weight
+
+        self.conv_sa = nn.Sequential(
+            nn.Conv3d(n_feats, n_feats, kernel_size=3, padding=1, bias=True),
+            nn.Sigmoid()
+        )
+
+    def forward(self, y):
+        y_avg = self.avg_pool(y)
+        y_max = self.max_pool(y)
+        y_sa = self.conv_sa(torch.cat([y_avg, y_max], 1))
+        return y * y_sa
+
+
+class LinearAttention2D(nn.Module):
+    def __init__(self, dim, heads=4, dim_head=32):
+        super().__init__()
+        self.heads = heads
+        self.dim_head = dim_head
+        inner_dim = heads * dim_head
+
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
+        self.to_out = nn.Linear(inner_dim, dim)
+
+    def max_neg_value(self, tensor):
+        return -torch.finfo(tensor.dtype).max
+
+    def exists(self, val):
+        return val is not None
+
+    def linear_attn(self, q, k, v, kv_mask=None):
+        dim = q.shape[-1]
+
+        if self.exists(kv_mask):
+            mask_value = self.max_neg_value(q)
+            mask = kv_mask[:, None, :, None]
+            k = k.masked_fill_(~mask, mask_value)
+            v = v.masked_fill_(~mask, 0.)
+            del mask
+
+        q = q.softmax(dim=-1)
+        k = k.softmax(dim=-2)
+
+        q = q * dim ** -0.5
+
+        context = einsum('bhnd,bhne->bhde', k, v)
+        attn = einsum('bhnd,bhde->bhne', q, context)
+        return attn.reshape(*q.shape)
+
+    def forward(self, x):  # x: (B, H, W, C)
+        B, H, W, C = x.shape
+        x = x.view(B, H*W, C)
+
+        qkv = self.to_qkv(x).chunk(3, dim=-1)
+        q, k, v = [t.view(B, -1, self.heads, self.dim_head).transpose(1,2) for t in qkv]
+        # shapes: (B, heads, N, D)
+
+        out = self.linear_attn(q, k, v)  # (B, heads, N, D)
+        out = out.transpose(1,2).reshape(B, H*W, -1)
+        out = self.to_out(out)
+
+        return out.view(B, H, W, C)
+
 
 
 class BasicLayer(nn.Module):

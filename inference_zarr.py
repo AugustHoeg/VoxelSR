@@ -235,7 +235,7 @@ def main(opt: DictConfig):
                     img_dict = {'H': img_H, 'E': img_E, 'L': img_L}
                     comp_path = os.path.join(image_path, "full_slice_comparisons")
 
-                    slice_idx_list = np.linspace(img_H.shape[axis] // 4, img_H.shape[axis] - img_H.shape[axis] // 4, 5)
+                    slice_idx_list = np.linspace(img_H.shape[axis] // 4, img_H.shape[axis] - img_H.shape[axis] // 4, 3)
                     for slice_idx in slice_idx_list:
                         grid_image = baseline_comparison_tool.get_comparison_image(img_dict, slice_idx=int(slice_idx), axis=axis)
                         grid_image = Image.fromarray(grid_image)

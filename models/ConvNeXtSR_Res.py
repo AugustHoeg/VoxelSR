@@ -381,7 +381,7 @@ if __name__ == "__main__":
     patch_size = 32
 
     net = ConvNeXtSR(depths=[3, 3, 3, 3],
-                     dims=[64, 192, 384, 768],  # [96, 192, 288, 384, 768],
+                     dims=[96, 192, 384, 768],  # [96, 192, 288, 384, 768],
                      in_chans=in_chans,
                      drop_path_rate=0.1,
                      layer_scale_init_value=1e-6,
