@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_bs16
+run_name: ${model_opt.model_architecture}_new_data_000
 note: Note
 
 # GPU configuration
@@ -55,13 +55,13 @@ dataset_opt:
 
   train_dataloader_params:
     dataloader_batch_size: 16
-    num_load_workers: 8
+    num_load_workers: 24
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
     dataloader_batch_size: 4
-    num_load_workers: 2
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
