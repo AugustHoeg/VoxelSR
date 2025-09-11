@@ -45,7 +45,7 @@ train_opt:
   num_accum_steps_G: 1
   G_optimizer_type: adamw
   G_optimizer_lr: 2e-4
-  G_optimizer_wd: 2e-4
+  G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
   G_warmup_steps: 3000  # new
 
@@ -56,13 +56,13 @@ dataset_opt:
 
   train_dataloader_params:
     dataloader_batch_size: 16
-    num_load_workers: 16 # 8
+    num_load_workers: 24 # 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
     dataloader_batch_size: 4
-    num_load_workers: 4 # 2
+    num_load_workers: 8 # 2
     persist_workers: true
     pin_memory: false
 
