@@ -5,7 +5,6 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import numpy as np
 import torch
-from torch import einsum
 import torch.nn.functional as F
 import torch.nn.init
 import torch.utils.checkpoint as checkpoint
@@ -56,7 +55,7 @@ class Block(nn.Module):
 
     def __init__(self, dim, drop_path=0.0, layer_scale_init_value=1e-6):
         super().__init__()
-        self.dwconv = nn.Conv3d(dim, dim, kernel_size=5, padding=2, groups=dim)  # depthwise conv
+        self.dwconv = nn.Conv3d(dim, dim, kernel_size=3, padding=1, groups=dim)  # depthwise conv
         self.norm = LayerNorm(dim, eps=1e-6)
         self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
         self.act = nn.GELU()
@@ -82,7 +81,6 @@ class Block(nn.Module):
 
         x = input + self.drop_path(x)
         return x
-
 
 class ChannelAttention(nn.Module):
     """Channel attention used in RCAN.
@@ -121,84 +119,6 @@ class CAB(nn.Module):
         return self.cab(x)
 
 
-## Spatial Attention Fusion Module (SAFM)
-class SAFM(nn.Module):
-    def __init__(self, size, n_feats):
-        super(SAFM, self).__init__()
-
-        # Extra details obtained from FASR paper:
-        # https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=9313377
-
-        # We compute spatial attention by global average/max pooling along the
-        # channel dimension, going from HxWxDxC to HxWxDx1
-        # spatial global avg/max pooling: pooling along channels
-        self.avg_pool = nn.AdaptiveAvgPool3d(size)
-        self.max_pool = nn.AdaptiveMaxPool3d(size)
-        # feature channel downscale and upscale --> channel weight
-
-        self.conv_sa = nn.Sequential(
-            nn.Conv3d(n_feats, n_feats, kernel_size=3, padding=1, bias=True),
-            nn.Sigmoid()
-        )
-
-    def forward(self, y):
-        y_avg = self.avg_pool(y)
-        y_max = self.max_pool(y)
-        y_sa = self.conv_sa(torch.cat([y_avg, y_max], 1))
-        return y * y_sa
-
-
-class LinearAttention2D(nn.Module):
-    def __init__(self, dim, heads=4, dim_head=32):
-        super().__init__()
-        self.heads = heads
-        self.dim_head = dim_head
-        inner_dim = heads * dim_head
-
-        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
-        self.to_out = nn.Linear(inner_dim, dim)
-
-    def max_neg_value(self, tensor):
-        return -torch.finfo(tensor.dtype).max
-
-    def exists(self, val):
-        return val is not None
-
-    def linear_attn(self, q, k, v, kv_mask=None):
-        dim = q.shape[-1]
-
-        if self.exists(kv_mask):
-            mask_value = self.max_neg_value(q)
-            mask = kv_mask[:, None, :, None]
-            k = k.masked_fill_(~mask, mask_value)
-            v = v.masked_fill_(~mask, 0.)
-            del mask
-
-        q = q.softmax(dim=-1)
-        k = k.softmax(dim=-2)
-
-        q = q * dim ** -0.5
-
-        context = einsum('bhnd,bhne->bhde', k, v)
-        attn = einsum('bhnd,bhde->bhne', q, context)
-        return attn.reshape(*q.shape)
-
-    def forward(self, x):  # x: (B, H, W, C)
-        B, H, W, C = x.shape
-        x = x.view(B, H*W, C)
-
-        qkv = self.to_qkv(x).chunk(3, dim=-1)
-        q, k, v = [t.view(B, -1, self.heads, self.dim_head).transpose(1,2) for t in qkv]
-        # shapes: (B, heads, N, D)
-
-        out = self.linear_attn(q, k, v)  # (B, heads, N, D)
-        out = out.transpose(1,2).reshape(B, H*W, -1)
-        out = self.to_out(out)
-
-        return out.view(B, H, W, C)
-
-
-
 class BasicLayer(nn.Module):
 
     r""" A basic ConvNeXt layer. We can modify this to implement other types of layers.
@@ -209,43 +129,23 @@ class BasicLayer(nn.Module):
         layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
     """
 
-    def __init__(self, dim, depth, dp_rates, layer_scale_init_value, compress_ratio=3, squeeze_factor=30):
+    def __init__(self, dim, depth, dp_rates, layer_scale_init_value):
         super().__init__()
 
         self.blocks = nn.ModuleList(
             Block(dim, dp_rates[i], layer_scale_init_value) for i in range(depth)
         )
 
-        #self.cab_blocks = nn.ModuleList(
-        #    CAB(dim, compress_ratio, squeeze_factor) for i in range(depth)
-        #)
-
-        #self.transitions = nn.ModuleList(
-        #    TransitionLayer(dim + i * growth_rate, growth_rate) for i in range(depth)
-        #)
-
-    def forward_res(self, x):
-        z = self.blocks[0](x)
-        for i in range(len(self.blocks)):
-            z = self.blocks[i](z)
-            #z = self.cab_blocks[i](z)
-
-        return z + x
-
-    def forward_dense(self, x):
-        for i in range(len(self.blocks)):
-            y = self.blocks[i](x)
-            y = self.cab_blocks[i](y)
-            y = self.transitions[i](y)
-            x = torch.cat((x, y), dim=1)
-
-        return x
-
-    def forward_rir(self, x):
-        ...
+        self.cab_blocks = nn.ModuleList(
+            CAB(dim, compress_ratio=4, squeeze_factor=16) for i in range(depth)
+        )
 
     def forward(self, x):
-        return self.forward_res(x)
+        z = self.blocks[0](x)
+        for blk in self.blocks[1:]:
+            z = blk(z)
+
+        return z + x
 
 
 class TransitionLayer(nn.Module):
@@ -352,14 +252,12 @@ class ConvNeXtSR(nn.Module):
         dp_rates = [x for x in np.linspace(0, drop_path_rate, sum(depths))]
         cur = 0
         for i in range(len(depths)):
-            compress_ratio = 4 #+ 4*i
-            squeeze_factor = 16
             dim_ = dims[i + 1] if i < len(depths) - 1 else dims[0]
             dp = dp_rates[cur : cur + depths[i]]
             stage = nn.Sequential(
                 *[
-                    BasicLayer(dims[i], depths[i], dp, layer_scale_init_value, compress_ratio, squeeze_factor),
-                    # CAB(dims[i] + growth_rate * depths[i], dims[i] + growth_rate * depths[i] // 4, squeeze_factor=16),
+                    BasicLayer(dims[i], depths[i], dp, layer_scale_init_value),
+                    # CAB(dims[i]),
                     TransitionLayer(dims[i], dim_)
                 ]
             )
@@ -395,12 +293,13 @@ class ConvNeXtSR(nn.Module):
             LayerNorm(dims[0], eps=1e-6, data_format="channels_first"),
         )
 
-        #self.transition_skip = nn.Sequential(
-        #    ChannelAttention(dims[-1], squeeze_factor=16),
-        #    TransitionLayer(dims[-1], dims[0]),
-        #    nn.GELU(),
-        #    TransitionLayer(dims[0], dims[0]),
-        #)
+        # Transition layers between stages
+        # self.transition_stages = nn.ModuleList(
+        #     TransitionLayer(dims[i] + dims[i]*depths[i], dims[i + 1]) for i in range(len(depths) - 1)
+        # )
+        # self.transition_stages.append(
+        #     TransitionLayer(dims[-1] + dims[-1]*depths[-1], dims[0])  # to match dims for long skip connection
+        # )
 
         # Upsampling
         if self.up_factor == 2:
@@ -449,7 +348,7 @@ class ConvNeXtSR(nn.Module):
         # deep feature extraction
         z = x
         for i in range(len(self.stages)):
-            if i % 1 == 0 and self.use_checkpoint:
+            if i % 2 == 0 and self.use_checkpoint:
                 z = checkpoint.checkpoint(self.stages[i], z)
             else:
                 z = self.stages[i](z)
@@ -481,17 +380,8 @@ if __name__ == "__main__":
     up_factor = 2
     patch_size = 32
 
-    depths = [3, 4, 5, 6]
-    #dims = [64, 192, 384, 768]
-    dims = [64, 192, 288, 384]
-
-    # depths = [3, 3, 3, 3]
-    # dims = [64, 256, 448, 640]
-    # growth_rate = 64
-    # print("Number of intermediate channels is:", [dim + i * growth_rate for i, dim in enumerate(dims)])
-
-    net = ConvNeXtSR(depths=depths,
-                     dims=dims,  # [96, 192, 288, 384, 768],
+    net = ConvNeXtSR(depths=[3, 3, 3, 3],
+                     dims=[96, 192, 384, 768],  # [96, 192, 288, 384, 768],
                      in_chans=in_chans,
                      drop_path_rate=0.1,
                      layer_scale_init_value=1e-6,

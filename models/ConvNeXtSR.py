@@ -216,9 +216,9 @@ class BasicLayer(nn.Module):
             Block(dim + i * growth_rate, dp_rates[i], layer_scale_init_value) for i in range(depth)
         )
 
-        self.cab_blocks = nn.ModuleList(
-            CAB(dim + i * growth_rate, compress_ratio, squeeze_factor) for i in range(depth)
-        )
+        #self.cab_blocks = nn.ModuleList(
+        #    CAB(dim + i * growth_rate, compress_ratio, squeeze_factor) for i in range(depth)
+        #)
 
         self.transitions = nn.ModuleList(
             TransitionLayer(dim + i * growth_rate, growth_rate) for i in range(depth)
@@ -226,15 +226,16 @@ class BasicLayer(nn.Module):
 
     def forward_res(self, x):
         z = self.blocks[0](x)
-        for blk in self.blocks[1:]:
-            z = blk(z)
+        for i in range(len(self.blocks)):
+            y = self.blocks[i](x)
+            y = self.cab_blocks[i](y)
 
         return z + x
 
     def forward_dense(self, x):
         for i in range(len(self.blocks)):
             y = self.blocks[i](x)
-            y = self.cab_blocks[i](y)
+            #y = self.cab_blocks[i](y)
             y = self.transitions[i](y)
             x = torch.cat((x, y), dim=1)
 
@@ -491,7 +492,7 @@ if __name__ == "__main__":
 
     depths = [3, 3, 3, 3]
     dims = [64]
-    growth_rate = 32  # 64
+    growth_rate = 64  # 64
 
     dim = dims[0]
     for i, depth in enumerate(depths):

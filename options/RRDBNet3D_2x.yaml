@@ -54,13 +54,13 @@ dataset_opt:
 
   train_dataloader_params:
     dataloader_batch_size: 16
-    num_load_workers: 24
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
     dataloader_batch_size: 4
-    num_load_workers: 8
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 

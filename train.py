@@ -9,7 +9,7 @@ import torch
 from monai.data import SmartCacheDataset, DataLoader
 
 import config
-from utils.load_options import save_yaml, init_options
+from utils.load_options import save_yaml, init_options, set_seed
 
 def test_plot(train_batch):
     size_hr = train_batch['H'].shape[-1]
@@ -21,13 +21,13 @@ def test_plot(train_batch):
     for i in range(batch_size):
         # Plot HR slice
         plt.subplot(2, batch_size, i + 1)
-        plt.imshow(train_batch['H'][i, 0, :, :, size_hr // 2], cmap='gray')
+        plt.imshow(train_batch['H'][i, 0, :, :, size_hr // 2], cmap='gray', vmin=0.0, vmax=1.0)
         plt.title(f'HR #{i}')
         plt.axis('off')
 
         # Plot LR slice
         plt.subplot(2, batch_size, batch_size + i + 1)
-        plt.imshow(train_batch['L'][i, 0, :, :, size_lr // 2], cmap='gray')
+        plt.imshow(train_batch['L'][i, 0, :, :, size_lr // 2], cmap='gray', vmin=0.0, vmax=1.0)
         plt.title(f'LR #{i}')
         plt.axis('off')
 
@@ -255,6 +255,9 @@ def main(opt: DictConfig):
 
     if opt['train_mode'] == "resume":
         assert iterations > model.last_iteration, "Total iterations >= start iterations. No iterations to resume training."
+
+    # Reset seed
+    set_seed(opt)
 
     # Define dataloaders
     from data.select_dataset import define_Dataset

@@ -56,21 +56,24 @@ class Dataset_VoDaSuRe_OME():
                            "LITS":      glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr")),
                            "CTSpine1K": glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/train/*.zarr")),
                            "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/train/*.zarr")),
-                           "VoDaSuRe":  glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))}
+                           #"VoDaSuRe":  glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
+                           }
 
             test_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr")),
                            "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr")),
                            "LITS": glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr")),
                            "CTSpine1K": glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/test/*.zarr")),
                            "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr")),
-                           "VoDaSuRe": glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))}
+                          # "VoDaSuRe": glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
+                          }
 
             sampling_weights = {"HCP_1200":  3.0,
                                 "IXI":       1.0,
                                 "LITS":      2.0,
                                 "CTSpine1K": 5.0,
                                 "LIDC-IDRI": 5.0,
-                                "VoDaSuRe":  15.0}
+                                #"VoDaSuRe":  15.0
+                                }
 
 
             # group_pairs = {
@@ -190,7 +193,7 @@ class Dataset_VoDaSuRe_OME():
         if mode == "train":
             # Random augmentations
             #trans_list.append(RandSRCLAHEd(keys=["H", "L"], prob=0.5, clip_limit_range=(0.005, 0.02)))
-            trans_list.append(RandSRContrastd(keys=["H", "L"], prob=0.5, gamma_range=(0.6, 1.4)))
+            trans_list.append(RandSRContrastd(keys=["H", "L"], prob=0.5, gamma_range=(0.8, 1.2)))
             trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=0, prob=0.5))
             trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=1, prob=0.5))
             trans_list.append(RandSRFlipd(keys=["H", "L"], spatial_axis=2, prob=0.5))
