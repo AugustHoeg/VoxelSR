@@ -278,6 +278,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
     elif dataset_type == "ZarrDatasetCache":
         from data.ZarrIterableDatasetCache import ZarrIterableDataset
 
+        slice_dim = None if opt.input_type == '3D' else 0
         patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
         patch_shape_hr = (opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr)
         train_dataset = ZarrIterableDataset(dataset_dict_train,
@@ -289,8 +290,8 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                             queue_size=128,
                                             store_type='DirectoryStore',
                                             num_samples=opt.train_opt.iterations//10,
-                                            sampling_method='random'  # 'random' or 'in_chunk'
-                                            )
+                                            sampling_method='random',  # 'random' or 'in_chunk'
+                                            slice_dim=slice_dim)
 
         test_dataset = ZarrIterableDataset(dataset_dict_test,
                                            patch_shape,
@@ -301,14 +302,15 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                            queue_size=128,
                                            store_type='DirectoryStore',
                                            num_samples=opt.train_opt.validation_iterations,
-                                           sampling_method='random'  # 'random' or 'in_chunk'
-                                           )
+                                           sampling_method='random',  # 'random' or 'in_chunk'
+                                           slice_dim=slice_dim)
 
         baseline_dataset = test_dataset
 
     elif dataset_type == "ZarrDatasetBase":
         from data.ZarrIterableDatasetBase import ZarrIterableDataset
 
+        slice_dim = None if opt.input_type == '3D' else 0
         patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
         patch_shape_hr = (opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr)
         train_dataset = ZarrIterableDataset(dataset_dict_train,
@@ -318,8 +320,8 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                             up_factor=opt.up_factor,
                                             store_type='DirectoryStore',
                                             num_samples=opt.train_opt.iterations//10,
-                                            sampling_method='random'  # 'random' or 'in_chunk'
-                                            )
+                                            sampling_method='random',  # 'random' or 'in_chunk'
+                                            slice_dim=slice_dim)
 
         test_dataset = ZarrIterableDataset(dataset_dict_test,
                                            patch_shape,
@@ -328,8 +330,8 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                            up_factor=opt.up_factor,
                                            store_type='DirectoryStore',
                                            num_samples=opt.train_opt.validation_iterations,
-                                           sampling_method='random'  # 'random' or 'in_chunk'
-                                           )
+                                           sampling_method='random',  # 'random' or 'in_chunk'
+                                           slice_dim=slice_dim)
 
         baseline_dataset = test_dataset
 

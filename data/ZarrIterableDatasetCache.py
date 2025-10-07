@@ -11,6 +11,7 @@ import torch
 import monai.data
 import monai.transforms as mt
 import zarr
+#import zarrs # check out: https://zarrs-python.readthedocs.io/en/stable/
 from zarr.storage import LocalStore, MemoryStore, FsspecStore
 from ome_zarr.io import parse_url
 from monai.data import SmartCacheDataset, DataLoader, IterableDataset
@@ -162,7 +163,7 @@ def extract_patch_levels_from_chunk(data, group_name, ome_levels, patch_size=(32
 
 
 class ZarrProducer():
-    def __init__(self, worker_data, patch_shape, patch_shape_hr, patch_transform, up_factor, queue_size: int = 64, num_workers: int = 1, sampling_method='random', seed=8338):
+    def __init__(self, worker_data, patch_shape, patch_shape_hr, patch_transform, up_factor, queue_size: int = 64, num_workers: int = 1, sampling_method='random', seed=8338, slice_dim=None):
         super().__init__()
 
         # Define data
@@ -171,6 +172,7 @@ class ZarrProducer():
         self.patch_shape_hr = patch_shape_hr
         self.patch_transform = patch_transform
         self.up_factor = up_factor
+        self.slice_dim = slice_dim  # Set to 0, 1, or 2 to extract random slices along that dimension
 
         self.num_workers = num_workers
         self.queues = []  # Each worker will have its own queue
@@ -201,6 +203,14 @@ class ZarrProducer():
             patch = self._sample_data(z, group_pair, self.patch_shape, self.patch_shape_hr, self.up_factor, metadata=None)  # metadata={'name': name, 'group_pair': group_pair})
             if self.patch_transform:
                 patch = self.patch_transform(patch)
+
+            # Select a random slice from the patch along the specified dimension if slice_dim is not None
+            if self.slice_dim is not None:
+                idx_L = np.random.randint(0, patch['L'].shape[1 + self.slice_dim])
+                idx_H = idx_L * self.up_factor
+                patch['L'] = np.take(patch['L'], indices=idx_L, axis=self.slice_dim + 2)
+                patch['H'] = np.take(patch['H'], indices=idx_H, axis=self.slice_dim + 2)
+
             try:
                 self.queues[id].put(patch)  # block for time out space is available
             except queue.Full:
@@ -250,7 +260,7 @@ class ZarrProducer():
 
 class ZarrIterableDataset(IterableDataset):
 
-    def __init__(self, dataset_dict, patch_shape, patch_shape_hr, patch_transform, up_factor, num_workers, queue_size, base_seed=8338, store_type='Numpy', num_samples=1000, sampling_method='random', print_metadata=False):
+    def __init__(self, dataset_dict, patch_shape, patch_shape_hr, patch_transform, up_factor, num_workers, queue_size, base_seed=8338, store_type='Numpy', num_samples=1000, sampling_method='random', print_metadata=False, slice_dim=None):
         self.dataset_dict = dataset_dict
         self.patch_shape = patch_shape
         self.patch_shape_hr = patch_shape_hr
@@ -264,6 +274,7 @@ class ZarrIterableDataset(IterableDataset):
         self.sampling_method = sampling_method  # Method to sample patches, e.g., 'random', 'in_chunk'
         self.store_type = store_type
         self.print_metadata = print_metadata  # Print metadata of the Zarr group
+        self.slice_dim = slice_dim
 
         self.dataset_names = list(dataset_dict.keys())
 
@@ -297,6 +308,7 @@ class ZarrIterableDataset(IterableDataset):
 
             for path in paths:
                 if dataset['store_type'] == 'Numpy':
+                    raise NotImplementedError("Numpy store not implemented yet for zarr v3.")
                     # TODO: fix NumPy method here.
                     data = zarr.open(path, mode='r')
                     z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
@@ -345,7 +357,8 @@ class ZarrIterableDataset(IterableDataset):
                                      queue_size=self.queue_size,
                                      num_workers=self.num_workers,
                                      sampling_method=self.sampling_method,
-                                     seed=self.base_seed + id*self.num_workers)  # Use a different seed for each producer
+                                     seed=self.base_seed + id*self.num_workers,
+                                     slice_dim=self.slice_dim)  # Use a different seed for each producer
         self.producer.set_workers()
         self.producer.start_workers()
 
@@ -378,6 +391,13 @@ class ZarrIterableDataset(IterableDataset):
 
         if self.patch_transform:
             patch = self.patch_transform(patch)
+
+        # Select a random slice from the patch along the specified dimension if slice_dim is not None
+        if self.slice_dim is not None:
+            idx_L = np.random.randint(0, patch['L'].shape[1 + self.slice_dim])
+            idx_H = idx_L * self.up_factor
+            patch['L'] = np.take(patch['L'], indices=idx_L, axis=self.slice_dim + 2)
+            patch['H'] = np.take(patch['H'], indices=idx_H, axis=self.slice_dim + 2)
 
         return patch
 
@@ -413,21 +433,28 @@ class ZarrIterableDataset(IterableDataset):
 
 
 def test_plot(train_batch):
-    size_hr = train_batch['H'].shape[-1]
-    size_lr = train_batch['L'].shape[-1]
+    size_hr = min(train_batch['H'].shape[2:])
+    size_lr = min(train_batch['L'].shape[2:])
     batch_size = len(train_batch['H'])
     plt.figure(figsize=(2*batch_size, 8))
     c = 0
     for i in range(batch_size):
         plt.subplot(2, batch_size, 1 + c)
-        plt.imshow(train_batch['H'][i, 0, :, :, size_hr//2])
+        if len(train_batch['H'].shape) == 4:
+            plt.imshow(train_batch['H'][i, 0, ...])
+        else:
+            plt.imshow(train_batch['H'][i, 0, size_hr//2, ...])
         plt.axis("off")
         plt.subplot(2, batch_size, 2 + c)
-        plt.imshow(train_batch['L'][i, 0, :, :, size_lr//2])
+        if len(train_batch['H'].shape) == 4:
+            plt.imshow(train_batch['L'][i, 0, ...])
+        else:
+            plt.imshow(train_batch['L'][i, 0, size_lr//2, ...])
         plt.axis("off")
         c += 2
     plt.tight_layout()
     plt.show()
+
 
 def main():
 
@@ -489,8 +516,8 @@ def main():
                                   queue_size=128,
                                   store_type='LocalStore',
                                   num_samples=1000,
-                                  sampling_method='random'  # 'random' or 'in_chunk'
-                                  )
+                                  sampling_method='random',  # 'random' or 'in_chunk'
+                                  slice_dim=None)
 
     num_workers = 1
     persistent_workers = True if num_workers > 0 else False
