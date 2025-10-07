@@ -18,16 +18,22 @@ class Dataset_VoDaSuRe_OME():
         self.patch_size_lr = opt['dataset_opt']['patch_size']
         self.degradation_type = opt['dataset_opt']['degradation_type']
 
+        print(f"Using datasets: {opt['dataset_opt']['datasets']} on {opt['run_type']}")
+
         if opt['run_type'] == "HOME PC":
             self.data_path = "../Vedrana_master_project/3D_datasets/datasets/"
 
-            train_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr")),
-                           "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))}
+            train_paths = {}
+            test_paths = {}
+            if "HCP_1200" in opt['dataset_opt']['datasets']:
+                train_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr"))
+                test_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr"))
 
-            test_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr")),
-                          "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))}
+            if "IXI" in opt['dataset_opt']['datasets']:
+                train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))
+                test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))
 
-            sampling_weights = {"HCP_1200": 1.0,
+            sampling_weights = {"HCP_1200": 2.0,
                                 "IXI":      1.0}
 
             group_pairs = {
@@ -51,29 +57,38 @@ class Dataset_VoDaSuRe_OME():
         else:  # Default is opt['cluster'] = "DTU_HPC"
             self.data_path = "../3D_datasets/datasets/"
 
-            train_paths = {"HCP_1200":  glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr")),
-                           "IXI":       glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr")),
-                           "LITS":      glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr")),
-                           "CTSpine1K": glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/train/*.zarr")),
-                           "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/train/*.zarr")),
-                           #"VoDaSuRe":  glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
-                           }
+            train_paths = {}
+            test_paths = {}
+            if "HCP_1200" in opt['dataset_opt']['datasets']:
+                train_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr"))
+                test_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr"))
 
-            test_paths = {"HCP_1200": glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr")),
-                           "IXI": glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr")),
-                           "LITS": glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr")),
-                           "CTSpine1K": glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/test/*.zarr")),
-                           "LIDC-IDRI": glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr")),
-                          # "VoDaSuRe": glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
-                          }
+            if "IXI" in opt['dataset_opt']['datasets']:
+                train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))
+                test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))
+
+            if "LITS" in opt['dataset_opt']['datasets']:
+                train_paths["LITS"] = glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr"))
+                test_paths["LITS"] = glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr"))
+
+            if "CTSpine1K" in opt['dataset_opt']['datasets']:
+                train_paths["CTSpine1K"] = glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/train/*.zarr"))
+                test_paths["CTSpine1K"] = glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/test/*.zarr"))
+
+            if "LIDC-IDRI" in opt['dataset_opt']['datasets']:
+                train_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/train/*.zarr"))
+                test_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr"))
+
+            if "VoDaSuRe" in opt['dataset_opt']['datasets']:
+                train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
+                test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
 
             sampling_weights = {"HCP_1200":  3.0,
                                 "IXI":       1.0,
                                 "LITS":      2.0,
                                 "CTSpine1K": 5.0,
                                 "LIDC-IDRI": 5.0,
-                                #"VoDaSuRe":  15.0
-                                }
+                                "VoDaSuRe":  15.0}
 
 
             # group_pairs = {
@@ -180,7 +195,8 @@ class Dataset_VoDaSuRe_OME():
 
         trans_list = []
         trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=pdata.channel_dim))  # Load the image
-        # trans_list.append(mt.CastToTyped(keys=["H", "L"], dtype=torch.float32))  # Cast to float32
+        trans_list.append(mt.CastToTyped(keys=["H", "L"], dtype=torch.float32))  # Cast to float32
+        trans_list.append(mt.ScaleIntensityRanged(keys=["H", "L"], a_min=0, a_max=65535, b_min=0.0, b_max=1.0, clip=True))
         trans_list.append(mt.SignalFillEmptyd(keys=["H", "L"], replacement=0))
 
         # Normalization and scaling

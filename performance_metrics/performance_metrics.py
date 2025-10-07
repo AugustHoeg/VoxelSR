@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torchio as tio
 from monai.metrics.regression import SSIMMetric, PSNRMetric, RMSEMetric
+from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D,calculate_nrmse_2D
 
 def calculate_metric_2D(img_H, img_E, border=0, metric_fn=None):
     metric = 0
@@ -103,6 +104,27 @@ def compute_performance_metrics_3D(real_hi_res, fake_hi_res, metric_fn_dict, met
 
     return metric_val_dict
 
+
+class PSNR_2D(nn.Module):
+    def __init__(self, border=1):
+        super().__init__()
+
+        self.border = border
+        self.metric_func = calculate_psnr_2D
+
+    def forward(self, img_true, img_false):
+
+        img_true = img_true.clamp(min=0.0, max=1.0).squeeze().cpu().numpy()
+        img_false = img_false.clamp(min=0.0, max=1.0).squeeze().cpu().numpy()
+
+        result = 0
+        for img1, img2 in zip(img_true, img_false):
+            result += self.metric_func(img1, img2)
+        result = result / img_true.shape[0]
+
+        return result
+
+
 class PSNR_3D(nn.Module):
     def __init__(self, border=1):
         super().__init__()
@@ -115,6 +137,26 @@ class PSNR_3D(nn.Module):
         result = torch.mean(self.metric_func(img_true.clamp(min=0.0, max=1.0), img_false.clamp(min=0.0, max=1.0)))  # mean over patches in batch
 
         return result.item()
+
+
+class SSIM_2D(nn.Module):
+    def __init__(self, border=1):
+        super().__init__()
+
+        self.border = border
+        self.metric_func = calculate_ssim_2D
+
+    def forward(self, img_true, img_false):
+
+        img_true = img_true.squeeze().cpu().numpy()
+        img_false = img_false.squeeze().cpu().numpy()
+
+        result = 0
+        for img1, img2 in zip(img_true, img_false):
+            result += self.metric_func(img1, img2)
+        result = result / img_true.shape[0]
+
+        return result
 
 
 class SSIM_3D(nn.Module):
@@ -130,6 +172,28 @@ class SSIM_3D(nn.Module):
 
         result = torch.mean(self.metric_func(img_true, img_false))  # mean over patches in batch
         return result.item()
+
+
+class NRMSE_2D(nn.Module):
+    def __init__(self, border=1, normalization='euclidean'):
+        super().__init__()
+
+        self.border = border
+        self.normalization = normalization
+        self.metric_func = calculate_nrmse_2D
+
+    def forward(self, img_true, img_false):
+
+        img_true = img_true.squeeze().cpu().numpy()
+        img_false = img_false.squeeze().cpu().numpy()
+
+        result = 0
+        for img1, img2 in zip(img_true, img_false):
+            result += self.metric_func(img1, img2)
+        result = result / img_true.shape[0]
+
+        return result
+
 
 class NRMSE_3D(nn.Module):
     def __init__(self, border=1, normalization='euclidean'):
