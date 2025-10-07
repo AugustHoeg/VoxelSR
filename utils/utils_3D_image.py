@@ -1,7 +1,8 @@
 import os
 import math
 import zarr
-from numcodecs import Blosc
+#from numcodecs import Blosc
+from zarr.codecs import BloscCodec, BloscCname, BloscShuffle
 import dask.array as da
 from PIL import Image
 
@@ -16,6 +17,21 @@ from tqdm import tqdm
 
 import h5py
 import monai.transforms as mt
+
+from utils.utils_zarr import write_ome_pyramid
+
+def upscale_slices(model, img_L, up_factor=2):
+
+    b, c, d, h, w = img_L.shape
+    D, H, W = np.array(img_L.shape[2:]) * up_factor
+
+    output_tensor = torch.zeros((b, c, D, H, W))
+    model.L = img_L.permute(0, 2, 1, 3, 4).reshape(b * d, c, h, w)
+    model.netG_forward()
+    output_tensor[:, :, ::up_factor, :, :] = model.E.reshape(b, d, c, H, W).permute(0, 2, 1, 3, 4).contiguous()
+
+    return output_tensor
+
 
 def generate_patch_coords(D, H, W, stride, f):
     z_idx = np.arange(0, D, stride)
@@ -99,11 +115,10 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
     return img_E
 
 
-def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, border, batch_size, overlap_mode="hann"):
+def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
 
-    # print("TODO: Fix hardcoded global min/max values for bone_2_ome.zarr/HR/2")
-    # global_min = -0.002063  # min value for bone_2_ome.zarr/HR/2
-    # global_max = 0.002476  # max value for bone_2_ome.zarr/HR/2
+    global_min = 0
+    global_max = 65535
 
     level_L = int(group_pair["L"].split("/")[-1])
     level_H = int(group_pair["H"].split("/")[-1])
@@ -116,20 +131,20 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
     size_hr = size_lr * f
     stride = size_lr - border
 
-    chunks_L = img_L.chunks
     chunks_H = img_H.chunks  # tuple(int(c * f) for c in chunks_L)
 
     # Prepare output Zarr store
-    compressor = Blosc(cname='lz4', clevel=3, shuffle=Blosc.BITSHUFFLE)
+    #compressor = Blosc(cname='lz4', clevel=3, shuffle=Blosc.BITSHUFFLE)  # old compressor syntax
+    #compressor = BloscCodec(cname=BloscCname['lz4'], clevel=3, shuffle=BloscShuffle.bitshuffle)
     root_out = zarr.open(out_path, mode='w')
     grp_out = root_out.create_group("temp")
     grp_weight = root_out.create_group("weight")
 
-    grp_out.create_dataset(level_H, shape=(D*f, H*f, W*f), chunks=chunks_H, dtype=np.float32, compressor=compressor)
-    grp_weight.create_dataset(level_H, shape=(D*f, H*f, W*f), chunks=chunks_H, dtype=np.float32, compressor=compressor)
+    grp_out.create_dataset(f'{level_H}', shape=(D*f, H*f, W*f), chunks=chunks_H, dtype=np.float32)
+    grp_weight.create_dataset(f'{level_H}', shape=(D*f, H*f, W*f), chunks=chunks_H, dtype=np.float32)
 
-    z_E = grp_out[level_H]
-    z_W = grp_weight[level_H]
+    z_E = grp_out[f'{level_H}']
+    z_W = grp_weight[f'{level_H}']
 
     coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
     N = coords_lr.shape[0]
@@ -149,16 +164,18 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
                 patch = torch.zeros((1, size_lr, size_lr, size_lr), dtype=torch.float32)
                 data_L = img_L[z0:z0+size_lr, y0:y0+size_lr, x0:x0+size_lr]
 
-                # Only for binning bone...
-                data_L = data_L.astype(np.float32)  # Ensure data is float32
-                # data_L = (data_L - global_min) / (global_max - global_min)
-
                 patch[:, :data_L.shape[0], :data_L.shape[1], :data_L.shape[2]] = torch.from_numpy(data_L)
                 patch_batch[j] = patch
 
-            model.L = patch_batch.to(model.device)
-            model.netG_forward()
-            upsampled_batch = model.E.float().cpu()
+            patch_batch = patch_batch.float()  # Ensure data is float32
+            patch_batch = (patch_batch - global_min) / (global_max - global_min)
+
+            if model_input_type == '2D':
+                upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
+            else:
+                model.L = patch_batch.to(model.device)
+                model.netG_forward()
+                upsampled_batch = model.E.float().cpu()
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D*f) - z_hr
@@ -183,23 +200,25 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
     if overlap_mode == "mean":
         data_W = da.where(data_W == 0, 1, data_W)
 
-    data_norm = (data_E / data_W).astype(np.float16)
+    data_norm = (data_E / data_W)  # Normalize data by weights
+    data_norm = da.clip(data_norm, 0.0, 1.0)  # Clip to [0, 1]
+    data_scaled = (data_norm * 65535).astype(np.uint16)  # Scale to uint16
 
     # Create image pyramid using downscale_local_mean
-    image_pyramid = [data_norm]
+    image_pyramid = [data_scaled]
     for i in range(2):
         image_pyramid.append(da.coarsen(np.mean, image_pyramid[i], axes={0: 2, 1: 2, 2: 2}))
 
     # Create image group for the volume
     image_group = root_out.create_group("SR")
 
-    from utils.utils_zarr import write_ome_pyramid
     write_ome_pyramid(
         image_group=image_group,
         image_pyramid=image_pyramid,
         label_pyramid=None,  # No labels
         chunk_size=chunks_H,
-        cname='lz4'  # Compression codec
+        shard_size=None,
+        cname=None  # Compression codec
     )
 
     # Remove image and weight groups
@@ -607,13 +626,13 @@ class ImageComparisonTool3D():
             else:
                 up_lr_slice = self.get_slice(img_dict['L'], slice_idx, axis)
 
-            img_list.append(up_lr_slice)
+            img_list.append(up_lr_slice.float())
 
         hr_slice = self.get_slice(img_dict['H'], slice_idx, axis)  # C, H, W, D -> C, H, W
         sr_slice = self.get_slice(img_dict['E'], slice_idx, axis)
 
-        img_list.append(sr_slice)
-        img_list.append(hr_slice)
+        img_list.append(sr_slice.float())
+        img_list.append(hr_slice.float())
 
         row = torch.stack(img_list)
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)  # make grid, then permute to H, W, C because WandB assumes channel last

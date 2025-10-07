@@ -5,7 +5,7 @@ dataset_type: ZarrDatasetBase  # ZarrDatasetCache, ZarrDatasetBase
 enable_femur_padding: false
 
 # Define datasets here
-datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+datasets: [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
 # Cropping and normalization
 n_channels: 1

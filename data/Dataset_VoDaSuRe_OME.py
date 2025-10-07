@@ -196,8 +196,8 @@ class Dataset_VoDaSuRe_OME():
         trans_list = []
         trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L"], channel_dim=pdata.channel_dim))  # Load the image
         trans_list.append(mt.CastToTyped(keys=["H", "L"], dtype=torch.float32))  # Cast to float32
-        trans_list.append(mt.ScaleIntensityRanged(keys=["H", "L"], a_min=0, a_max=65535, b_min=0.0, b_max=1.0, clip=True))
-        trans_list.append(mt.SignalFillEmptyd(keys=["H", "L"], replacement=0))
+        trans_list.append(mt.ScaleIntensityRanged(keys=["H", "L"], a_min=0, a_max=65535, b_min=0.0, b_max=1.0, clip=True))  # Scale to [0, 1]
+        trans_list.append(mt.SignalFillEmptyd(keys=["H", "L"], replacement=0))  # Remove any NaNs
 
         # Normalization and scaling
         if pdata.norm_type == "scale_intensity":

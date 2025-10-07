@@ -104,6 +104,10 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1):
             H_slice = img_H[:, :, i]
             E_slice = img_E[:, :, i]
 
+        # Normalize to [0, 1]
+        E_slice = (E_slice - E_slice.min()) / (E_slice.max() - E_slice.min())
+        H_slice = (H_slice - H_slice.min()) / (H_slice.max() - H_slice.min())
+
         slice_psnr = calculate_psnr_2D(E_slice, H_slice, border=0)
         psnr_slice_list.append(slice_psnr)
 
@@ -152,6 +156,10 @@ def main(opt: DictConfig):
     if not os.path.exists(image_path + "full_slice_comparisons/"):
         os.makedirs(image_path + "full_slice_comparisons/")
 
+    batch_size = opt.dataset_opt.train_dataloader_params.dataloader_batch_size
+    if opt['input_type'] == '2D' and batch_size > 1:
+        batch_size = 1  # Force batch size of 1 for 2D models
+
     for name, dataset in data_dict.items():
         print(f"Dataset name: {name}")
 
@@ -166,11 +174,11 @@ def main(opt: DictConfig):
         nrmse_sample_means = []
 
         for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
-            print(f"Group pair: {group_pair}")
             group_text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
 
             if "HR0" not in group_text:
                 continue  # skip group pairs that do not contain HR0
+            print(f"Group pair: {group_pair}")
 
             # Create metric lists
             psnr_vals = {"sample_means": [], "slice_vals": []}
@@ -181,10 +189,6 @@ def main(opt: DictConfig):
                 print(f"Processing image {image_idx + 1}/{len(paths)}: {zarr_path}")
                 out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
-                if "bone_2_cropped" in zarr_path:
-                    print(f"Skipping very large bone sample: {zarr_path}. Please run inference on this sample separately if needed.")
-                    continue  # skip the very large danmax bone sample
-
                 run_strided_inference_zarr(
                     model=model,
                     zarr_path=zarr_path,
@@ -193,8 +197,9 @@ def main(opt: DictConfig):
                     f=opt['up_factor'],
                     size_lr=opt.dataset_opt.patch_size,
                     border=4,
-                    batch_size=opt.dataset_opt.train_dataloader_params.dataloader_batch_size,
-                    overlap_mode="hann"
+                    batch_size=batch_size,
+                    overlap_mode="hann",
+                    model_input_type=opt['input_type'],
                 )
 
                 zarr_H = zarr.open(zarr_path, mode='r')
@@ -204,7 +209,8 @@ def main(opt: DictConfig):
                 zarr_E = zarr.open(out_path, mode='r')
                 img_E = zarr_E['SR/0']  # Always read the top level
 
-                psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1)
+                slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
+                psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=slice_step)
 
                 sample_psnr = np.mean(psnr_slice_list)
                 sample_ssim = np.mean(ssim_slice_list)
@@ -228,7 +234,7 @@ def main(opt: DictConfig):
                         patch_size_hr=target_shape,
                         upscaling_methods=["tio_nearest"],  ## or tio_linear
                         unnorm=False,
-                        div_max=False,
+                        div_max=True,
                         out_dtype=np.uint8,
                         upscale_slice=True)
 
