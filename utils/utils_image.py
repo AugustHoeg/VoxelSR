@@ -636,7 +636,7 @@ def channel_convert(in_c, tar_type, img_list):
 # --------------------------------------------
 # PSNR
 # --------------------------------------------
-def calculate_psnr_2D(img1, img2, border=0):
+def calculate_psnr_2D(img1, img2, border=0, eps=1e-10, max_psnr=100):
     # img1 and img2 have range [0, 255]
     # img1 = img1.squeeze()
     # img2 = img2.squeeze()
@@ -649,9 +649,12 @@ def calculate_psnr_2D(img1, img2, border=0):
     img1 = img1.astype(np.float64)
     img2 = img2.astype(np.float64)
     mse = np.mean((img1 - img2) ** 2)
-    if mse == 0:
-        return float('inf')
-    return 20 * math.log10(1.0 / math.sqrt(mse))
+
+    mse = np.max(mse, eps)  # Prevent division by zero or log(0)
+
+    psnr = 20 * math.log10(1.0 / math.sqrt(mse))
+
+    return np.min(psnr, max_psnr)
 
 
 def calculate_psnr_3D(img1, img2, border=0):
