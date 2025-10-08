@@ -3,6 +3,7 @@
 # Written by August Høeg
 # --------------------------------------------------------
 import time
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -92,7 +93,7 @@ class ConvNextBlock3D(nn.Module):
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-    def forward(self, x):
+    def forward(self, x, prev_x=None):
         input = x
         x = self.dwconv(x)
         x = x.permute(0, 2, 3, 4, 1)  # (N, C, D, H, W) -> (N, D, H, W, C)
@@ -136,14 +137,25 @@ class ConvNextLayer(nn.Module):
 
 class ConvNextGroup(nn.Module):
 
-
-
-    def __init__(self, dim, depth, dp_rates, layer_scale_init_value):
+    def __init__(self, dim, skip_dim, depth, dp_rates, layer_scale_init_value):
         super().__init__()
 
-        self.layers = nn.ModuleList(
-            nn.Identity() for _ in range(depth)
-        )
+        self.layers = nn.ModuleList()
+        self.compress_layers = nn.ModuleList()
+        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+        for layer_idx in range(depth):
+            channel_dim = dim + skip_dim * layer_idx
+            compress_dim = skip_dim if layer_idx < depth - 1 else dim
+
+            self.layers.append(
+                ConvNextBlock3D(channel_dim, dp_rates[layer_idx], layer_scale_init_value)
+            )
+
+            self.compress_layers.append(
+                nn.Conv3d(channel_dim, compress_dim, kernel_size=1, stride=1, padding=0)
+            )
+
 
     def forward(self, x, prev_x=None):
 
@@ -151,7 +163,7 @@ class ConvNextGroup(nn.Module):
         next_x = x
 
         ###### Dense-connected block structure ######
-        for i in range(self.blk_layers[self.level] - 1):
+        for i in range(len(self.layers) - 1):
             prev_x = None if i > 0 else prev_x
 
             # Main layer
@@ -161,7 +173,7 @@ class ConvNextGroup(nn.Module):
             x = self.act(self.compress_layers[i](x))
 
             # Concatenate
-            next_x = torch.cat([next_x, x], 2)
+            next_x = torch.cat([next_x, x], 1)
 
         # Final layer
         x = self.layers[-1](next_x, prev_x)
@@ -264,7 +276,7 @@ class PatchEmbed3D(nn.Module):
         return x
 
 
-class MTVNet(nn.Module):
+class MTVNeXt(nn.Module):
     """
     Cleaned, minimal MTVNet that only takes used args.
 
@@ -299,6 +311,8 @@ class MTVNet(nn.Module):
                  pre_up_feats,
                  embed_dims,
                  patch_sizes,
+                 skip_dim,
+                 drop_path_rate=0.0,
                  use_checkpoint=False,
                  upsample_method="nearest"):
         super().__init__()
@@ -355,24 +369,39 @@ class MTVNet(nn.Module):
             )
 
         self.LX_blocks = nn.ModuleList()
-        #dp_rates = [x for x in np.linspace(0, drop_path_rate, sum(depths))]
-        #cur = 0
+        cur = 0
         for level in range(num_levels):
             blocks = nn.ModuleList()
-            #dp = dp_rates[cur: cur + depths[i]]
+            dp_rates = [x for x in np.linspace(0, drop_path_rate, self.num_blks[level] * self.blk_layers[level])]
+            dp = dp_rates[cur: cur + self.blk_layers[level]]
             for _ in range(self.num_blks[level]):
                 blocks.append(
-                    ConvNextLayer(dim=self.embed_dims[level],
+                    ConvNextGroup(dim=self.embed_dims[level],
+                                  skip_dim=skip_dim,
                                   depth=self.blk_layers[level],
-                                  dp_rates=[0.0] * self.blk_layers[level],
+                                  dp_rates=dp,
                                   layer_scale_init_value=1e-6)
                 )
             self.LX_blocks.append(blocks)
+
+        self.Final_blk = nn.Sequential(
+            ConvNextBlock3D(self.embed_dims[-1], drop_path=0.0, layer_scale_init_value=1e-6)
+        )
+        if patch_sizes[-1] > 1:
+            self.Final_blk.append(
+                    SRBlock3D(self.embed_dims[-1],
+                              self.embed_dims[-1],
+                              k_size=6, pad=2,
+                              upsample_method="nearest",
+                              upscale_factor=patch_sizes[-1],
+                              use_checkpoint=False)
+            )
 
         # convolution to map final features (image space)
         self.conv_image = nn.Conv3d(in_channels=self.embed_dims[-1],
                                     out_channels=shallow_feats[-1],
                                     kernel_size=3, stride=1, padding=1, bias=True)
+
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
         # Upsampling SR blocks (supports 2/3/4)
@@ -446,9 +475,9 @@ class MTVNet(nn.Module):
                 LX = self.crop_next(LX, level + 1)
 
         if self.use_checkpoint:
-            final_feats, _ = checkpoint.checkpoint(self.Final_blk, LX_emb)
+            final_feats = checkpoint.checkpoint(self.Final_blk, LX_emb)
         else:
-            final_feats, _ = self.Final_blk(LX_emb)
+            final_feats = self.Final_blk(LX_emb)
 
         # final_feats: use highest-level image features
         final_feats = self.lrelu(self.conv_image(final_feats))  # image-space conv + act
@@ -475,28 +504,41 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 96
+    img_size = 32
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).to(device)
     B, C, H, W, D = x.shape
 
     # small config for quick run
-    context_sizes = [96, 64, 32]
+    context_sizes = [img_size]
     num_levels = len(context_sizes)
-    shallow_feats = [32, 64, 128]
-    pre_up_feats = [32, 32]
-    num_blks = [1, 2, 3]
-    blk_layers = [6, 6, 6]
-    patch_sizes = [3, 2, 1]
+    shallow_feats = [128]
+    pre_up_feats = [64, 64]
+    num_blks = [3]
+    blk_layers = [6]
+    patch_sizes = [2]
+    skip_dim = 64
     embed_dims = [256, 256, 256]
     up_factor = 2
     input_size = (H, W, D)
     use_checkpoint = True
 
-    net = MTVNet(input_size=input_size, up_factor=up_factor, num_levels=num_levels,
-                 context_sizes=context_sizes, num_blks=num_blks, blk_layers=blk_layers,
-                 in_chans=1, shallow_feats=shallow_feats, pre_up_feats=pre_up_feats,
-                 embed_dims=embed_dims, patch_sizes=patch_sizes, use_checkpoint=use_checkpoint,
+    # TODO: Add merge of features from previous network levels.
+    net = MTVNeXt(input_size=input_size,
+                  up_factor=up_factor,
+                  num_levels=num_levels,
+                  context_sizes=context_sizes,
+                  num_blks=num_blks,
+                  blk_layers=blk_layers,
+                  in_chans=1,
+                  shallow_feats=shallow_feats,
+                  pre_up_feats=pre_up_feats,
+                  embed_dims=embed_dims,
+                  patch_sizes=patch_sizes,
+                  skip_dim=skip_dim,
+                  drop_path_rate=0.1,
+                  use_checkpoint=use_checkpoint,
+
                  upsample_method="nearest",).to(device)
     net.train()
 
