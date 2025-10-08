@@ -267,18 +267,20 @@ def main(opt: DictConfig):
     dataloader_params_test = opt['dataset_opt']['test_dataloader_params']
 
     train_loader = DataLoader(train_dataset,
-                                         batch_size=dataloader_params_train['dataloader_batch_size'],
-                                         shuffle=dataloader_params_train['dataloader_shuffle'],
-                                         num_workers=dataloader_params_train['num_load_workers'],
-                                         persistent_workers=dataloader_params_train['persist_workers'],
-                                         pin_memory=dataloader_params_train['pin_memory'])
+                              batch_size=dataloader_params_train['dataloader_batch_size'],
+                              shuffle=dataloader_params_train['dataloader_shuffle'],
+                              num_workers=dataloader_params_train['num_load_workers'],
+                              persistent_workers=dataloader_params_train['persist_workers'],
+                              pin_memory=dataloader_params_train['pin_memory'],
+                              drop_last=True)
 
     test_loader = DataLoader(test_dataset,
-                                        batch_size=dataloader_params_test['dataloader_batch_size'],
-                                        shuffle=dataloader_params_test['dataloader_shuffle'],
-                                        num_workers=dataloader_params_test['num_load_workers'],
-                                        persistent_workers=dataloader_params_test['persist_workers'],
-                                        pin_memory=dataloader_params_test['pin_memory'])
+                             batch_size=dataloader_params_test['dataloader_batch_size'],
+                             shuffle=dataloader_params_test['dataloader_shuffle'],
+                             num_workers=dataloader_params_test['num_load_workers'],
+                             persistent_workers=dataloader_params_test['persist_workers'],
+                             pin_memory=dataloader_params_test['pin_memory'],
+                             drop_last=True)
 
     # Train model
     if opt['dataset_opt']['dataset_type'] == "MonaiSmartCacheDataset":

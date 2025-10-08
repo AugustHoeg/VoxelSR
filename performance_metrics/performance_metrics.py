@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torchio as tio
 from monai.metrics.regression import SSIMMetric, PSNRMetric, RMSEMetric
-from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D,calculate_nrmse_2D
+from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nrmse_2D
 
 def calculate_metric_2D(img_H, img_E, border=0, metric_fn=None):
     metric = 0
@@ -114,8 +114,8 @@ class PSNR_2D(nn.Module):
 
     def forward(self, img_true, img_false):
 
-        img_true = img_true.clamp(min=0.0, max=1.0).squeeze().cpu().numpy()
-        img_false = img_false.clamp(min=0.0, max=1.0).squeeze().cpu().numpy()
+        img_true = img_true.clamp(min=0.0, max=1.0).squeeze(1).cpu().numpy()
+        img_false = img_false.clamp(min=0.0, max=1.0).squeeze(1).cpu().numpy()
 
         result = 0
         for img1, img2 in zip(img_true, img_false):
@@ -148,8 +148,8 @@ class SSIM_2D(nn.Module):
 
     def forward(self, img_true, img_false):
 
-        img_true = img_true.squeeze().cpu().numpy()
-        img_false = img_false.squeeze().cpu().numpy()
+        img_true = img_true.squeeze(1).cpu().numpy()
+        img_false = img_false.squeeze(1).cpu().numpy()
 
         result = 0
         for img1, img2 in zip(img_true, img_false):
@@ -184,8 +184,8 @@ class NRMSE_2D(nn.Module):
 
     def forward(self, img_true, img_false):
 
-        img_true = img_true.squeeze().cpu().numpy()
-        img_false = img_false.squeeze().cpu().numpy()
+        img_true = img_true.squeeze(1).cpu().numpy()
+        img_false = img_false.squeeze(1).cpu().numpy()
 
         result = 0
         for img1, img2 in zip(img_true, img_false):
