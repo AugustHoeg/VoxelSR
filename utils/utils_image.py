@@ -650,11 +650,11 @@ def calculate_psnr_2D(img1, img2, border=0, eps=1e-10, max_psnr=100):
     img2 = img2.astype(np.float64)
     mse = np.mean((img1 - img2) ** 2)
 
-    mse = np.max(mse, eps)  # Prevent division by zero or log(0)
+    mse = max(mse, eps)  # Prevent division by zero or log(0)
 
     psnr = 20 * math.log10(1.0 / math.sqrt(mse))
 
-    return np.min(psnr, max_psnr)
+    return min(psnr, max_psnr)
 
 
 def calculate_psnr_3D(img1, img2, border=0):
