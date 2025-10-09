@@ -156,7 +156,8 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
     model.netG.eval()
     with torch.inference_mode():
         for i in range(0, N, batch_size):
-            print(f"Processing batch {i}-{min(i+batch_size, N)}/{N}")
+            if i % 10 == 0:
+                print(f"Processing batch {i}-{min(i+batch_size, N)}/{N}")
             batch_coords_lr = coords_lr[i:i+batch_size]
             batch_coords_hr = coords_hr[i:i+batch_size]
 
