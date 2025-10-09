@@ -12,6 +12,7 @@ class Dataset_VoDaSuRe_OME():
     def __init__(self, opt):
 
         self.synthetic = opt['dataset_opt']['synthetic']
+        print(f"Using synthetic LR images: {self.synthetic}")
 
         self.opt = opt
         self.patch_size_hr = opt['dataset_opt']['patch_size_hr']
@@ -33,22 +34,26 @@ class Dataset_VoDaSuRe_OME():
                 train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))
                 test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))
 
-            sampling_weights = {"HCP_1200": 2.0,
-                                "IXI":      1.0}
+            if "VoDaSuRe" in opt['dataset_opt']['datasets']:
+                train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
+                test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
 
-            group_pairs = {
-                "HCP_1200": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-                },
-                "IXI": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-                },
-            }
+            sampling_weights = {"HCP_1200": 1.0,
+                                "IXI":      1.0,
+                                "VoDaSuRe": 1.0}
+
+            group_pairs = {}
+            group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+
+            if self.synthetic:
+                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            else:
+                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
 
             store_type = {"HCP_1200": "LocalStore",
-                          "IXI":      "LocalStore"}
+                          "IXI":      "LocalStore",
+                          "VoDaSuRe": "LocalStore"}
 
         elif opt['cluster'] == "TITANS":
             self.data_path = ""

@@ -197,9 +197,15 @@ class ZarrIterableDataset(IterableDataset):
 
         worker_data = copy.deepcopy(self.dataset_dict)
         for name, dataset in self.dataset_dict.items():
-            paths = dataset['paths'][worker_id::num_workers]
+
+            # check number of paths in dataset
+            if len(dataset['paths']) < num_workers:
+                paths = dataset['paths']  # All paths to all workers
+            else:
+                paths = dataset['paths'][worker_id::num_workers]  # Distribute paths among workers
+
             if paths:
-                worker_data[name]['paths'] = dataset['paths'][worker_id::num_workers]
+                worker_data[name]['paths'] = paths
             else:
                 del worker_data[name]
                 continue
