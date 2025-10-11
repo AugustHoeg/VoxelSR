@@ -84,7 +84,7 @@ def write_metric_statistics(file_path, psnr_vals, ssim_vals, nrmse_vals, text=No
         file.write("AVERAGE SLICE-WISE NRSME: " + str(nrmse_slice_mean) + "+-" + str(ci_nrmse) + "\n")
 
 
-def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1):
+def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9):
 
     num_slices = img_H.shape[slice_dim]
 
@@ -105,8 +105,14 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1):
             E_slice = img_E[:, :, i]
 
         # Normalize to [0, 1]
-        E_slice = (E_slice - E_slice.min()) / (E_slice.max() - E_slice.min())
-        H_slice = (H_slice - H_slice.min()) / (H_slice.max() - H_slice.min())
+        E_min, E_max = E_slice.min(), E_slice.max()
+        H_min, H_max = H_slice.min(), H_slice.max()
+
+        if E_max - E_min > eps and H_max - H_min > eps:
+            E_slice = (E_slice - E_slice.min()) / (E_slice.max() - E_slice.min())
+            H_slice = (H_slice - H_slice.min()) / (H_slice.max() - H_slice.min())
+        else:
+            continue
 
         slice_psnr = calculate_psnr_2D(E_slice, H_slice, border=0)
         psnr_slice_list.append(slice_psnr)
@@ -176,8 +182,8 @@ def main(opt: DictConfig):
         for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
             group_text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
 
-            if "HR0" not in group_text:
-                continue  # skip group pairs that do not contain HR0
+            #if "HR0" not in group_text:
+            #    continue  # skip group pairs that do not contain HR0
             print(f"Group pair: {group_pair}")
 
             # Create metric lists
