@@ -311,7 +311,7 @@ class MTVNeXt(nn.Module):
                  pre_up_feats,
                  embed_dims,
                  patch_sizes,
-                 skip_dim,
+                 skip_dims,
                  drop_path_rate=0.0,
                  use_checkpoint=False,
                  upsample_method="nearest"):
@@ -333,26 +333,18 @@ class MTVNeXt(nn.Module):
 
         # Shallow feature extraction blocks (simple convs)
         self.sfe_blks = nn.ModuleList()
-        for level in range(num_levels):
-            input_feats = in_chans if level == 0 else shallow_feats[level-1]
-            shallow_feat = shallow_feats[level]
-            if level == num_levels - 1:
-                sfe_blk = nn.Sequential(
-                    nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.LeakyReLU(negative_slope=0.2, inplace=True),
-                    nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
-                )
-            else:
-                sfe_blk = nn.Sequential(
-                    nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True)
-                )
-            self.sfe_blks.append(sfe_blk)
+        sfe_blk = nn.Sequential(nn.Conv3d(in_chans, shallow_feats[0], kernel_size=3, stride=1, padding=1, bias=True))
+        self.sfe_blks.append(sfe_blk)
+        sfe_blk = nn.Sequential(nn.Conv3d(embed_dims[0], shallow_feats[1], kernel_size=3, stride=1, padding=1, bias=True))
+        self.sfe_blks.append(sfe_blk)
+        sfe_blk = nn.Sequential(nn.Conv3d(embed_dims[1], shallow_feats[2], kernel_size=3, stride=1, padding=1, bias=True))
+        self.sfe_blks.append(sfe_blk)
 
         # Patch embedding blocks (proj only)
         self.patch_embedding_blks = nn.ModuleList()
         for level in range(num_levels):
             self.patch_embedding_blks.append(
-                PatchEmbed3D(in_channels=shallow_feats[level],
+                PatchEmbed3D(in_channels=self.shallow_feats[level],
                              dim=self.embed_dims[level],
                              patch_size=patch_sizes[level],
                              method="proj",
@@ -361,12 +353,6 @@ class MTVNeXt(nn.Module):
         #
         # # dropout (kept for API)
         # self.pos_drop = nn.Dropout(p=0.0)
-
-        self.transition_layers = nn.ModuleList()
-        for level in range(num_levels):
-            self.transition_layers.append(
-                TransitionLayer(in_dim=self.shallow_feats[level], out_dim=self.embed_dims[level])
-            )
 
         self.LX_blocks = nn.ModuleList()
         cur = 0
@@ -377,7 +363,7 @@ class MTVNeXt(nn.Module):
             for _ in range(self.num_blks[level]):
                 blocks.append(
                     ConvNextGroup(dim=self.embed_dims[level],
-                                  skip_dim=skip_dim,
+                                  skip_dim=skip_dims[level],
                                   depth=self.blk_layers[level],
                                   dp_rates=dp,
                                   layer_scale_init_value=1e-6)
@@ -454,6 +440,7 @@ class MTVNeXt(nn.Module):
         prev_x = None
 
         for level in range(0, self.num_levels):
+
             # SFE
             LX = self.sfe_blks[level](LX)  # (B, shallow_feats[level], D, H, W)
 
@@ -472,7 +459,8 @@ class MTVNeXt(nn.Module):
 
             # Optionally crop next input image for the next level
             if level < self.num_levels - 1:
-                LX = self.crop_next(LX, level + 1)
+                # LX = self.crop_next(LX, level + 1)
+                LX = self.crop_next(LX_emb, level + 1)
 
         if self.use_checkpoint:
             final_feats = checkpoint.checkpoint(self.Final_blk, LX_emb)
@@ -512,13 +500,13 @@ if __name__ == "__main__":
     # small config for quick run
     context_sizes = [64, 48, 32]
     num_levels = len(context_sizes)
-    shallow_feats = [32, 64, 128]
+    shallow_feats = [16, 32, 64]
     pre_up_feats = [64, 64]
     num_blks = [1, 2, 3]
     blk_layers = [6, 6, 6]
-    patch_sizes = [3, 2, 1]
-    skip_dim = 64
-    embed_dims = [128, 128, 128]
+    patch_sizes = [1, 1, 1]
+    skip_dims = [4, 8, 64]
+    embed_dims = [32, 64, 256]
     up_factor = 2
     input_size = (H, W, D)
     use_checkpoint = True
@@ -535,7 +523,7 @@ if __name__ == "__main__":
                   pre_up_feats=pre_up_feats,
                   embed_dims=embed_dims,
                   patch_sizes=patch_sizes,
-                  skip_dim=skip_dim,
+                  skip_dims=skip_dims,
                   drop_path_rate=0.1,
                   use_checkpoint=use_checkpoint,
 
