@@ -12,7 +12,7 @@ class Dataset_VoDaSuRe_OME():
     def __init__(self, opt):
 
         self.synthetic = opt['dataset_opt']['synthetic']
-        print(f"Using synthetic LR images: {self.synthetic}")
+        print(f"Using synthetically downsampled LR images: {self.synthetic}")
 
         self.opt = opt
         self.patch_size_hr = opt['dataset_opt']['patch_size_hr']
@@ -123,32 +123,44 @@ class Dataset_VoDaSuRe_OME():
             #     },
             # }
 
-            group_pairs = {  # only synthetic
-                "HCP_1200": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}]
-                },
-                "IXI": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}]
-                },
-                "LITS": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}]
-                },
-                "CTSpine1K": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}]
-                },
-                "LIDC-IDRI": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}]
-                },
-                "VoDaSuRe": {
-                    "4": [{"H": "HR/0", "L": "HR/2"}],
-                    "2": [{"H": "HR/0", "L": "HR/1"}]
-                },
-            }
+            # group_pairs = {  # only synthetic
+            #     "HCP_1200": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}]
+            #     },
+            #     "IXI": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}]
+            #     },
+            #     "LITS": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}]
+            #     },
+            #     "CTSpine1K": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}]
+            #     },
+            #     "LIDC-IDRI": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}]
+            #     },
+            #     "VoDaSuRe": {
+            #         "4": [{"H": "HR/0", "L": "HR/2"}],
+            #         "2": [{"H": "HR/0", "L": "HR/1"}]
+            #     },
+            # }
+
+            group_pairs = {}
+            group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            group_pairs["LITS"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            group_pairs["CTSpine1K"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            group_pairs["LIDC-IDRI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+
+            if self.synthetic:
+                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            else:
+                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
 
             store_type = {"HCP_1200":  "LocalStore",
                           "IXI":       "LocalStore",
@@ -156,7 +168,6 @@ class Dataset_VoDaSuRe_OME():
                           "CTSpine1K": "LocalStore",
                           "LIDC-IDRI": "LocalStore",
                           "VoDaSuRe":  "LocalStore"}
-
 
         self.dataset_dict_train = {}
         self.dataset_dict_test = {}
