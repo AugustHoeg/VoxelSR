@@ -1060,7 +1060,7 @@ def test():
     "use_checkpoint": true  
     """
 
-    patch_size = 64
+    patch_size = 32
     up_factor = 2
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0

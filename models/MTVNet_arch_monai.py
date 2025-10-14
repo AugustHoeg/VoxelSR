@@ -1,5 +1,5 @@
 # --------------------------------------------------------
-# MTVNeXt
+# MTVNet (cleaned)
 # Written by August Høeg
 # --------------------------------------------------------
 import time
@@ -13,6 +13,42 @@ from torch import Tensor, nn
 from models.models_3D import SRBlock3D
 from utils.utils_3D_image import numel
 
+from monai.networks.nets.swin_unetr import SwinTransformerBlock
+
+
+def compute_mask(x_dims, window_size, shift_size):
+    '''
+    Computing region masks based on: "Liu et al.,
+    Swin Transformer: Hierarchical Vision Transformer using Shifted Windows
+    <https://arxiv.org/abs/2103.14030>"
+    https://github.com/microsoft/Swin-Transformer
+
+    :param x_dims:
+    :param ct_dims:
+    :param window_size:
+    :param ct_size:
+    :param shift_size:
+    :param ct_shift:
+    :param device:
+    :return:
+    '''
+
+    # Compute img mask for local tokens
+    cnt = 0
+    d, h, w = x_dims
+    img_mask = torch.zeros((1, d, h, w, 1))  # removed device=device
+    for d in slice(-window_size), slice(-window_size, -shift_size), slice(-shift_size, None):
+        for h in slice(-window_size), slice(-window_size, -shift_size), slice(-shift_size, None):
+            for w in slice(-window_size), slice(-window_size, -shift_size), slice(-shift_size, None):
+                img_mask[:, d, h, w, :] = cnt
+                cnt += 1
+
+    mask_windows = window_partition3D(img_mask, window_size)
+    mask_windows = mask_windows.squeeze(-1)
+    attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
+    attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
+
+    return attn_mask
 
 def drop_path(x: Tensor, drop_prob: float = 0.0, training: bool = False) -> Tensor:
     if drop_prob == 0.0 or not training:
@@ -64,124 +100,6 @@ class LayerNorm(nn.Module):
             x = (x - u) / torch.sqrt(s + self.eps)
             x = self.weight[:, None, None, None] * x + self.bias[:, None, None, None]
             return x
-
-class ConvNextBlock3D(nn.Module):
-    r"""ConvNeXt Block. There are two equivalent implementations:
-    (1) DwConv -> LayerNorm (channels_first) -> 1x1 Conv -> GELU -> 1x1 Conv; all in (N, C, H, W)
-    (2) DwConv -> Permute to (N, H, W, C); LayerNorm (channels_last) -> Linear -> GELU -> Linear; Permute back
-    We use (2) as we find it slightly faster in PyTorch
-
-    Args:
-        dim (int): Number of input channels.
-        drop_path (float): Stochastic depth rate. Default: 0.0
-        layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
-
-    Source: https://github.com/facebookresearch/ConvNeXt/blob/main/models/convnext.py
-    """
-
-    def __init__(self, dim, drop_path=0.0, layer_scale_init_value=1e-6):
-        super().__init__()
-        self.dwconv = nn.Conv3d(dim, dim, kernel_size=5, padding=2, groups=dim)  # depthwise conv
-        self.norm = LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
-        self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(4 * dim, dim)
-        self.gamma = (
-            nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
-            if layer_scale_init_value > 0
-            else None
-        )
-        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-
-    def forward(self, x, prev_x=None):
-        input = x
-        x = self.dwconv(x)
-        x = x.permute(0, 2, 3, 4, 1)  # (N, C, D, H, W) -> (N, D, H, W, C)
-        x = self.norm(x)
-        x = self.pwconv1(x)
-        x = self.act(x)
-        x = self.pwconv2(x)
-        if self.gamma is not None:
-            x = self.gamma * x
-        x = x.permute(0, 4, 1, 2, 3)  # (N, H, W, C) -> (N, C, H, W)
-
-        x = input + self.drop_path(x)
-        return x
-
-
-
-class ConvNextLayer(nn.Module):
-
-    r""" A basic ConvNeXt layer. We can modify this to implement other types of layers.
-    Args:
-        dim (int): Number of input channels.
-        depth (int): Number of blocks.
-        drop_path (float | list[float]): Stochastic depth rate. Default: 0.0
-        layer_scale_init_value (float): Init value for Layer Scale. Default: 1e-6.
-    """
-
-    def __init__(self, dim, depth, dp_rates, layer_scale_init_value):
-        super().__init__()
-
-        self.blocks = nn.ModuleList(
-            ConvNextBlock3D(dim, dp_rates[i], layer_scale_init_value) for i in range(depth)
-        )
-
-    def forward(self, x):
-        z = self.blocks[0](x)
-        for blk in self.blocks[1:]:
-            z = blk(z)
-
-        return z + x
-
-
-class ConvNextGroup(nn.Module):
-
-    def __init__(self, dim, skip_dim, depth, dp_rates, layer_scale_init_value):
-        super().__init__()
-
-        self.layers = nn.ModuleList()
-        self.compress_layers = nn.ModuleList()
-        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-
-        for layer_idx in range(depth):
-            channel_dim = dim + skip_dim * layer_idx
-            compress_dim = skip_dim if layer_idx < depth - 1 else dim
-
-            self.layers.append(
-                ConvNextBlock3D(channel_dim, dp_rates[layer_idx], layer_scale_init_value)
-            )
-
-            self.compress_layers.append(
-                nn.Conv3d(channel_dim, compress_dim, kernel_size=1, stride=1, padding=0)
-            )
-
-
-    def forward(self, x, prev_x=None):
-
-        x_input = x
-        next_x = x
-
-        ###### Dense-connected block structure ######
-        for i in range(len(self.layers) - 1):
-            prev_x = None if i > 0 else prev_x
-
-            # Main layer
-            x = self.layers[i](next_x, prev_x)
-
-            # Compress
-            x = self.act(self.compress_layers[i](x))
-
-            # Concatenate
-            next_x = torch.cat([next_x, x], 1)
-
-        # Final layer
-        x = self.layers[-1](next_x, prev_x)
-        x = self.act(self.compress_layers[-1](x))
-
-        x = 0.2 * x + x_input
-
-        return x
 
 
 class TransitionLayer(nn.Module):
@@ -276,7 +194,227 @@ class PatchEmbed3D(nn.Module):
         return x
 
 
-class MTVNeXt(nn.Module):
+class Mlp(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
+
+
+class WindowCrossAttention3D(nn.Module):
+    def __init__(self, dim, window_size, num_heads, q_bias=True, kv_bias=True, qk_scale=None, attn_drop=0.,
+                 proj_drop=0.,
+                 pretrained_window_size=[0, 0, 0]):
+
+        super().__init__()
+        self.dim = dim
+        self.window_size = window_size  # Wh, Ww
+        self.pretrained_window_size = pretrained_window_size
+        self.num_heads = num_heads
+
+        #### changed for cross-attention
+        head_dim = dim // num_heads
+        self.scale = qk_scale or head_dim ** -0.5
+        self.q = nn.Linear(dim, dim, bias=q_bias)
+        self.kv = nn.Linear(dim, dim * 2, bias=kv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        if q_bias:
+            self.q_bias = nn.Parameter(torch.zeros(dim))
+        else:
+            self.q_bias = None
+
+        if kv_bias:
+            self.v_bias = nn.Parameter(torch.zeros(dim))
+        else:
+            self.v_bias = None
+        self.softmax = nn.Softmax(dim=-1)
+        ####
+
+        self.logit_scale = nn.Parameter(torch.log(10 * torch.ones((num_heads, 1, 1))), requires_grad=True)
+
+
+    def forward(self, x1, x2):
+        """
+        Args:
+            x1: input features with shape of (num_windows*B, N, C)
+            x2: input features with shape of (num_windows*B, N, C)
+        """
+
+        B1, N1, C1 = x1.shape
+        B2, N2, C2 = x2.shape
+
+        # Compute q from x1
+        q = F.linear(input=x1, weight=self.q.weight, bias=self.q_bias)
+        q = q.reshape(B1, -1, self.num_heads, C1 // self.num_heads).permute(0, 2, 1, 3)
+
+        kv_bias = None
+        if self.v_bias is not None:
+            kv_bias = torch.cat((torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
+
+        # Compute k and v from x2
+        kv = F.linear(input=x2, weight=self.kv.weight, bias=kv_bias)
+        kv = kv.reshape(B2, -1, 2, self.num_heads, C2 // self.num_heads).permute(2, 0, 3, 1, 4)
+
+        k, v = kv[0], kv[1]  # make torchscript happy (cannot use tensor as tuple)
+
+        # cosine cross-attention
+        attn = (F.normalize(q, dim=-1) @ F.normalize(k, dim=-1).transpose(-2, -1))
+        logit_scale = torch.clamp(self.logit_scale, max=torch.log(torch.tensor(1. / 0.01).cuda())).exp()
+        attn = attn * logit_scale
+
+        relative_position_bias = 0  # TODO: Add relative position bias or other positional encoding
+        attn = attn + relative_position_bias
+
+        attn = self.softmax(attn)
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B1, N1, C1)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+    def extra_repr(self) -> str:
+        return f'dim={self.dim}, window_size={self.window_size}, ' \
+               f'pretrained_window_size={self.pretrained_window_size}, num_heads={self.num_heads}'
+
+    def flops(self, N):
+        # calculate flops for 1 window with token length of N
+        flops = 0
+        # qkv = self.qkv(x)
+        flops += N * self.dim * 3 * self.dim
+        # attn = (q @ k.transpose(-2, -1))
+        flops += self.num_heads * N * (self.dim // self.num_heads) * N
+        #  x = (attn @ v)
+        flops += self.num_heads * N * N * (self.dim // self.num_heads)
+        # x = self.proj(x)
+        flops += N * self.dim * self.dim
+        return flops
+
+
+
+class Group(nn.Module):
+
+    def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None, prev_dim=None):
+        super().__init__()
+
+        self.layers = nn.ModuleList()
+        self.compress_layers = nn.ModuleList()
+        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+        for layer_idx in range(depth):
+            channel_dim = dim + skip_dim * layer_idx
+            compress_dim = skip_dim if layer_idx < depth - 1 else dim
+
+            self.window_size = window_size
+            self.shift_size = window_size // 2 if (layer_idx % 2) == 1 else 0
+            self.num_heads = num_heads
+            self.mlp_ratio = mlp_ratio
+
+            self.layers.append(
+                    SwinTransformerBlock(
+                        dim=channel_dim,
+                        num_heads=self.num_heads,
+                        window_size=[self.window_size, self.window_size, self.window_size],
+                        shift_size=[self.shift_size, self.shift_size, self.shift_size],
+                        mlp_ratio=self.mlp_ratio,
+                        qkv_bias=True,
+                        drop=0.0,
+                        attn_drop=0.0,
+                        drop_path=dp_rates[layer_idx],
+                        norm_layer=nn.LayerNorm,
+                        use_checkpoint=False)
+            )
+
+            self.compress_layers.append(
+                nn.Conv3d(channel_dim, compress_dim, kernel_size=1, stride=1, padding=0)
+            )
+        Dp, Hp, Wp = [input_size // patch_size] * 3  # hardcoded for now
+        self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
+
+        if prev_dim is not None:
+            ######### Multi-level patch merge #########
+            self.mlp_match = Mlp(in_features=prev_dim,
+                                hidden_features=prev_dim * 1,
+                                out_features=dim)
+
+            self.cross_attn = WindowCrossAttention3D(dim,
+                                                     window_size=[self.window_size, self.window_size, self.window_size],
+                                                     num_heads=self.num_heads,
+                                                     q_bias=True,
+                                                     kv_bias=True,
+                                                     qk_scale=None,
+                                                     attn_drop=0.0,
+                                                     proj_drop=0.0)
+
+            self.cross_norm = nn.LayerNorm(dim)
+
+
+    def forward(self, x, prev_x=None):
+
+        B, C, D, H, W = x.shape
+
+        x_input = x
+        next_x = x
+
+        ###### Dense-connected block structure ######
+        for i in range(len(self.layers) - 1):
+
+            x = x.permute(0, 2, 3, 4, 1).contiguous()
+
+            prev_x = None if i > 0 else prev_x
+            if prev_x is not None:
+                prev_x = prev_x.permute(0, 2, 3, 4, 1).contiguous()  # B, D, H, W, C
+                prev_x = self.mlp_match(prev_x)
+
+                x = window_partition3D(x, window_size=self.window_size)
+                prev_x = window_partition3D(prev_x, window_size=self.window_size)
+
+                cross_attn_windows = self.cross_attn(x, prev_x)  # nW*B, window_size*window_size, C
+                x = x + self.cross_norm(cross_attn_windows)
+                x = window_reverse3D(x, window_size=self.window_size, dims=(B, D, H, W))
+
+            # Main layer
+            x = self.layers[i](x, self.mask_matrix)
+
+            x = x.permute(0, 4, 1, 2, 3).contiguous()  # B, C, D, H, W
+
+            # Compress
+            x = self.act(self.compress_layers[i](x))
+
+            # Concatenate
+            next_x = torch.cat([next_x, x], 1)
+            x = next_x
+
+        # Final layer
+        next_x = next_x.permute(0, 2, 3, 4, 1).contiguous()
+
+        x = self.layers[-1](next_x, prev_x)
+
+        x = x.permute(0, 4, 1, 2, 3).contiguous()
+
+        x = self.act(self.compress_layers[-1](x))
+
+        x = 0.2 * x + x_input
+
+        return x
+
+
+class MTVNet_monai(nn.Module):
     """
     Cleaned, minimal MTVNet that only takes used args.
 
@@ -310,6 +448,9 @@ class MTVNeXt(nn.Module):
                  shallow_feats,
                  pre_up_feats,
                  embed_dims,
+                 num_heads,
+                 mlp_ratio,
+                 attn_window_sizes,
                  patch_sizes,
                  skip_dims,
                  drop_path_rate=0.0,
@@ -330,23 +471,32 @@ class MTVNeXt(nn.Module):
         self.shallow_feats = shallow_feats
         self.pre_up_feats = pre_up_feats
         self.embed_dims = embed_dims
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
+        self.attn_window_sizes = attn_window_sizes
 
         # Shallow feature extraction blocks (simple convs)
         self.sfe_blks = nn.ModuleList()
-        sfe_blk = nn.Sequential(nn.Conv3d(in_chans, shallow_feats[0], kernel_size=3, stride=1, padding=1, bias=True))
-        self.sfe_blks.append(sfe_blk)
-        if num_levels > 1:
-            sfe_blk = nn.Sequential(nn.Conv3d(embed_dims[0], shallow_feats[1], kernel_size=3, stride=1, padding=1, bias=True))
-            self.sfe_blks.append(sfe_blk)
-        if num_levels > 2:
-            sfe_blk = nn.Sequential(nn.Conv3d(embed_dims[1], shallow_feats[2], kernel_size=3, stride=1, padding=1, bias=True))
+        for level in range(num_levels):
+            input_feats = in_chans if level == 0 else shallow_feats[level-1]
+            shallow_feat = shallow_feats[level]
+            if level == num_levels - 1:
+                sfe_blk = nn.Sequential(
+                    nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
+                    nn.LeakyReLU(negative_slope=0.2, inplace=True),
+                    nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
+                )
+            else:
+                sfe_blk = nn.Sequential(
+                    nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True)
+                )
             self.sfe_blks.append(sfe_blk)
 
         # Patch embedding blocks (proj only)
         self.patch_embedding_blks = nn.ModuleList()
         for level in range(num_levels):
             self.patch_embedding_blks.append(
-                PatchEmbed3D(in_channels=self.shallow_feats[level],
+                PatchEmbed3D(in_channels=shallow_feats[level],
                              dim=self.embed_dims[level],
                              patch_size=patch_sizes[level],
                              method="proj",
@@ -356,6 +506,12 @@ class MTVNeXt(nn.Module):
         # # dropout (kept for API)
         # self.pos_drop = nn.Dropout(p=0.0)
 
+        self.transition_layers = nn.ModuleList()
+        for level in range(num_levels):
+            self.transition_layers.append(
+                TransitionLayer(in_dim=self.shallow_feats[level], out_dim=self.embed_dims[level])
+            )
+
         self.LX_blocks = nn.ModuleList()
         cur = 0
         for level in range(num_levels):
@@ -364,16 +520,21 @@ class MTVNeXt(nn.Module):
             dp = dp_rates[cur: cur + self.blk_layers[level]]
             for _ in range(self.num_blks[level]):
                 blocks.append(
-                    ConvNextGroup(dim=self.embed_dims[level],
-                                  skip_dim=skip_dims[level],
-                                  depth=self.blk_layers[level],
-                                  dp_rates=dp,
-                                  layer_scale_init_value=1e-6)
+                    Group(input_size=context_sizes[level],
+                          patch_size=patch_sizes[level],
+                          dim=self.embed_dims[level],
+                          skip_dim=skip_dims[level],
+                          depth=self.blk_layers[level],
+                          window_size=self.attn_window_sizes[level],
+                          num_heads=self.num_heads,
+                          mlp_ratio=self.mlp_ratio,
+                          dp_rates=dp,
+                          prev_dim=self.embed_dims[level-1] if level > 0 else None)
                 )
             self.LX_blocks.append(blocks)
 
         self.Final_blk = nn.Sequential(
-            ConvNextBlock3D(self.embed_dims[-1], drop_path=0.0, layer_scale_init_value=1e-6)
+            nn.Identity()
         )
         if patch_sizes[-1] > 1:
             self.Final_blk.append(
@@ -442,7 +603,6 @@ class MTVNeXt(nn.Module):
         prev_x = None
 
         for level in range(0, self.num_levels):
-
             # SFE
             LX = self.sfe_blks[level](LX)  # (B, shallow_feats[level], D, H, W)
 
@@ -461,8 +621,7 @@ class MTVNeXt(nn.Module):
 
             # Optionally crop next input image for the next level
             if level < self.num_levels - 1:
-                # LX = self.crop_next(LX, level + 1)
-                LX = self.crop_next(LX_emb, level + 1)
+                LX = self.crop_next(LX, level + 1)
 
         if self.use_checkpoint:
             final_feats = checkpoint.checkpoint(self.Final_blk, LX_emb)
@@ -494,41 +653,30 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 32
+    img_size = 64
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).to(device)
     B, C, H, W, D = x.shape
 
     # small config for quick run
-    # context_sizes = [64, 48, 32]
-    # num_levels = len(context_sizes)
-    # shallow_feats = [8, 16, 64]
-    # pre_up_feats = [64, 64]
-    # num_blks = [1, 2, 3]
-    # blk_layers = [6, 6, 6]
-    # patch_sizes = [1, 1, 1]
-    # skip_dims = [4, 8, 64]
-    # embed_dims = [32, 64, 256]
-    # up_factor = 2
-    # input_size = (H, W, D)
-    # use_checkpoint = True
-
-    # small config for quick run
-    context_sizes = [32]
+    context_sizes = [64, 48, 32]
     num_levels = len(context_sizes)
-    shallow_feats = [128]
+    shallow_feats = [32, 64, 128]
     pre_up_feats = [64, 64]
-    num_blks = [3]
-    blk_layers = [6]
-    patch_sizes = [1]
-    skip_dims = [60]
-    embed_dims = [180]
+    num_blks = [1, 2, 3]
+    blk_layers = [6, 6, 6]
+    patch_sizes = [4, 3, 2]
+    skip_dims = [60, 60, 60]
+    embed_dims = [120, 180, 240]
+    num_heads = 4
+    mlp_ratio = 4
+    attn_window_sizes = [8, 8, 8]
     up_factor = 2
     input_size = (H, W, D)
     use_checkpoint = True
 
     # TODO: Add merge of features from previous network levels.
-    net = MTVNeXt(input_size=input_size,
+    net = MTVNet_monai(input_size=input_size,
                   up_factor=up_factor,
                   num_levels=num_levels,
                   context_sizes=context_sizes,
@@ -538,12 +686,14 @@ if __name__ == "__main__":
                   shallow_feats=shallow_feats,
                   pre_up_feats=pre_up_feats,
                   embed_dims=embed_dims,
+                  num_heads=num_heads,
+                  mlp_ratio=mlp_ratio,
+                  attn_window_sizes=attn_window_sizes,
                   patch_sizes=patch_sizes,
                   skip_dims=skip_dims,
                   drop_path_rate=0.1,
                   use_checkpoint=use_checkpoint,
-
-                 upsample_method="nearest",).to(device)
+                  upsample_method="nearest",).to(device)
     net.train()
 
     print("Number of parameters", numel(net, only_trainable=True))
@@ -556,10 +706,10 @@ if __name__ == "__main__":
 
     start = time.time()
     out = net(x)
+    loss = loss_func(out, x_hr)
     stop = time.time()
     print("Time elapsed:", stop - start)
 
-    loss = loss_func(out, x_hr)
     print("output shape:", out.shape)
     loss.backward()
 

@@ -142,12 +142,11 @@ def test():
 
     # Forward pass
     start = time.time()
-    with torch.cuda.amp.autocast(dtype=torch.bfloat16):
-        out = net(x)
-        loss = loss_func(out, x_hr)
+    out = net(x)
     stop = time.time()
     print("Time elapsed:", stop - start)
 
+    loss = loss_func(out, x_hr)
     loss.backward()
 
     print("Output shape:", out.shape)

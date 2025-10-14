@@ -184,48 +184,90 @@ def define_G(opt, mode='train'):
 
     elif model_architecture == 'MTVNet':
 
-        if opt['model_opt']['netG']['ct_size'] == 0:
-            print("Using MTVNet without Carrier tokens!")
-            from models.MTVNet_no_CT import MTVNet_no_CT as net
-        else:
-            from models.MTVNet_arch import MTVNet as net
-
         H = opt['dataset_opt']['patch_size']
         W = opt['dataset_opt']['patch_size']
         D = opt['dataset_opt']['patch_size']
         input_size = (H, W, D)
 
-        netG = net(input_size=input_size,
-                  up_factor=opt['up_factor'],
-                  num_levels=opt_net['num_levels'],
-                  context_sizes=opt_net['context_sizes'],
-                  num_blks=opt_net['num_blks'],
-                  blk_layers=opt_net['blk_layers'],
-                  in_chans=opt_net['in_channels'],
-                  shallow_feats=opt_net['shallow_feats'],
-                  pre_up_feats=opt_net['pre_up_feats'],
-                  ct_embed_dims=opt_net['ct_embed_dims'],  # [512, 256, 128]
-                  embed_dims=opt_net['embed_dims'],  # [512, 256, 128]
-                  ct_size=opt_net['ct_size'],
-                  ct_pool_method=opt_net['ct_pool_method'],
-                  patch_sizes=opt_net['patch_sizes'],
-                  num_heads=opt_net['num_heads'],
-                  attn_window_sizes=opt_net['attn_window_sizes'],
-                  enable_shift=opt_net['enable_shift'],
-                  mlp_ratio=4.,
-                  qkv_bias=True,
-                  drop=0.,
-                  attn_drop=0.,
-                  drop_path=opt_net['drop_path'] if mode == 'train' else 0.0,
-                  token_upsample_method=opt_net["token_upsample_method"],
-                  upsample_method=opt_net["upsample_method"],
-                  use_checkpoint=opt_net["use_checkpoint"],
-                  layer_type=opt_net["layer_type"],  # fastervit_without_ct, swin, fastervit
-                  enable_ape_ct=opt_net["enable_ape_ct"],
-                  enable_ape_x=opt_net["enable_ape_x"],
-                  enable_ct_rpb=opt_net["enable_ct_rpb"],
-                  enable_conv_skip=opt_net["enable_conv_skip"],
-                  patch_pe_method=opt_net["patch_pe_method"],)
+        if 'use_monai' in opt_net and opt_net['use_monai']:
+            print("Using MTVNet monai version")
+            from models.MTVNet_arch_monai import MTVNet_monai as net
+            netG = net(input_size=input_size,
+                       up_factor=opt['up_factor'],
+                       num_levels=opt_net['num_levels'],
+                       context_sizes=opt_net['context_sizes'],
+                       num_blks=opt_net['num_blks'],
+                       blk_layers=opt_net['blk_layers'],
+                       in_chans=opt_net['in_channels'],
+                       shallow_feats=opt_net['shallow_feats'],
+                       pre_up_feats=opt_net['pre_up_feats'],
+                       embed_dims=opt_net['embed_dims'],
+                       num_heads=opt_net['num_heads'],
+                       attn_window_sizes=opt_net['attn_window_sizes'],
+                       patch_sizes=opt_net['patch_sizes'],
+                       skip_dims=opt_net['skip_dims'],
+                       mlp_ratio=opt_net['mlp_ratio'],
+                       drop_path_rate=opt_net['drop_path'] if mode == 'train' else 0.0,
+                       use_checkpoint=opt_net['use_checkpoint'],
+                       upsample_method=opt_net['upsample_method'])
+
+        elif 'use_convnext' in opt_net and opt_net['use_convnext']:
+            print("Using MTVNet ConvNext version")
+            from models.MTVNeXt_arch_crop_merge import MTVNeXt as net
+            netG = net(input_size=input_size,
+                       up_factor=opt['up_factor'],
+                       num_levels=opt_net['num_levels'],
+                       context_sizes=opt_net['context_sizes'],
+                       num_blks=opt_net['num_blks'],
+                       blk_layers=opt_net['blk_layers'],
+                       in_chans=opt_net['in_channels'],
+                       shallow_feats=opt_net['shallow_feats'],
+                       pre_up_feats=opt_net['pre_up_feats'],
+                       embed_dims=opt_net['embed_dims'],
+                       patch_sizes=opt_net['patch_sizes'],
+                       skip_dims=opt_net['skip_dims'],
+                       drop_path_rate=opt_net['drop_path'] if mode == 'train' else 0.0,
+                       use_checkpoint=opt_net['use_checkpoint'],
+                       upsample_method=opt_net['upsample_method'])
+
+        else:
+            if opt['model_opt']['netG']['ct_size'] == 0:
+                print("Using MTVNet without Carrier tokens!")
+                from models.MTVNet_no_CT import MTVNet_no_CT as net
+            else:
+                from models.MTVNet_arch import MTVNet as net
+
+            netG = net(input_size=input_size,
+                      up_factor=opt['up_factor'],
+                      num_levels=opt_net['num_levels'],
+                      context_sizes=opt_net['context_sizes'],
+                      num_blks=opt_net['num_blks'],
+                      blk_layers=opt_net['blk_layers'],
+                      in_chans=opt_net['in_channels'],
+                      shallow_feats=opt_net['shallow_feats'],
+                      pre_up_feats=opt_net['pre_up_feats'],
+                      ct_embed_dims=opt_net['ct_embed_dims'],  # [512, 256, 128]
+                      embed_dims=opt_net['embed_dims'],  # [512, 256, 128]
+                      ct_size=opt_net['ct_size'],
+                      ct_pool_method=opt_net['ct_pool_method'],
+                      patch_sizes=opt_net['patch_sizes'],
+                      num_heads=opt_net['num_heads'],
+                      attn_window_sizes=opt_net['attn_window_sizes'],
+                      enable_shift=opt_net['enable_shift'],
+                      mlp_ratio=4.,
+                      qkv_bias=True,
+                      drop=0.,
+                      attn_drop=0.,
+                      drop_path=opt_net['drop_path'] if mode == 'train' else 0.0,
+                      token_upsample_method=opt_net["token_upsample_method"],
+                      upsample_method=opt_net["upsample_method"],
+                      use_checkpoint=opt_net["use_checkpoint"],
+                      layer_type=opt_net["layer_type"],  # fastervit_without_ct, swin, fastervit
+                      enable_ape_ct=opt_net["enable_ape_ct"],
+                      enable_ape_x=opt_net["enable_ape_x"],
+                      enable_ct_rpb=opt_net["enable_ct_rpb"],
+                      enable_conv_skip=opt_net["enable_conv_skip"],
+                      patch_pe_method=opt_net["patch_pe_method"],)
 
     # ----------------------------------------
     # ArSSR

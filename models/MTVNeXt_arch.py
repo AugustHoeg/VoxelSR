@@ -538,8 +538,7 @@ if __name__ == "__main__":
                   skip_dim=skip_dim,
                   drop_path_rate=0.1,
                   use_checkpoint=use_checkpoint,
-
-                 upsample_method="nearest",).to(device)
+                  upsample_method="nearest",).to(device)
     net.train()
 
     print("Number of parameters", numel(net, only_trainable=True))

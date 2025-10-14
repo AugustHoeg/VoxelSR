@@ -1647,7 +1647,7 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
-    img_size = 32  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
+    img_size = 64  # 48*2  # 48  # Should ideally be divisible by the patch_size*window_size
     print("image size: ", img_size)
     x = torch.randn((1, 1, img_size, img_size, img_size)).cuda()
     B, C, H, W, D = x.shape
@@ -1677,17 +1677,17 @@ if __name__ == "__main__":
     # x_out = window_reverse3D(attn_windows, attn_window_size, int(H/patch_size), int(W/patch_size), int(D/patch_size)).to("cuda")  # B H' W' C
     # print("x_out: ", x_out.shape)
 
-    context_sizes = [32]
+    context_sizes = [64, 48, 32]
     num_levels = len(context_sizes)  # 3
-    shallow_feats = [128]  # 128 normally
+    shallow_feats = [32, 64, 128]  # 128 normally
     pre_up_feats = [64, 64]
-    num_blks = [1]  # [1, 1, 3]  # [6, 6, 6]
-    blk_layers = [3]  # Number of transformer layers per block in each level
-    patch_sizes = [2]  # [16, 8, 2]
+    num_blks = [1, 2, 3]  # [1, 1, 3]  # [6, 6, 6]
+    blk_layers = [6, 6, 6]  # Number of transformer layers per block in each level
+    patch_sizes = [4, 3, 2]  # [16, 8, 2]
     ct_size = 4
     ct_pool_method = "conv"
-    ct_embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
-    embed_dims = [128, 128, 128]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    ct_embed_dims = [256, 256, 256]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
+    embed_dims = [256, 256, 256]  # 128 normally. Old model: [512, 128, 64]  # [512, 128, 64]
     attn_window_sizes = [8, 8, 8]  # [4, 4, 4]
     num_heads = 4
     enable_ape_ct = True
@@ -1704,7 +1704,7 @@ if __name__ == "__main__":
     # TODO: implement overlapping patches
     overlap_patches = False
 
-    up_factor = 4
+    up_factor = 2
 
     input_size = (H, W, D)
     net = MTVNet_no_CT(input_size=input_size, up_factor=up_factor, num_levels=num_levels, context_sizes=context_sizes, num_blks=num_blks,

@@ -1,0 +1,27 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: plain
+model_architecture: MTVNet
+netG:
+
+  net_type: MTVNet
+  description: "Mapping using Transformers for Volumes – Network for Super-Resolution with Long-Range Interactions"
+
+  use_convnext: true
+
+  in_channels: 1
+  shallow_feats: [ 128 ]
+  pre_up_feats: [ 64, 64 ]
+  num_levels: 1
+  context_sizes: [ 32 ]
+  num_blks: [ 3 ]
+  blk_layers: [ 3 ]  # [6, 6, 6]
+  embed_dims: [ 240 ]
+  patch_sizes: [ 1 ]
+  skip_dims: [ 60 ]
+  drop_path: 0.1
+  upsample_method: nearest
+  use_checkpoint: true
+
+  init_type: kaiming_normal
+  init_bn_type: uniform   # "uniform" | "constant"
+  init_gain: 0.1
