@@ -229,7 +229,8 @@ def main(opt: DictConfig):
                     img_L = z[group_pair["L"]]
                     img_H = z[group_pair["H"]]
 
-                    img_L = np.array(img_L).reshape(1, *img_L.shape)
+                    img_L = np.array(img_L)
+                    img_L = np.reshape(img_L, (1, *img_L.shape))
                     img_L = torch.from_numpy(img_L)
 
                     img_E = run_strided_inference(
