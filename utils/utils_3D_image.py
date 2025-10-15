@@ -124,9 +124,12 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
     if overlap_mode == "mean":
         weight[weight == 0] = 1
 
-    img_E = (img_E / weight).numpy()  # Normalize data by weights
-    img_E = np.clip(img_E, 0.0, 1.0)  # Clip to [0, 1]
-    img_E = (img_E * 65535).astype(np.uint16)  # Scale to uint16
+    img_E /= weight  # Normalize data by weights
+    img_E = img_E.numpy()  # Convert to numpy array
+    np.clip(img_E, 0.0, 1.0, out=img_E)  # Clip to [0, 1]
+
+    img_E *= 65535  # Scale to [0, 65535]
+    img_E = img_E.astype(np.uint16)  # Scale to uint16
 
     return img_E
 
