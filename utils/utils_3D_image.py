@@ -61,7 +61,11 @@ def get_hann_window(patch_size):
         hann_window_3d = hann_window_3d * hann_window_1d
     return hann_window_3d
 
-def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_mode="hann"):
+def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
+
+    global_min = 0
+    global_max = 65535
+
     C, D, H, W = img_L.shape
     size_hr = size_lr * f
     stride = size_lr - border
@@ -72,7 +76,7 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
     coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
     N = coords_lr.shape[0]
 
-    patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=img_L.dtype)
+    patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=torch.float32)
 
     if overlap_mode == "hann":
         hann_window = get_hann_window((size_hr, size_hr, size_hr))
@@ -89,29 +93,41 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
             for j, (z, y, x) in enumerate(batch_coords_lr):
                 patch = torch.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
                 data_L = img_L[:, z:z+size_lr, y:y+size_lr, x:x+size_lr]  # Extract data
+
                 patch[:, :data_L.shape[1], :data_L.shape[2], :data_L.shape[3]] = data_L  # Fill patch with data
                 patch_batch[j] = patch  # Fill batch with patch
 
-            #upsampled_batch = np.ones((batch_size, C, size_hr, size_hr, size_hr))  # dummy initialization
-            model.L = patch_batch.to(model.device)
-            model.netG_forward()
-            upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
+            patch_batch = patch_batch.float()  # Ensure data is float32
+            patch_batch = (patch_batch - global_min) / (global_max - global_min)
+
+            if model_input_type == '2D':
+                upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
+            else:
+                model.L = patch_batch.to(model.device)
+                model.netG_forward()
+                upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D*f) - z_hr
                 dy = min(y_hr+size_hr, H*f) - y_hr
                 dx = min(x_hr+size_hr, W*f) - x_hr
+                patch_E = upsampled_batch[j, :, :dz, :dy, :dx].numpy()
+
                 if overlap_mode == "hann":
-                    img_E[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += upsampled_batch[j, :, :dz, :dy, :dx] * hann_window[:, :dz, :dy, :dx]
-                    weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += hann_window[:, :dz, :dy, :dx]
+                    window = hann_window[:, :dz, :dy, :dx].numpy()
+                    img_E[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += patch_E * window
+                    weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += window
                 elif overlap_mode == "mean":
-                    img_E[:, z_hr:z_hr + dz, y_hr:y_hr + dy, x_hr:x_hr + dx] += upsampled_batch[j, :, :dz, :dy, :dx]
+                    img_E[:, z_hr:z_hr + dz, y_hr:y_hr + dy, x_hr:x_hr + dx] += patch_E
                     weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += 1
-                #weight[:, z_hr:z_hr+size_hr, y_hr:y_hr+size_hr, x_hr:x_hr+size_hr] += 1
 
     if overlap_mode == "mean":
         weight[weight == 0] = 1
-    img_E /= weight
+
+    img_E = (img_E / weight).numpy()  # Normalize data by weights
+    img_E = np.clip(img_E, 0.0, 1.0)  # Clip to [0, 1]
+    img_E = (img_E * 65535).astype(np.uint16)  # Scale to uint16
+
     return img_E
 
 

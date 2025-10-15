@@ -19,7 +19,7 @@ from tqdm import tqdm
 import config
 from utils import utils_3D_image
 from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nrmse_2D
-from utils.utils_3D_image import run_strided_inference_zarr
+from utils.utils_3D_image import run_strided_inference_zarr, run_strided_inference
 from utils.load_options import load_options_from_experiment_id
 
 def get_mean_and_ci(data_sequence, confidence=0.95):
@@ -94,6 +94,9 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9):
     nrmse_slice_list = []
 
     for i in range(0, num_slices, slice_step):
+        if i % 100 == 0:
+            print(f"Evaluating slice {i}/{num_slices}")
+
         if slice_dim == 0:
             H_slice = img_H[i, :, :]
             E_slice = img_E[i, :, :]
@@ -145,6 +148,10 @@ def main(opt: DictConfig):
     print("Cuda current device", torch.cuda.current_device())
     print("Cuda device name", torch.cuda.get_device_name(0))
 
+    # Set inference mode: 'zarr' or 'in_memory'
+    inference_mode = 'in_memory'  # 'zarr' or 'in_memory'
+    print(f"Running inference with mode: {inference_mode}")
+
     from models.select_model import define_Model
     model = define_Model(opt, mode='test')
     model.init_test(experiment_id)
@@ -195,28 +202,60 @@ def main(opt: DictConfig):
                 print(f"Processing image {image_idx + 1}/{len(paths)}: {zarr_path}")
                 out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
-                run_strided_inference_zarr(
-                    model=model,
-                    zarr_path=zarr_path,
-                    out_path=out_path,
-                    group_pair=group_pair,
-                    f=opt['up_factor'],
-                    size_lr=opt.dataset_opt.patch_size,
-                    border=4,
-                    batch_size=batch_size,
-                    overlap_mode="hann",
-                    model_input_type=opt['input_type'],
-                )
+                if inference_mode == 'zarr':
+                    run_strided_inference_zarr(
+                        model=model,
+                        zarr_path=zarr_path,
+                        out_path=out_path,
+                        group_pair=group_pair,
+                        f=opt['up_factor'],
+                        size_lr=opt.dataset_opt.patch_size,
+                        border=4,
+                        batch_size=batch_size,
+                        overlap_mode="hann",
+                        model_input_type=opt['input_type'],
+                    )
 
-                zarr_H = zarr.open(zarr_path, mode='r')
-                img_H = zarr_H[group_pair["H"]]
-                img_L = zarr_H[group_pair["L"]]
+                    zarr_H = zarr.open(zarr_path, mode='r')
+                    img_H = zarr_H[group_pair["H"]]
+                    img_L = zarr_H[group_pair["L"]]
 
-                zarr_E = zarr.open(out_path, mode='r')
-                img_E = zarr_E['SR/0']  # Always read the top level
+                    zarr_E = zarr.open(out_path, mode='r')
+                    img_E = zarr_E['SR/0']  # Always read the top level
+
+                elif inference_mode == 'in_memory':
+                    # Open LR zarr and convert to numpy array
+                    z = zarr.open(zarr_path, mode='r')
+                    img_L = z[group_pair["L"]]
+                    img_L = np.array(img_L).reshape(1, *img_L.shape)
+                    img_L = torch.from_numpy(img_L)
+
+                    img_E = run_strided_inference(
+                        model=model,
+                        img_L=img_L,
+                        f=opt['up_factor'],
+                        size_lr=opt.dataset_opt.patch_size,
+                        border=4,
+                        batch_size=batch_size,
+                        overlap_mode="hann",
+                        model_input_type=opt['input_type']
+                    )
+                    img_L = img_L[0]  # assumes single channel dimension
+                    img_E = img_E[0]  # assumes single channel dimension
+
+                    zarr_H = zarr.open(zarr_path, mode='r')
+                    img_H = zarr_H[group_pair["H"]]
+                    img_H = np.array(img_H)
+
+                else:
+                    raise ValueError(f"Inference mode {inference_mode} not recognized.")
 
                 slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
+
+                start = time.time()
                 psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=slice_step)
+                stop = time.time()
+                print("Time elapsed for full sample evaluation:", stop - start)
 
                 sample_psnr = np.mean(psnr_slice_list)
                 sample_ssim = np.mean(ssim_slice_list)
