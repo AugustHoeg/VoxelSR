@@ -323,7 +323,6 @@ class Group(nn.Module):
             self.window_size = window_size
             self.shift_size = window_size // 2 if (layer_idx % 2) == 1 else 0
             self.num_heads = num_heads
-            self.mlp_ratio = mlp_ratio
 
             self.layers.append(
                     SwinTransformerBlock(
@@ -331,7 +330,7 @@ class Group(nn.Module):
                         num_heads=self.num_heads,
                         window_size=[self.window_size, self.window_size, self.window_size],
                         shift_size=[self.shift_size, self.shift_size, self.shift_size],
-                        mlp_ratio=self.mlp_ratio,
+                        mlp_ratio=mlp_ratio,
                         qkv_bias=True,
                         drop=0.0,
                         attn_drop=0.0,
@@ -343,6 +342,10 @@ class Group(nn.Module):
             self.compress_layers.append(
                 nn.Conv3d(channel_dim, compress_dim, kernel_size=1, stride=1, padding=0)
             )
+
+            if layer_idx % 2 == 1:
+                mlp_ratio = max(1, mlp_ratio // 2)
+
         Dp, Hp, Wp = [input_size // patch_size] * 3  # hardcoded for now
         self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
 

@@ -14,7 +14,7 @@ netG:
   num_levels: 3
   context_sizes: [ 64, 48, 32 ]
   num_blks: [ 1, 2, 3 ]
-  blk_layers: [ 3, 3, 3 ]  # [6, 6, 6]
+  blk_layers: [ 6, 6, 6 ]  # [6, 6, 6]
   embed_dims: [120, 180, 240]
   patch_sizes: [ 4, 3, 2 ]
   skip_dims: [ 60, 60, 60 ]
