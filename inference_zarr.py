@@ -227,6 +227,8 @@ def main(opt: DictConfig):
                     # Open LR zarr and convert to numpy array
                     z = zarr.open(zarr_path, mode='r')
                     img_L = z[group_pair["L"]]
+                    img_H = z[group_pair["H"]]
+
                     img_L = np.array(img_L).reshape(1, *img_L.shape)
                     img_L = torch.from_numpy(img_L)
 
@@ -243,9 +245,8 @@ def main(opt: DictConfig):
                     img_L = img_L[0]  # assumes single channel dimension
                     img_E = img_E[0]  # assumes single channel dimension
 
-                    zarr_H = zarr.open(zarr_path, mode='r')
-                    img_H = zarr_H[group_pair["H"]]
-                    img_H = np.array(img_H)
+                    print("HR shape:", img_H.shape, "LR shape:", img_L.shape, "SR shape:", img_E.shape)
+                    # img_H = np.array(img_H)
 
                 else:
                     raise ValueError(f"Inference mode {inference_mode} not recognized.")
