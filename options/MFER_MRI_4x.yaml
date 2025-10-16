@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
+up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
@@ -21,7 +21,7 @@ run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -31,7 +31,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: MFER_MRI_2x_VoDaSuRe_OME_ID003100  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
@@ -56,8 +56,8 @@ dataset_opt:
   datasets: [LITS, LIDC-IDRI, CTSpine1K] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 16
+    dataloader_batch_size: 6
+    num_load_workers: 18
     persist_workers: true
     pin_memory: false
 
