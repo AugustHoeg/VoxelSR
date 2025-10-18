@@ -45,7 +45,7 @@ train_opt:
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 5
+  G_optimizer_clipgrad: 2
   G_warmup_steps: 0  # new
 
 # Overwrite default dataset parameters
