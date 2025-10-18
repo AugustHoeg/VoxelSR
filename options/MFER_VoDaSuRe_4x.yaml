@@ -1,0 +1,82 @@
+defaults:
+  - train_opt: train_VoDaSuRe          # Default training config
+  - dataset_opt: VoDaSuRe_OME       # Default dataset config
+  - model_opt: MFER              # Default model config
+  - _self_  # Ensure compliance with Hydra 1.1
+
+# Main configuration
+task: superresolution
+input_type: 3D # Input type, 2D or 3D
+up_factor: 2  # upscaling factor
+
+# Profile
+run_profile: false
+
+# WandB parameters
+wandb_mode: online
+wandb_entity: aulho
+wandb_project: ${dataset_opt.name}_DOWN_${up_factor}x # <--- change project
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+run_name: ${model_opt.model_architecture}_000
+note: Note
+
+# GPU configuration
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
+gpu_ids: [0]
+dist: false
+cluster: DTU_HPC # DTU_HPC or TITANS
+
+save_model: true  # flag to save model
+save_time: 36  # Backup save of model after 35 hours
+
+path:
+  root: superresolution
+  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_netE: null
+
+# Overwrite default training parameters
+train_opt:
+  iterations: 100000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
+  num_accum_steps_G: 1
+  G_optimizer_lr: 2e-4
+  G_optimizer_wd: 0
+  G_optimizer_clipgrad: 10
+  G_warmup_steps: 0  # new
+
+# Overwrite default dataset parameters
+dataset_opt:
+  synthetic: true
+  patch_size: 32
+
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+
+  train_dataloader_params:
+    dataloader_batch_size: 16
+    num_load_workers: 16
+    persist_workers: true
+    pin_memory: false
+
+  test_dataloader_params:
+    dataloader_batch_size: 4
+    num_load_workers: 4
+    persist_workers: true
+    pin_memory: false
+
+# Hydra configuration
+hydra:
+  run:
+    dir: .  # Prevents Hydra from changing the working directory
+  job:
+    chdir: False  # Prevents changing working directory
+  output_subdir: null  # Prevents automatic output directory creation
+  sweep:
+    dir: .  # Keeps sweep results in the current directory
+  job_logging:
+    disable_existing_loggers: False  # Allows you to control logging manually
+
+#config_path: ${hydra:runtime.config_sources}
