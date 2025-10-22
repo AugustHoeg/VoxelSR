@@ -15,7 +15,7 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_REG_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_DOWN_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_000
 note: Note
@@ -50,7 +50,7 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: false
+  synthetic: true
   patch_size: 128 # Change this to 96 for MTVNeXt L3, 64 for L2 and 32 for L1
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
