@@ -51,7 +51,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 96 # Change this to 96 for MTVNeXt L3, 64 for L2 and 32 for L1
+  patch_size: 128 # Change this to 96 for MTVNeXt L3, 64 for L2 and 32 for L1
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
