@@ -158,19 +158,20 @@ class ConvNextGroup(nn.Module):
             )
 
 
-    def forward(self, x):
+    def forward(self, x, prev_x=None):
 
         x_input = x
         next_x = x
 
         ###### Dense-connected block structure ######
         for i in range(len(self.layers) - 1):
+            prev_x = None if i > 0 else prev_x
 
             # Main layer
             if self.use_checkpoint and i % 2 == 1:
-                x = checkpoint.checkpoint(self.layers[i], next_x)
+                x = checkpoint.checkpoint(self.layers[i], next_x, prev_x)
             else:
-                x = self.layers[i](next_x)
+                x = self.layers[i](next_x, prev_x)
 
             # Compress
             x = self.act(self.compress_layers[i](x))
@@ -179,7 +180,7 @@ class ConvNextGroup(nn.Module):
             next_x = torch.cat([next_x, x], 1)
 
         # Final layer
-        x = self.layers[-1](next_x)
+        x = self.layers[-1](next_x, prev_x)
         x = self.act(self.compress_layers[-1](x))
 
         x = 0.2 * x + x_input
@@ -335,13 +336,21 @@ class MTVNeXt(nn.Module):
         self.embed_dims = embed_dims
 
         # Shallow feature extraction blocks (simple convs)
-        self.sfe_blk = nn.Conv3d(in_chans, shallow_feats[0], kernel_size=3, stride=1, padding=1, bias=True)
+        self.sfe_blks = nn.ModuleList()
+        sfe_blk = nn.Sequential(nn.Conv3d(in_chans, shallow_feats[0], kernel_size=3, stride=1, padding=1, bias=True))
+        self.sfe_blks.append(sfe_blk)
+        if num_levels > 1:
+            sfe_blk = nn.Sequential(nn.Conv3d(shallow_feats[0], shallow_feats[1], kernel_size=3, stride=1, padding=1, bias=True))
+            self.sfe_blks.append(sfe_blk)
+        if num_levels > 2:
+            sfe_blk = nn.Sequential(nn.Conv3d(shallow_feats[1], shallow_feats[2], kernel_size=3, stride=1, padding=1, bias=True))
+            self.sfe_blks.append(sfe_blk)
 
         # Patch embedding blocks (proj only)
         self.patch_embedding_blks = nn.ModuleList()
         for level in range(num_levels):
             self.patch_embedding_blks.append(
-                PatchEmbed3D(in_channels=self.shallow_feats[0] if level == 0 else self.embed_dims[level - 1],
+                PatchEmbed3D(in_channels=self.shallow_feats[level],
                              dim=self.embed_dims[level],
                              patch_size=patch_sizes[level],
                              method="proj",
@@ -435,29 +444,30 @@ class MTVNeXt(nn.Module):
         """
 
         LX = x  # image-space features (B, C_img, D, H, W)
-
-        # SFE
-        LX = self.sfe_blk(LX)  # (B, shallow_feats[level], D, H, W)
+        prev_x = None
 
         for level in range(0, self.num_levels):
 
+            # SFE
+            LX = self.sfe_blks[level](LX)  # (B, shallow_feats[level], D, H, W)
+
             # Patch embedding
             LX_emb = self.patch_embedding_blks[level](LX)
-            LX_emb_skip = LX_emb  # store for skip connection
 
             # Pass through LX blocks (placeholder identity blocks)
             for i, blk in enumerate(self.LX_blocks[level]):
                 if self.use_checkpoint:
-                    LX_emb = checkpoint.checkpoint(blk, LX_emb)
+                    LX_emb = checkpoint.checkpoint(blk, LX_emb, prev_x)
                 else:
-                    LX_emb = blk(LX_emb)
+                    LX_emb = blk(LX_emb, prev_x)
 
-            LX_emb = LX_emb + LX_emb_skip  # skip connection
+                if i == self.num_blks[level] - 1 and level != self.num_levels - 1:
+                    prev_x = LX_emb
 
             # Optionally crop next input image for the next level
             if level < self.num_levels - 1:
-                # LX = self.crop_next(LX, level + 1)  # Use this to crop input image for next level
-                LX = self.crop_next(LX_emb, level + 1)  # Use this to crop embedded features for next level
+                LX = self.crop_next(LX, level + 1)  # Use this to crop input image for next level
+                # LX = self.crop_next(LX_emb, level + 1)  # Use this to crop embedded features for next level
 
         if self.use_checkpoint:
             final_feats = checkpoint.checkpoint(self.Final_blk, LX_emb)
@@ -465,7 +475,10 @@ class MTVNeXt(nn.Module):
             final_feats = self.Final_blk(LX_emb)
 
         # final_feats: use highest-level image features
-        out = self.lrelu(self.conv_image(final_feats))  # image-space conv + act
+        final_feats = self.lrelu(self.conv_image(final_feats))  # image-space conv + act
+
+        # Long skip connection
+        out = LX + final_feats
 
         # Upsampling
         if self.up_factor == 2:
@@ -492,15 +505,15 @@ if __name__ == "__main__":
     B, C, H, W, D = x.shape
 
     # small config for quick run
-    context_sizes = [64, 48, 32]
+    context_sizes = [96, 64, 32]
     num_levels = len(context_sizes)
-    shallow_feats = [32]
+    shallow_feats = [32, 64, 128]
     pre_up_feats = [64, 64]
     num_blks = [1, 3, 6]
-    blk_layers = [3, 4, 6]
-    patch_sizes = [1, 1, 1]
+    blk_layers = [6, 6, 6]
+    patch_sizes = [3, 2, 1]
     skip_dims = [20, 40, 60]
-    embed_dims = [60, 120, 200]
+    embed_dims = [200, 200, 200]
     up_factor = 2
     input_size = (H, W, D)
     use_checkpoint = True
