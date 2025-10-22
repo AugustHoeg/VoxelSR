@@ -9,15 +9,15 @@ netG:
   use_convnext: true
 
   in_channels: 1
-  shallow_feats: [ 128 ]
+  shallow_feats: [ 64, 128 ]
   pre_up_feats: [ 64, 64 ]
-  num_levels: 1
-  context_sizes: [ 32 ]
-  num_blks: [ 6 ]
-  blk_layers: [ 6 ]  # [6, 6, 6]
-  embed_dims: [ 200 ]
-  patch_sizes: [ 1 ]
-  skip_dims: [ 60 ]
+  num_levels: 2
+  context_sizes: [ 64, 32 ]
+  num_blks: [ 3, 6 ]
+  blk_layers: [ 6, 6 ]  # [6, 6, 6]
+  embed_dims: [ 200, 200 ]
+  patch_sizes: [ 2, 1 ]
+  skip_dims: [ 40, 60 ]
   drop_path: 0.1
   upsample_method: nearest
   use_checkpoint: true

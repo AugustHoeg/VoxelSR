@@ -83,9 +83,9 @@ class ConvNextBlock3D(nn.Module):
         super().__init__()
         self.dwconv = nn.Conv3d(dim, dim, kernel_size=5, padding=2, groups=dim)  # depthwise conv
         self.norm = LayerNorm(dim, eps=1e-6)
-        self.pwconv1 = nn.Linear(dim, 4 * dim)  # pointwise/1x1 convs, implemented with linear layers
+        self.pwconv1 = nn.Linear(dim, 2 * dim)  # pointwise/1x1 convs, implemented with linear layers
         self.act = nn.GELU()
-        self.pwconv2 = nn.Linear(4 * dim, dim)
+        self.pwconv2 = nn.Linear(2 * dim, dim)
         self.gamma = (
             nn.Parameter(layer_scale_init_value * torch.ones((dim)), requires_grad=True)
             if layer_scale_init_value > 0
@@ -137,12 +137,13 @@ class ConvNextLayer(nn.Module):
 
 class ConvNextGroup(nn.Module):
 
-    def __init__(self, dim, skip_dim, depth, dp_rates, layer_scale_init_value):
+    def __init__(self, dim, skip_dim, depth, dp_rates, layer_scale_init_value, use_checkpoint=False):
         super().__init__()
 
         self.layers = nn.ModuleList()
         self.compress_layers = nn.ModuleList()
         self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.use_checkpoint = use_checkpoint
 
         for layer_idx in range(depth):
             channel_dim = dim + skip_dim * layer_idx
@@ -167,7 +168,10 @@ class ConvNextGroup(nn.Module):
             prev_x = None if i > 0 else prev_x
 
             # Main layer
-            x = self.layers[i](next_x, prev_x)
+            if self.use_checkpoint and i % 2 == 1:
+                x = checkpoint.checkpoint(self.layers[i], next_x, prev_x)
+            else:
+                x = self.layers[i](next_x, prev_x)
 
             # Compress
             x = self.act(self.compress_layers[i](x))
@@ -336,10 +340,10 @@ class MTVNeXt(nn.Module):
         sfe_blk = nn.Sequential(nn.Conv3d(in_chans, shallow_feats[0], kernel_size=3, stride=1, padding=1, bias=True))
         self.sfe_blks.append(sfe_blk)
         if num_levels > 1:
-            sfe_blk = nn.Sequential(nn.Conv3d(embed_dims[0], shallow_feats[1], kernel_size=3, stride=1, padding=1, bias=True))
+            sfe_blk = nn.Sequential(nn.Conv3d(shallow_feats[0], shallow_feats[1], kernel_size=3, stride=1, padding=1, bias=True))
             self.sfe_blks.append(sfe_blk)
         if num_levels > 2:
-            sfe_blk = nn.Sequential(nn.Conv3d(embed_dims[1], shallow_feats[2], kernel_size=3, stride=1, padding=1, bias=True))
+            sfe_blk = nn.Sequential(nn.Conv3d(shallow_feats[1], shallow_feats[2], kernel_size=3, stride=1, padding=1, bias=True))
             self.sfe_blks.append(sfe_blk)
 
         # Patch embedding blocks (proj only)
@@ -368,7 +372,8 @@ class MTVNeXt(nn.Module):
                                   skip_dim=skip_dims[level],
                                   depth=self.blk_layers[level],
                                   dp_rates=dp,
-                                  layer_scale_init_value=1e-6)
+                                  layer_scale_init_value=1e-6,
+                                  use_checkpoint=self.use_checkpoint)
                 )
             self.LX_blocks.append(blocks)
 
@@ -461,8 +466,8 @@ class MTVNeXt(nn.Module):
 
             # Optionally crop next input image for the next level
             if level < self.num_levels - 1:
-                # LX = self.crop_next(LX, level + 1)
-                LX = self.crop_next(LX_emb, level + 1)
+                LX = self.crop_next(LX, level + 1)  # Use this to crop input image for next level
+                # LX = self.crop_next(LX_emb, level + 1)  # Use this to crop embedded features for next level
 
         if self.use_checkpoint:
             final_feats = checkpoint.checkpoint(self.Final_blk, LX_emb)
@@ -494,10 +499,24 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 32
+    img_size = 64
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).to(device)
     B, C, H, W, D = x.shape
+
+    # small config for quick run
+    context_sizes = [96, 64, 32]
+    num_levels = len(context_sizes)
+    shallow_feats = [32, 64, 128]
+    pre_up_feats = [64, 64]
+    num_blks = [1, 3, 6]
+    blk_layers = [6, 6, 6]
+    patch_sizes = [3, 2, 1]
+    skip_dims = [20, 40, 60]
+    embed_dims = [200, 200, 200]
+    up_factor = 2
+    input_size = (H, W, D)
+    use_checkpoint = True
 
     # small config for quick run
     # context_sizes = [64, 48, 32]
@@ -512,20 +531,6 @@ if __name__ == "__main__":
     # up_factor = 2
     # input_size = (H, W, D)
     # use_checkpoint = True
-
-    # small config for quick run
-    context_sizes = [32]
-    num_levels = len(context_sizes)
-    shallow_feats = [128]
-    pre_up_feats = [64, 64]
-    num_blks = [3]
-    blk_layers = [6]
-    patch_sizes = [1]
-    skip_dims = [60]
-    embed_dims = [180]
-    up_factor = 2
-    input_size = (H, W, D)
-    use_checkpoint = True
 
     # TODO: Add merge of features from previous network levels.
     net = MTVNeXt(input_size=input_size,
