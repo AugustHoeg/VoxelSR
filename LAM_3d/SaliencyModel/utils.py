@@ -107,19 +107,31 @@ def vis_saliency_new(map, zoomin=4):
     Img = Img.resize((s1 * zoomin, s2 * zoomin, s3 * zoomin), Image.NEAREST)
     return Img
 
-def vis_saliency_log(map, zoomin=4):
+
+def vis_saliency_log(map, zoomin=4, eps=1e-6):
     """
     :param map: the saliency map, 2D, norm to [0, 1]
     :param zoomin: the resize factor, nn upsample
-    :return:
+    :param eps: small value to avoid log(0)
+    :return: PIL RGB Image of the saliency map on a logarithmic scale
     """
     cmap = plt.get_cmap('seismic')
-    # map_color = (255 * cmap(map * 0.5 + 0.5)).astype(np.uint8)
-    map_color = (255 * cmap(np.log(map) * 0.5 + 0.5)).astype(np.uint8)
+
+    # Apply log transform and normalize back to [0,1]
+    log_map = np.log(map + eps)
+    log_map -= log_map.min()  # shift to [0, inf)
+    # log_map /= log_map.max()  # normalize to [0, 1]
+    log_map /= 50  # normalize by fixed value
+
+    # Apply colormap
+    map_color = (255 * cmap(log_map * 0.5 + 0.5)).astype(np.uint8)
+
     Img = Image.fromarray(map_color)
     s1, s2 = Img.size
     Img = Img.resize((s1 * zoomin, s2 * zoomin), Image.NEAREST)
-    return Img
+
+    return Img.convert('RGB')
+
 
 def vis_saliency(map, zoomin=4):
     """
@@ -197,6 +209,15 @@ def grad_abs_norm(grad):
     grad_max = grad_3d.max()
     grad_norm = grad_3d / grad_max
     return grad_norm
+
+def grad_abs(grad):
+    """
+    :param grad: numpy array (shape: [c, h, w, d])
+    :return:
+    """
+    grad_3d = np.abs(grad.sum(axis=0))      #shape: [h, w, d]
+    return grad_3d
+
 
 def grad_abs_norm_2d(grad):
     """
@@ -285,7 +306,7 @@ def gini(array):
         # Values cannot be negative:
         array -= np.amin(array)
     # Values cannot be 0:
-    array += 0.0000001
+    array += 0.0000001 # 0.0000001
     # Values must be sorted:
     array = np.sort(array)
     # Index per array element:
@@ -295,3 +316,26 @@ def gini(array):
     # Gini coefficient:
     return ((np.sum((2 * index - n  - 1) * array)) / (n * np.sum(array)))
 
+
+def pad_to_shape_numpy(arr, target_shape):
+    """
+    Pads a 2D or 3D numpy array with zeros to match target_shape.
+
+    Args:
+        arr (np.ndarray): Input 2D (H, W) or 3D (D, H, W) array.
+        target_shape (tuple): Desired output shape.
+
+    Returns:
+        np.ndarray: Zero-padded array of shape target_shape.
+    """
+    assert len(arr.shape) in (2, 3), "Only supports 2D or 3D arrays"
+    assert len(arr.shape) == len(target_shape), "Shape mismatch"
+
+    pad_width = []
+    for s, t in zip(arr.shape, target_shape):
+        total_pad = max(t - s, 0)
+        before = total_pad // 2
+        after = total_pad - before
+        pad_width.append((before, after))
+
+    return np.pad(arr, pad_width, mode="constant", constant_values=0)
