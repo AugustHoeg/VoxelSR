@@ -8,7 +8,7 @@ netG:
 
   in_channels: 1
   shallow_feats: [ 128 ]
-  pre_up_feats: [ 64, 64 ]
+  pre_up_feats: [ 62, 62 ]
   num_levels: 1
   context_sizes: [ 32 ]
   num_blks: [ 3 ]
@@ -21,7 +21,7 @@ netG:
   num_heads: 4
   attn_window_sizes: [ 8, 8, 8 ]
   drop_path: 0.1
-  upsample_method: pixelshuffle3D
+  upsample_method: nearest
   token_upsample_method: deconv_nn_resize
   use_checkpoint: true
   enable_ape_ct: true

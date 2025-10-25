@@ -147,6 +147,7 @@ def main(opt: DictConfig):
     else:
         image_dir = os.path.join("saved_image_cubes", opt['dataset_opt']['datasets'][0])
         print(f"Using {opt['dataset_opt']['datasets'][0]} for saving image cubes.")
+        print(f"Synthetic: {opt['dataset_opt']['synthetic']}")
 
     print("Saving image comparisons to:", image_dir)
 
