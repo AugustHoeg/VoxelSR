@@ -80,7 +80,4 @@ def nsysproftrain(ctx, model, dataset, experiment_id):
 @task
 def generatecubes(ctx, dataset, mode="synthetic"):
     """Run generate cubes script."""
-    synthetic = False
-    if mode == "synthetic":
-        synthetic = True
-    ctx.run(f"python -u generate_cubes.py -cn 'generate_cubes' dataset_opt='generate_cubes' dataset_opt.datasets={dataset} dataset_opt.synthetic={synthetic}")
+    ctx.run(f"python -u generate_cubes.py -cn 'generate_cubes' dataset_opt='generate_cubes' dataset_opt.datasets={dataset} dataset_opt.synthetic={True if mode == 'synthetic' else False}")
