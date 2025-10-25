@@ -142,7 +142,12 @@ def main(opt: DictConfig):
                              drop_last=True)
 
     # Create directory for test patch comparisons
-    image_dir = os.path.join("saved_image_cubes", opt['dataset_opt']['name'])
+    if "datasets" not in opt['dataset_opt']:
+        image_dir = os.path.join("saved_image_cubes", opt['dataset_opt']['name'])
+    else:
+        image_dir = os.path.join("saved_image_cubes", opt['dataset_opt']['datasets'][0])
+        print(f"Using {opt['dataset_opt']['datasets'][0]} for saving image cubes.")
+
     print("Saving image comparisons to:", image_dir)
 
     if opt['dataset_opt']['dataset_type'] == "MonaiSmartCacheDataset":
