@@ -48,6 +48,8 @@ train_opt:
   G_optimizer_clipgrad: 2
   G_warmup_steps: 3000  # new
 
+  manual_seed: 8500 # 8400
+
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
