@@ -25,6 +25,7 @@ LAM_3d/saved_image_cubes/**
 LAM_3d/saved_models/**
 LAM_3d/Results/**
 LAM_3d/Figures/**
+LAM_3d/*.sh
 
 **/*.h5
 *.h5
