@@ -172,6 +172,10 @@ def main(opt: DictConfig):
         saliency_image_abs = vis_saliency(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx], zoomin=up_factor)
         angn_mean = abs_normed_grad_numpy
         angn_mean = (angn_mean - np.min(angn_mean)) / (np.max(angn_mean) - np.min(angn_mean))
+
+        angn_mean_no_pad = angn_mean[crop_idx:-crop_idx, crop_idx:-crop_idx]
+        angn_mean_no_pad = (angn_mean_no_pad - np.min(angn_mean_no_pad)) / (np.max(angn_mean_no_pad) - np.min(angn_mean_no_pad))
+
         saliency_image_abs_mean = vis_saliency(angn_mean[crop_idx:-crop_idx, crop_idx:-crop_idx], zoomin=up_factor)
         saliency_image_abs_mean_full = vis_saliency(angn_mean, zoomin=up_factor)
         saliency_image_abs_mean_full_log = vis_saliency_log(angn_mean, zoomin=up_factor)
@@ -221,6 +225,10 @@ def main(opt: DictConfig):
             saliency_image_abs = vis_saliency(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr], zoomin=up_factor)
             angn_mean = np.mean(abs_normed_grad_numpy, axis=2)
             angn_mean = (angn_mean - np.min(angn_mean)) / (np.max(angn_mean) - np.min(angn_mean))
+
+            angn_mean_no_pad = angn_mean[crop_idx:-crop_idx, crop_idx:-crop_idx]
+            angn_mean_no_pad = (angn_mean_no_pad - np.min(angn_mean_no_pad)) / (np.max(angn_mean_no_pad) - np.min(angn_mean_no_pad))
+
             saliency_image_abs_mean = vis_saliency(angn_mean[crop_idx:-crop_idx, crop_idx:-crop_idx], zoomin=up_factor)
             saliency_image_abs_mean_full = vis_saliency(angn_mean, zoomin=up_factor)
             saliency_image_abs_mean_full_log = vis_saliency_log(angn_mean, zoomin=up_factor)
@@ -253,6 +261,10 @@ def main(opt: DictConfig):
             saliency_image_abs = vis_saliency(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr], zoomin=up_factor)
             angn_mean = np.mean(abs_normed_grad_numpy,axis=2)
             angn_mean = (angn_mean - np.min(angn_mean)) / (np.max(angn_mean) - np.min(angn_mean))
+
+            angn_mean_no_pad = angn_mean[crop_idx:-crop_idx, crop_idx:-crop_idx]
+            angn_mean_no_pad = (angn_mean_no_pad - np.min(angn_mean_no_pad)) / (np.max(angn_mean_no_pad) - np.min(angn_mean_no_pad))
+
             saliency_image_abs_mean = vis_saliency(angn_mean[crop_idx:-crop_idx, crop_idx:-crop_idx], zoomin=up_factor)
             saliency_image_abs_mean_full = vis_saliency(angn_mean, zoomin=up_factor)
             saliency_image_abs_mean_full_log = vis_saliency_log(angn_mean, zoomin=up_factor)
@@ -288,6 +300,9 @@ def main(opt: DictConfig):
     diffusion_index_no_pad = (1 - gini_index_no_pad) * 100
     print(f"The DI (no pad) of this case is {diffusion_index_no_pad}")
 
+    gini_index_mean_no_pad = gini(angn_mean_no_pad)
+    diffusion_index_mean_no_pad = (1 - gini_index_mean_no_pad) * 100
+    print(f"The DI_mean (no pad) of this case is {diffusion_index_mean_no_pad}")
 
     # %% Show LAM
     fig, axs = plt.subplots(1,3,figsize=(14,4))
@@ -365,6 +380,7 @@ def main(opt: DictConfig):
         f.write(f'Diffusion index for {model_name}, {experiment_id}: {diffusion_index} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         f.write(f'Diffusion index (MEAN) for {model_name}, {experiment_id}: {diffusion_index_mean} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         f.write(f'Diffusion index (no pad) for {model_name}, {experiment_id}: {diffusion_index_no_pad} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
+        f.write(f'Diffusion index (MEAN, no pad) for {model_name}, {experiment_id}: {diffusion_index_mean_no_pad} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         #f.write(f'Gradient magnitude sum over full input for {model_name}, {experiment_id}: {grad_mag_sum} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         #f.write(f'Gradient magnitude sum over SR ROI for {model_name}, {experiment_id}: {grad_mag_sum_roi} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
 
