@@ -1,6 +1,9 @@
 import argparse
 import os
 
+import hydra
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,11 +66,7 @@ def parse_LAM_arguments():
     # Parse command-line arguments for LAM analysis
     parser = argparse.ArgumentParser(description="Run LAM_3d with specified model.")
 
-    # Parse command-line arguments for experiment options
-    parser.add_argument("--options_file", type=str, help="Specify the .json options file to use.")
-    parser.add_argument("--experiment_id", type=str, help="Specify the experiment id to load options.", required=False)
-    parser.add_argument("--dataset", type=str, help="Specify dataset (overwrites options file).", required=False)
-    parser.add_argument("--cluster", type=str, help="Specify name of HPC cluster.", required=False, default="DTU_HPC")
+    # parser.add_argument("--experiment_id", type=str, required=True, help="Experiment ID for the trained model to use.")
 
     # Parse command-line arguments for LAM analysis
     parser.add_argument("--cube_no", type=str, required=False, default='001', help="ID of cube for LAM analysis")
@@ -83,37 +82,18 @@ def parse_LAM_arguments():
     return args
 
 
-def main():
+@hydra.main(version_base=None, config_path="../options", config_name=config.MODEL_ARCHITECTURE)
+def main(opt: DictConfig):
 
     # Returns None if no arguments parsed, as when run in IDE
-    args = parse_LAM_arguments()
+    # args = parse_LAM_arguments()
 
-    # Define experiment parameters
-    options_file = args.options_file
-    experiment_id = args.experiment_id
-    print("options_file", options_file)
-
-    if experiment_id is not None:
-        # Load saved options file saved based on specified experiment id
-        print("Experiment_id", experiment_id)
-        opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR)
-
-        # Load options
-        opt = load_json(opt_path)
-        #wandb_path = opt_path.rsplit("files", 1)[0]
-
-    elif options_file is not None:
-        # Load specified options file
-        opt_path = os.path.join(config.ROOT_DIR, 'options', options_file)
-
-        # Load options
-        opt = load_json(opt_path)
-        experiment_id = opt['experiment_id']
-
-    else:
-        # Load experiment options
-        opt = parse_options(options_file)
-        experiment_id = opt['experiment_id']
+    # Load options file from experiment ID
+    experiment_id = opt['experiment_id']
+    print("Experiment ID:", experiment_id)
+    opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
+    opt = OmegaConf.load(opt_path)
+    wandb_path = opt_path.rsplit("files", 1)[0]
 
     # Set input type to 3D if not specified
     if 'input_type' not in opt:
@@ -121,7 +101,7 @@ def main():
 
     # Define universal SR model using the KAIR define_Model framework
     from models.select_model import define_Model
-    model = define_Model(opt)
+    model = define_Model(opt, mode='test')
 
     model.init_test(experiment_id)
 
@@ -131,20 +111,22 @@ def main():
     np.random.seed(seed_value)
 
     # Define parameters
-    model_name = opt['model_architecture']
-    cube_no = args.cube_no
-    h = args.h
-    w = args.w
-    d = args.d
-    window_size = args.window_size
+    model_name = opt['model_opt']['model_architecture']
     up_factor = opt['up_factor']
-    input_size = opt['datasets']['patch_size']
+    input_size = opt['dataset_opt']['patch_size']
+
+    cube_no = f"{opt['LAM_opt']['cube_no']:03d}"
+    h = opt['LAM_opt']['h']
+    w = opt['LAM_opt']['w']
+    d = opt['LAM_opt']['d']
+    window_size = opt['LAM_opt']['window_size']
+    use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
 
     # %% Load test image
-    if args.use_new_cube_dir:
+    if use_new_cube_dir:
         root_dir = config.ROOT_DIR
-        lr_cube_dir = f"{root_dir}/saved_image_cubes/{opt['datasets']['name']}/LR_{opt['datasets']['degradation_type']}"
-        hr_cube_dir = f"{root_dir}/saved_image_cubes/{opt['datasets']['name']}/HR_{opt['datasets']['degradation_type']}"
+        lr_cube_dir = f"{root_dir}/saved_image_cubes/{list(opt['dataset_opt']['datasets'])[0]}/LR"
+        hr_cube_dir = f"{root_dir}/saved_image_cubes/{list(opt['dataset_opt']['datasets'])[0]}/HR"
         img_lr = np.load(f"{lr_cube_dir}/cube_{input_size}_{cube_no}.npy")
         img_lr_full = np.load(f"{lr_cube_dir}/cube_{128}_{cube_no}.npy")
         img_hr = np.load(f"{hr_cube_dir}/cube_{cube_no}.npy")
@@ -204,6 +186,7 @@ def main():
         z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (128 - 32) // 2
 
         gini_index = gini(abs_normed_grad_numpy)
+        gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx])
 
         pil_lr_full = Image.fromarray((img_lr_full[0, :, :, z_idx_lr] * 255).astype(np.uint8))
         pil_lr_full_cv2 = pil_to_cv2(pil_lr_full)
@@ -250,6 +233,7 @@ def main():
 
             z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (128 - 32) // 2
             gini_index = gini(abs_normed_grad_numpy[:, :, z_idx_lr])
+            gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr])
 
             pil_lr_full = Image.fromarray((img_lr_full[0, :, :, z_idx_lr] * 255).astype(np.uint8))
             pil_lr_full_cv2 = pil_to_cv2(pil_lr_full)
@@ -279,6 +263,7 @@ def main():
             blend_abs_and_hr = cv2_to_pil(pil_to_cv2(saliency_image_abs_zoom) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
 
             gini_index = gini(abs_normed_grad_numpy[:, :, z_idx_lr])
+            gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr])
 
             pil_lr_full = Image.fromarray((img_lr_full[0, :, :, z_idx_lr] * 255).astype(np.uint8))
             pil_lr_full_cv2 = pil_to_cv2(pil_lr_full)
@@ -297,6 +282,10 @@ def main():
     diffusion_index_mean = diffusion_index_mean * 2**3  # scale to padded input size of 128^3
     print(f"The DI_mean of this case is {diffusion_index_mean}")
 
+    diffusion_index_no_pad = (1 - gini_index_no_pad) * 100
+    print(f"The DI (no pad) of this case is {diffusion_index_no_pad}")
+
+
     # %% Show LAM
     fig, axs = plt.subplots(1,3,figsize=(14,4))
     axs[0].imshow(position_pil)
@@ -304,8 +293,8 @@ def main():
     axs[2].imshow(saliency_image_abs_mean)
 
     # %% Save results
-    cube_dir = f"{opt['datasets']['name']}_cube_{cube_no}_win{window_size}_h{h}-w{w}-d{d}"
-    if args.use_new_cube_dir:
+    cube_dir = f"{list(opt['dataset_opt']['datasets'])[0]}_cube_{cube_no}_win{window_size}_h{h}-w{w}-d{d}"
+    if use_new_cube_dir:
         cube_dir = cube_dir + "_new"
     if not os.path.exists("Results/" + cube_dir):
         os.makedirs("Results/" + cube_dir, exist_ok=True)
@@ -367,6 +356,7 @@ def main():
     with open(f'Results/{cube_dir}/LAM_DI.txt', 'a') as f:
         f.write(f'Diffusion index for {model_name}, {experiment_id}: {diffusion_index} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         f.write(f'Diffusion index (MEAN) for {model_name}, {experiment_id}: {diffusion_index_mean} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
+        f.write(f'Diffusion index (no pad) for {model_name}, {experiment_id}: {diffusion_index_no_pad} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         #f.write(f'Gradient magnitude sum over full input for {model_name}, {experiment_id}: {grad_mag_sum} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         #f.write(f'Gradient magnitude sum over SR ROI for {model_name}, {experiment_id}: {grad_mag_sum_roi} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
 

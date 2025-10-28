@@ -1,0 +1,9 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+
+# LAM options
+cube_no: 001
+h: 28
+w: 28
+d: 28
+window_size: 8
+use_new_cube_dir: True
