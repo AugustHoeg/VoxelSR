@@ -121,7 +121,7 @@ def main():
 
     # Define universal SR model using the KAIR define_Model framework
     from models.select_model import define_Model
-    model = define_Model(opt)
+    model = define_Model(opt, mode='test')
 
     model.init_test(experiment_id)
 
@@ -204,6 +204,7 @@ def main():
         z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (128 - 32) // 2
 
         gini_index = gini(abs_normed_grad_numpy)
+        gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx])
 
         pil_lr_full = Image.fromarray((img_lr_full[0, :, :, z_idx_lr] * 255).astype(np.uint8))
         pil_lr_full_cv2 = pil_to_cv2(pil_lr_full)
@@ -250,6 +251,7 @@ def main():
 
             z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (128 - 32) // 2
             gini_index = gini(abs_normed_grad_numpy[:, :, z_idx_lr])
+            gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr])
 
             pil_lr_full = Image.fromarray((img_lr_full[0, :, :, z_idx_lr] * 255).astype(np.uint8))
             pil_lr_full_cv2 = pil_to_cv2(pil_lr_full)
@@ -279,6 +281,7 @@ def main():
             blend_abs_and_hr = cv2_to_pil(pil_to_cv2(saliency_image_abs_zoom) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
 
             gini_index = gini(abs_normed_grad_numpy[:, :, z_idx_lr])
+            gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr])
 
             pil_lr_full = Image.fromarray((img_lr_full[0, :, :, z_idx_lr] * 255).astype(np.uint8))
             pil_lr_full_cv2 = pil_to_cv2(pil_lr_full)
@@ -296,6 +299,10 @@ def main():
     diffusion_index_mean = (1 - gini_index_mean) * 100
     diffusion_index_mean = diffusion_index_mean * 2**3  # scale to padded input size of 128^3
     print(f"The DI_mean of this case is {diffusion_index_mean}")
+
+    diffusion_index_no_pad = (1 - gini_index_no_pad) * 100
+    print(f"The DI (no pad) of this case is {diffusion_index_no_pad}")
+
 
     # %% Show LAM
     fig, axs = plt.subplots(1,3,figsize=(14,4))
@@ -367,6 +374,7 @@ def main():
     with open(f'Results/{cube_dir}/LAM_DI.txt', 'a') as f:
         f.write(f'Diffusion index for {model_name}, {experiment_id}: {diffusion_index} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         f.write(f'Diffusion index (MEAN) for {model_name}, {experiment_id}: {diffusion_index_mean} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
+        f.write(f'Diffusion index (no pad) for {model_name}, {experiment_id}: {diffusion_index_no_pad} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         #f.write(f'Gradient magnitude sum over full input for {model_name}, {experiment_id}: {grad_mag_sum} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
         #f.write(f'Gradient magnitude sum over SR ROI for {model_name}, {experiment_id}: {grad_mag_sum_roi} ({cube_no}; selection: h{h}-w{w}-d{d})\n')
 
