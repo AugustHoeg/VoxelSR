@@ -92,7 +92,7 @@ def main(opt: DictConfig):
     d = opt['LAM_opt']['d']
     window_size = opt['LAM_opt']['window_size']
     use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
-    dataset = list(opt['dataset_opt']['datasets'])
+    dataset = opt['dataset_opt']['datasets']
 
     # Load options file from experiment ID
     experiment_id = opt['experiment_id']
