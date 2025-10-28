@@ -85,13 +85,8 @@ def parse_LAM_arguments():
 @hydra.main(version_base=None, config_path="../options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
 
-    # Load LAM arguments from command line
-    cube_no = f"{opt['LAM_opt']['cube_no']}"
-    h = opt['LAM_opt']['h']
-    w = opt['LAM_opt']['w']
-    d = opt['LAM_opt']['d']
-    window_size = opt['LAM_opt']['window_size']
-    use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
+    # Returns None if no arguments parsed, as when run in IDE
+    # args = parse_LAM_arguments()
 
 
     # Load options file from experiment ID
@@ -120,6 +115,13 @@ def main(opt: DictConfig):
     model_name = opt['model_opt']['model_architecture']
     up_factor = opt['up_factor']
     input_size = opt['dataset_opt']['patch_size']
+
+    cube_no = f"{opt['LAM_opt']['cube_no']:03d}"
+    h = opt['LAM_opt']['h']
+    w = opt['LAM_opt']['w']
+    d = opt['LAM_opt']['d']
+    window_size = opt['LAM_opt']['window_size']
+    use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
 
     # %% Load test image
     if use_new_cube_dir:

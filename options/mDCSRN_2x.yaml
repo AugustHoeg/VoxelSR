@@ -2,6 +2,7 @@ defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
   - model_opt: mDCSRN                  # Default model config
+  - LAM_opt: default                   # Default LAM config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
