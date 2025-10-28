@@ -1,6 +1,9 @@
 import argparse
 import os
 
+import hydra
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -63,11 +66,7 @@ def parse_LAM_arguments():
     # Parse command-line arguments for LAM analysis
     parser = argparse.ArgumentParser(description="Run LAM_3d with specified model.")
 
-    # Parse command-line arguments for experiment options
-    parser.add_argument("--options_file", type=str, help="Specify the .json options file to use.")
-    parser.add_argument("--experiment_id", type=str, help="Specify the experiment id to load options.", required=False)
-    parser.add_argument("--dataset", type=str, help="Specify dataset (overwrites options file).", required=False)
-    parser.add_argument("--cluster", type=str, help="Specify name of HPC cluster.", required=False, default="DTU_HPC")
+    # parser.add_argument("--experiment_id", type=str, required=True, help="Experiment ID for the trained model to use.")
 
     # Parse command-line arguments for LAM analysis
     parser.add_argument("--cube_no", type=str, required=False, default='001', help="ID of cube for LAM analysis")
@@ -83,37 +82,18 @@ def parse_LAM_arguments():
     return args
 
 
-def main():
+@hydra.main(version_base=None, config_path="../options", config_name=config.MODEL_ARCHITECTURE)
+def main(opt: DictConfig):
 
     # Returns None if no arguments parsed, as when run in IDE
-    args = parse_LAM_arguments()
+    # args = parse_LAM_arguments()
 
-    # Define experiment parameters
-    options_file = args.options_file
-    experiment_id = args.experiment_id
-    print("options_file", options_file)
-
-    if experiment_id is not None:
-        # Load saved options file saved based on specified experiment id
-        print("Experiment_id", experiment_id)
-        opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR)
-
-        # Load options
-        opt = load_json(opt_path)
-        #wandb_path = opt_path.rsplit("files", 1)[0]
-
-    elif options_file is not None:
-        # Load specified options file
-        opt_path = os.path.join(config.ROOT_DIR, 'options', options_file)
-
-        # Load options
-        opt = load_json(opt_path)
-        experiment_id = opt['experiment_id']
-
-    else:
-        # Load experiment options
-        opt = parse_options(options_file)
-        experiment_id = opt['experiment_id']
+    # Load options file from experiment ID
+    experiment_id = opt['experiment_id']
+    print("Experiment ID:", experiment_id)
+    opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
+    opt = OmegaConf.load(opt_path)
+    wandb_path = opt_path.rsplit("files", 1)[0]
 
     # Set input type to 3D if not specified
     if 'input_type' not in opt:
@@ -131,20 +111,22 @@ def main():
     np.random.seed(seed_value)
 
     # Define parameters
-    model_name = opt['model_architecture']
-    cube_no = args.cube_no
-    h = args.h
-    w = args.w
-    d = args.d
-    window_size = args.window_size
+    model_name = opt['model_opt']['model_architecture']
     up_factor = opt['up_factor']
-    input_size = opt['datasets']['patch_size']
+    input_size = opt['dataset_opt']['patch_size']
+
+    cube_no = f"{opt['LAM_opt']['cube_no']:03d}"
+    h = opt['LAM_opt']['h']
+    w = opt['LAM_opt']['w']
+    d = opt['LAM_opt']['d']
+    window_size = opt['LAM_opt']['window_size']
+    use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
 
     # %% Load test image
-    if args.use_new_cube_dir:
+    if use_new_cube_dir:
         root_dir = config.ROOT_DIR
-        lr_cube_dir = f"{root_dir}/saved_image_cubes/{opt['datasets']['name']}/LR_{opt['datasets']['degradation_type']}"
-        hr_cube_dir = f"{root_dir}/saved_image_cubes/{opt['datasets']['name']}/HR_{opt['datasets']['degradation_type']}"
+        lr_cube_dir = f"{root_dir}/saved_image_cubes/{list(opt['dataset_opt']['datasets'])[0]}/LR"
+        hr_cube_dir = f"{root_dir}/saved_image_cubes/{list(opt['dataset_opt']['datasets'])[0]}/HR"
         img_lr = np.load(f"{lr_cube_dir}/cube_{input_size}_{cube_no}.npy")
         img_lr_full = np.load(f"{lr_cube_dir}/cube_{128}_{cube_no}.npy")
         img_hr = np.load(f"{hr_cube_dir}/cube_{cube_no}.npy")
@@ -311,8 +293,8 @@ def main():
     axs[2].imshow(saliency_image_abs_mean)
 
     # %% Save results
-    cube_dir = f"{opt['datasets']['name']}_cube_{cube_no}_win{window_size}_h{h}-w{w}-d{d}"
-    if args.use_new_cube_dir:
+    cube_dir = f"{list(opt['dataset_opt']['datasets'])[0]}_cube_{cube_no}_win{window_size}_h{h}-w{w}-d{d}"
+    if use_new_cube_dir:
         cube_dir = cube_dir + "_new"
     if not os.path.exists("Results/" + cube_dir):
         os.makedirs("Results/" + cube_dir, exist_ok=True)
