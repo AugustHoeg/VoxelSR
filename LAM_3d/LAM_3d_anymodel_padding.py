@@ -93,6 +93,7 @@ def main(opt: DictConfig):
     window_size = opt['LAM_opt']['window_size']
     use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
 
+
     # Load options file from experiment ID
     experiment_id = opt['experiment_id']
     print("Experiment ID:", experiment_id)
