@@ -92,6 +92,7 @@ def main(opt: DictConfig):
     d = opt['LAM_opt']['d']
     window_size = opt['LAM_opt']['window_size']
     use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
+    dataset = list(opt['dataset_opt']['datasets'])
 
     # Load options file from experiment ID
     experiment_id = opt['experiment_id']
@@ -99,6 +100,9 @@ def main(opt: DictConfig):
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
     wandb_path = opt_path.rsplit("files", 1)[0]
+
+    # Override datasets from command line
+    opt['dataset_opt']['datasets'] = dataset
 
     # Set input type to 3D if not specified
     if 'input_type' not in opt:
@@ -123,8 +127,8 @@ def main(opt: DictConfig):
     # %% Load test image
     if use_new_cube_dir:
         root_dir = config.ROOT_DIR
-        lr_cube_dir = f"{root_dir}/saved_image_cubes/{list(opt['dataset_opt']['datasets'])[0]}/LR"
-        hr_cube_dir = f"{root_dir}/saved_image_cubes/{list(opt['dataset_opt']['datasets'])[0]}/HR"
+        lr_cube_dir = f"{root_dir}/saved_image_cubes/{dataset}/LR"
+        hr_cube_dir = f"{root_dir}/saved_image_cubes/{dataset}/HR"
         img_lr = np.load(f"{lr_cube_dir}/cube_{input_size}_{cube_no}.npy")
         img_lr_full = np.load(f"{lr_cube_dir}/cube_{128}_{cube_no}.npy")
         img_hr = np.load(f"{hr_cube_dir}/cube_{cube_no}.npy")
@@ -133,7 +137,7 @@ def main(opt: DictConfig):
         img_lr = np.load(f"saved_image_cubes/{opt['datasets']['name']}_{up_factor}x/LR/cube_{input_size}_{cube_no}.npy")
         img_hr = np.load(f"saved_image_cubes/{opt['datasets']['name']}_{up_factor}x/HR/cube_{cube_no}.npy")
 
-    print(f"Using dataset: {list(opt['dataset_opt']['datasets'])[0]}")
+    print(f"Using dataset: {dataset}")
     tensor_lr = torch.from_numpy(img_lr) ; tensor_hr = torch.from_numpy(img_hr)
     cv2_lr = np.moveaxis(tensor_lr.numpy(), 0, 3) ; cv2_hr = np.moveaxis(tensor_hr.numpy(), 0, 3)
 
@@ -313,7 +317,7 @@ def main(opt: DictConfig):
     axs[2].imshow(saliency_image_abs_mean)
 
     # %% Save results
-    cube_dir = f"{list(opt['dataset_opt']['datasets'])[0]}_cube_{cube_no}_win{window_size}_h{h}-w{w}-d{d}"
+    cube_dir = f"{dataset}_cube_{cube_no}_win{window_size}_h{h}-w{w}-d{d}"
     if use_new_cube_dir:
         cube_dir = cube_dir + "_new"
     if not os.path.exists("Results/" + cube_dir):
