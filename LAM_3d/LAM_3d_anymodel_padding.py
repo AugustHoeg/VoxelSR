@@ -132,6 +132,8 @@ def main(opt: DictConfig):
     else:
         img_lr = np.load(f"saved_image_cubes/{opt['datasets']['name']}_{up_factor}x/LR/cube_{input_size}_{cube_no}.npy")
         img_hr = np.load(f"saved_image_cubes/{opt['datasets']['name']}_{up_factor}x/HR/cube_{cube_no}.npy")
+
+    print(f"Using dataset: {list(opt['dataset_opt']['datasets'])[0]}")
     tensor_lr = torch.from_numpy(img_lr) ; tensor_hr = torch.from_numpy(img_hr)
     cv2_lr = np.moveaxis(tensor_lr.numpy(), 0, 3) ; cv2_hr = np.moveaxis(tensor_hr.numpy(), 0, 3)
 
