@@ -82,7 +82,6 @@ def LAM(ctx, experiment_id, datasets, cube_no, window_size, h, w, d):
     with ctx.cd("LAM_3d/"):
         ctx.run(f"python -u LAM_3d_anymodel_padding.py experiment_id={experiment_id} dataset_opt.datasets={datasets} LAM_opt=default LAM_opt.cube_no={cube_no} LAM_opt.window_size={window_size} LAM_opt.h={h} LAM_opt.w={w} LAM_opt.d={d} LAM_opt.use_new_cube_dir={True}")
 
-
 @task
 def nsysproftrain(ctx, model, dataset, experiment_id):
     """Run the testing script."""

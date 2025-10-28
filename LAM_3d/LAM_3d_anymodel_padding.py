@@ -156,6 +156,7 @@ def main(opt: DictConfig):
     cv2.rectangle(draw_img_slice, (w, h), (w + window_size, h + window_size), (0, 0, 255), 1)
     position_pil = cv2_to_pil(draw_img_slice)
 
+
     if opt['input_type'] == "2D":
         # %% Calculate LAM 2D
         sigma = 1.2 ; fold = 25 ; l = 9 ; alpha = 0.1
