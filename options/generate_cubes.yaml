@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
+up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
