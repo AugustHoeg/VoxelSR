@@ -128,6 +128,7 @@ def main(opt: DictConfig):
         img_lr = np.load(f"{lr_cube_dir}/cube_{input_size}_{cube_no}.npy")
         img_lr_full = np.load(f"{lr_cube_dir}/cube_{128}_{cube_no}.npy")
         img_hr = np.load(f"{hr_cube_dir}/cube_{cube_no}.npy")
+        print(f"LR shape: {img_lr.shape}, HR shape: {img_hr.shape}, LR full shape: {img_lr_full.shape}")
     else:
         img_lr = np.load(f"saved_image_cubes/{opt['datasets']['name']}_{up_factor}x/LR/cube_{input_size}_{cube_no}.npy")
         img_hr = np.load(f"saved_image_cubes/{opt['datasets']['name']}_{up_factor}x/HR/cube_{cube_no}.npy")
