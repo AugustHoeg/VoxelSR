@@ -164,7 +164,8 @@ def main(opt: DictConfig):
 
     if opt['input_type'] == "2D":
         # %% Calculate LAM 2D
-        sigma = 1.2 ; fold = 25 ; l = 9 ; alpha = 0.1
+        sigma = 1.2 ; fold = 25 ; l = 9
+        alpha = 0.25 if dataset == "VoDaSuRe" else 0.25
         attr_objective = attribution_objective_2d(attr_grad_2d, h, w, window=window_size)
         gaus_blur_path_func = GaussianBlurPath_2d(sigma, fold, l)
 
@@ -210,7 +211,8 @@ def main(opt: DictConfig):
 
     else:
         # %% Calculate LAM
-        sigma = 1.2 ; fold = 25 ; l = 9 ; alpha = 0.1
+        sigma = 1.2 ; fold = 25 ; l = 9
+        alpha = 0.25 if dataset == "VoDaSuRe" else 0.25
         attr_objective = attribution_objective(attr_grad, h, w, d, window=window_size)
         gaus_blur_path_func = GaussianBlurPath(sigma, fold, l)
         if model_name == "ArSSR":
