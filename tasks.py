@@ -71,6 +71,10 @@ def testzarrid(ctx, model, dataset, experiment_id):
     """Run the testing script."""
     ctx.run(f"python -u inference_zarr.py experiment_id={model}_{dataset}_{experiment_id}")
 
+@task
+def testzarrcross(ctx, experiment_id, datasets, mode):
+    """Run the testing script."""
+    ctx.run(f"python -u inference_zarr_cross.py experiment_id={experiment_id} dataset_opt.datasets={datasets} dataset_opt.synthetic={True if mode == 'synthetic' else False}")
 
 @task
 def nsysproftrain(ctx, model, dataset, experiment_id):
