@@ -182,6 +182,7 @@ def main(opt: DictConfig):
         print("Shape of pil_hr", pil_hr.size)
         print("Shape of saliency_image_abs_zoom", saliency_image_abs_zoom.size)
         blend_abs_and_hr = cv2_to_pil(pil_to_cv2(saliency_image_abs_zoom) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
+        blend_mean = cv2_to_pil(pil_to_cv2(saliency_image_abs_mean) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
 
         z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (128 - 32) // 2
 
@@ -230,6 +231,7 @@ def main(opt: DictConfig):
             print("Shape of pil_hr", pil_hr.size)
             print("Shape of saliency_image_abs_zoom", saliency_image_abs_zoom.size)
             blend_abs_and_hr = cv2_to_pil(pil_to_cv2(saliency_image_abs_zoom) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
+            blend_mean = cv2_to_pil(pil_to_cv2(saliency_image_abs_mean) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
 
             z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (128 - 32) // 2
             gini_index = gini(abs_normed_grad_numpy[:, :, z_idx_lr])
@@ -261,6 +263,7 @@ def main(opt: DictConfig):
             print("Shape of pil_hr", pil_hr.size)
             print("Shape of saliency_image_abs_zoom", saliency_image_abs_zoom.size)
             blend_abs_and_hr = cv2_to_pil(pil_to_cv2(saliency_image_abs_zoom) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
+            blend_mean = cv2_to_pil(pil_to_cv2(saliency_image_abs_mean) * (1.0 - alpha) + pil_to_cv2(pil_hr) * alpha)
 
             gini_index = gini(abs_normed_grad_numpy[:, :, z_idx_lr])
             gini_index_no_pad = gini(abs_normed_grad_numpy[crop_idx:-crop_idx, crop_idx:-crop_idx, z_idx_lr])
@@ -336,6 +339,11 @@ def main(opt: DictConfig):
     plt.imshow(saliency_image_abs_mean)
     plt.axis('off')
     plt.savefig(f'Results/{cube_dir}/{model_name}_{experiment_id}_{cube_no}_h{h}-w{w}-d{d}_mean.png', bbox_inches='tight', pad_inches=0)
+
+    plt.figure()
+    plt.imshow(blend_mean)
+    plt.axis('off')
+    plt.savefig(f'Results/{cube_dir}/{model_name}_{experiment_id}_{cube_no}_h{h}-w{w}-d{d}_mean_blend.png', bbox_inches='tight', pad_inches=0)
 
     plt.figure()
     plt.imshow(saliency_image_abs_mean_full)
