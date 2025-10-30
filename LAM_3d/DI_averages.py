@@ -6,20 +6,31 @@ from collections import defaultdict
 
 def extract_diffusion_scores(file_path):
     """
-    Extracts 'Diffusion index' and 'Diffusion index (MEAN)' scores for each model
-    from a given text file.
+    Extracts the four diffusion scores for each model from a given text file:
+      - Diffusion index
+      - Diffusion index (MEAN)
+      - Diffusion index (no pad)
+      - Diffusion index (MEAN, no pad)
 
     Returns:
         dict: {
             model_name: {
                 "id": str,
                 "diffusion": float,
-                "mean": float
+                "mean": float,
+                "no_pad": float,
+                "mean_no_pad": float
             }
         }
     """
+
+    # Match all four variants:
+    #   Diffusion index for MODEL, ID: VALUE
+    #   Diffusion index (MEAN) for MODEL, ID: VALUE
+    #   Diffusion index (no pad) for MODEL, ID: VALUE
+    #   Diffusion index (MEAN, no pad) for MODEL, ID: VALUE
     pattern = re.compile(
-        r"Diffusion index(?: \(MEAN\))? for ([^,]+), ([^:]+): ([\d\.eE+-]+)"
+        r"Diffusion index(?: \((MEAN)?(?:, )?(no pad)?\))? for ([^,]+), ([^:]+): ([\d\.eE+-]+)"
     )
 
     results = {}
@@ -27,43 +38,49 @@ def extract_diffusion_scores(file_path):
     with open(file_path, "r") as f:
         for line in f:
             match = pattern.search(line)
-            if match:
-                model_name = match.group(1).strip()
-                full_id = match.group(2).strip()
-                score = float(match.group(3))
+            if not match:
+                continue
 
-                if model_name not in results:
-                    results[model_name] = {"id": full_id, "diffusion": None, "mean": None}
+            mean_flag = match.group(1)
+            nopad_flag = match.group(2)
+            model_name = match.group(3).strip()
+            full_id = match.group(4).strip()
+            score = float(match.group(5))
 
-                if "(MEAN)" in line:
-                    results[model_name]["mean"] = score
-                elif "(MEAN, no pad)" in line:
-                    results[model_name]["mean_no_pad"] = score
-                elif "(no pad)" in line:
-                    results[model_name]["no_pad"] = score
-                else:
-                    results[model_name]["diffusion"] = score
+            if model_name not in results:
+                results[model_name] = {
+                    "id": full_id,
+                    "diffusion": None,
+                    "mean": None,
+                    "no_pad": None,
+                    "mean_no_pad": None,
+                }
+
+            # Determine which variant we are dealing with
+            if mean_flag and nopad_flag:
+                results[model_name]["mean_no_pad"] = score
+            elif mean_flag:
+                results[model_name]["mean"] = score
+            elif nopad_flag:
+                results[model_name]["no_pad"] = score
+            else:
+                results[model_name]["diffusion"] = score
 
     return results
 
 
 if __name__ == "__main__":
 
-    #scores = extract_diffusion_scores("Results/HCP_1200_cube_027_win48_h40-w40-d40_new/LAM_DI.txt")
-    #for model in scores:
-    #    print(f"\"{model}\": {scores[model]['mean']},")
-
     print("Current working directory is:", os.getcwd())
 
-    dataset = "CTSpine1K"
+    dataset = "VoDaSuRe"
     print(f"Running DI averages for: {dataset}")
 
-    #file_paths = glob.glob("Results/Synthetic*/LAM_DI.txt")
     file_paths = glob.glob(f"Results/{dataset}*/LAM_DI.txt")
-    print("file paths", file_paths)
+    #print("file paths", file_paths)
 
     # Collect values across all files
-    aggregated = defaultdict(lambda: {"diffusion": [], "mean": [], "ids": set()})
+    aggregated = defaultdict(lambda: {"diffusion": [], "mean": [], "no_pad": [], "mean_no_pad": [], "ids": set()})
 
     for file_path in file_paths:
         scores = extract_diffusion_scores(file_path)
@@ -77,7 +94,7 @@ if __name__ == "__main__":
                 aggregated[model]["no_pad"].append(vals["no_pad"])
             if vals["mean_no_pad"] is not None:
                 aggregated[model]["mean_no_pad"].append(vals["mean_no_pad"])
-            aggregated[model]["ids"].add(vals["id"])  # keep track of IDs seen
+            aggregated[model]["ids"].add(vals["id"])
 
     # Compute averages
     for model, vals in aggregated.items():
@@ -85,11 +102,11 @@ if __name__ == "__main__":
         avg_mean = sum(vals["mean"]) / len(vals["mean"]) if vals["mean"] else None
         avg_no_pad = sum(vals["no_pad"]) / len(vals["no_pad"]) if vals["no_pad"] else None
         avg_mean_no_pad = sum(vals["mean_no_pad"]) / len(vals["mean_no_pad"]) if vals["mean_no_pad"] else None
-        ids = ", ".join(sorted(vals["ids"]))  # optional: show all IDs
+        ids = ", ".join(sorted(vals["ids"]))
 
         print(f"{model} ({ids}):")
-        print(f"  Average Diffusion index      = {avg_diffusion}")
-        print(f"  Average Diffusion index no pad = {avg_no_pad}")
-        print(f"  Average Diffusion index MEAN = {avg_mean}")
-        print(f"  Average Diffusion index MEAN no pad = {avg_mean_no_pad}")
+        print(f"  Average Diffusion index              = {avg_diffusion}")
+        print(f"  Average Diffusion index (no pad)     = {avg_no_pad}")
+        print(f"  Average Diffusion index (MEAN)       = {avg_mean}")
+        print(f"  Average Diffusion index (MEAN, no pad) = {avg_mean_no_pad}")
         print()
