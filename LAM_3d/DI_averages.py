@@ -49,9 +49,9 @@ def extract_diffusion_scores(file_path):
 
 if __name__ == "__main__":
 
-    scores = extract_diffusion_scores("Results/HCP_1200_cube_027_win48_h40-w40-d40_new/LAM_DI.txt")
-    for model in scores:
-        print(f"\"{model}\": {scores[model]['mean']},")
+    #scores = extract_diffusion_scores("Results/HCP_1200_cube_027_win48_h40-w40-d40_new/LAM_DI.txt")
+    #for model in scores:
+    #    print(f"\"{model}\": {scores[model]['mean']},")
 
     print("Current working directory is:", os.getcwd())
 
