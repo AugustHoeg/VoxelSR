@@ -34,17 +34,23 @@ class Dataset_VoDaSuRe_OME():
                 train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))
                 test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))
 
+            if "LITS" in opt['dataset_opt']['datasets']:
+                train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr"))
+                test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr"))
+
             if "VoDaSuRe" in opt['dataset_opt']['datasets']:
                 train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
                 test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
 
             sampling_weights = {"HCP_1200": 1.0,
                                 "IXI":      1.0,
+                                "LITS":     1.0,
                                 "VoDaSuRe": 1.0}
 
             group_pairs = {}
             group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
             group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            group_pairs["LITS"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
 
             if self.synthetic:
                 group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
@@ -53,6 +59,7 @@ class Dataset_VoDaSuRe_OME():
 
             store_type = {"HCP_1200": "LocalStore",
                           "IXI":      "LocalStore",
+                          "LITS":     "LocalStore",
                           "VoDaSuRe": "LocalStore"}
 
         elif opt['cluster'] == "TITANS":

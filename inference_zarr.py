@@ -205,6 +205,16 @@ def main(opt: DictConfig):
     dataset = D(opt)
     data_dict = dataset.dataset_dict_test
 
+    if opt['model_opt']['model_architecture'] == "MTVNet":
+        patch_size = opt['dataset_opt']['patch_size']
+        center_size = opt['model_opt']['netG']['context_sizes'][-1]  # New
+        context_width = (patch_size - center_size) // 2
+        patch_size_hr = center_size * opt['up_factor']
+    else:
+        patch_size = opt['dataset_opt']['patch_size']
+        context_width = 0
+        patch_size_hr = opt['dataset_opt']['patch_size_hr']
+
     # Create directory for test patch comparisons
     image_path = os.path.join(wandb_path, "files/", "media/", "images/")
     print("Saving image comparisons to:", image_path)
@@ -259,7 +269,8 @@ def main(opt: DictConfig):
                         group_pair=group_pair,
                         f=opt['up_factor'],
                         size_lr=opt.dataset_opt.patch_size,
-                        border=4,
+                        size_hr=patch_size_hr,
+                        border=4+context_width*2,
                         batch_size=batch_size,
                         overlap_mode="hann",
                         model_input_type=opt['input_type'],
@@ -287,8 +298,9 @@ def main(opt: DictConfig):
                         img_L=img_L,
                         f=opt['up_factor'],
                         size_lr=opt.dataset_opt.patch_size,
-                        border=4,
-                        batch_size=batch_size,
+                        size_hr=patch_size_hr,
+                        border=4+context_width*2,
+                        batch_size=batch_size // 2,
                         overlap_mode="hann",
                         model_input_type=opt['input_type']
                     )

@@ -61,19 +61,20 @@ def get_hann_window(patch_size):
         hann_window_3d = hann_window_3d * hann_window_1d
     return hann_window_3d
 
-def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
+def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
 
     global_min = 0
     global_max = 65535
 
     C, D, H, W = img_L.shape
-    size_hr = size_lr * f
     stride = size_lr - border
 
     img_E = torch.zeros((C, int(D * f), int(H * f), int(W * f)), dtype=torch.float32)
     weight = torch.zeros_like(img_E)
 
     coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f)
+    #coords_lr = coords_lr + size_lr // 2
+    #coords_hr = coords_hr + size_hr // 2
     N = coords_lr.shape[0]
 
     patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=torch.float32)
@@ -134,7 +135,7 @@ def run_strided_inference(model, img_L, f, size_lr, border, batch_size, overlap_
     return img_E
 
 
-def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
+def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, size_hr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
 
     global_min = 0
     global_max = 65535
@@ -147,7 +148,6 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
     img_L = z[group_pair["L"]]
     img_H = z[group_pair["H"]]
     D, H, W = img_L.shape
-    size_hr = size_lr * f
     stride = size_lr - border
 
     chunks_H = img_H.chunks  # tuple(int(c * f) for c in chunks_L)
