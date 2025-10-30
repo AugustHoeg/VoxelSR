@@ -55,8 +55,11 @@ if __name__ == "__main__":
 
     print("Current working directory is:", os.getcwd())
 
+    dataset = "CTSpine1K"
+    print(f"Running DI averages for: {dataset}")
+
     #file_paths = glob.glob("Results/Synthetic*/LAM_DI.txt")
-    file_paths = glob.glob("Results/HCP_1200*/LAM_DI.txt")
+    file_paths = glob.glob(f"Results/{dataset}*/LAM_DI.txt")
     print("file paths", file_paths)
 
     # Collect values across all files
