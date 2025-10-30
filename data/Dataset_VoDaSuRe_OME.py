@@ -88,6 +88,36 @@ class Dataset_VoDaSuRe_OME():
                 train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
                 test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
 
+                if "domain_test_wood" in opt:
+                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Larch_B_bin1x1_ome_1.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Oak_A_bin1x1_ome_1.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Bamboo_A_bin1x1_ome_1.zarr")]
+
+                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Cypress_A_bin1x1_ome_0.zarr"),
+                                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr")]
+
+                    print("Running domain generalization test on wood samples!")
+                    print("Train paths: ", train_paths["VoDaSuRe"])
+                    print("Test paths: ", test_paths["VoDaSuRe"])
+
+                if "domain_test_bone" in opt:
+                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_15_80kV_ome.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_21_80kV_ome.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_74_80kV_ome.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/test/Femur_01_80kV_ome.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/bone_1_ome.zarr"),
+                                               os.path.join(self.data_path, "VoDaSuRe/ome/test/bone_2_ome.zarr")]
+
+                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Vertebrae_A_80kV_ome.zarr"),
+                                              os.path.join(self.data_path, "VoDaSuRe/ome/train/Vertebrae_B_80kV_ome.zarr"),
+                                              os.path.join(self.data_path, "VoDaSuRe/ome/train/Vertebrae_C_80kV_ome.zarr"),
+                                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Vertebrae_D_80kV_ome.zarr"),
+                                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Ox_bone_A_bin1x1_ome_0.zarr")]
+
+                    print("Running domain generalization test on bone samples!")
+                    print("Train paths: ", train_paths["VoDaSuRe"])
+                    print("Test paths: ", test_paths["VoDaSuRe"])
+
             sampling_weights = {"HCP_1200":  3.0,
                                 "IXI":       1.0,
                                 "LITS":      2.0,
