@@ -73,6 +73,10 @@ if __name__ == "__main__":
                 aggregated[model]["diffusion"].append(vals["diffusion"])
             if vals["mean"] is not None:
                 aggregated[model]["mean"].append(vals["mean"])
+            if vals["no_pad"] is not None:
+                aggregated[model]["no_pad"].append(vals["no_pad"])
+            if vals["mean_no_pad"] is not None:
+                aggregated[model]["mean_no_pad"].append(vals["mean_no_pad"])
             aggregated[model]["ids"].add(vals["id"])  # keep track of IDs seen
 
     # Compute averages
