@@ -53,7 +53,7 @@ dataset_opt:
   synthetic: true
   patch_size: 32
 
-  datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
     dataloader_batch_size: 2

@@ -86,13 +86,22 @@ def parse_LAM_arguments():
 def main(opt: DictConfig):
 
     # Load LAM arguments from command line
-    cube_no = f"{opt['LAM_opt']['cube_no']}"
-    h = opt['LAM_opt']['h']
-    w = opt['LAM_opt']['w']
-    d = opt['LAM_opt']['d']
-    window_size = opt['LAM_opt']['window_size']
-    use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
-    dataset = opt['dataset_opt']['datasets']
+    if 'LAM_opt' not in opt:
+        cube_no = "012"
+        h = 28
+        w = 28
+        d = 28
+        window_size = 8
+        use_new_cube_dir = True
+        dataset = opt['dataset_opt']['datasets'][0]
+    else:
+        cube_no = f"{opt['LAM_opt']['cube_no']}"
+        h = opt['LAM_opt']['h']
+        w = opt['LAM_opt']['w']
+        d = opt['LAM_opt']['d']
+        window_size = opt['LAM_opt']['window_size']
+        use_new_cube_dir = opt['LAM_opt']['use_new_cube_dir']
+        dataset = opt['dataset_opt']['datasets']
 
     # Load options file from experiment ID
     experiment_id = opt['experiment_id']
@@ -169,7 +178,7 @@ def main(opt: DictConfig):
         attr_objective = attribution_objective_2d(attr_grad_2d, h, w, window=window_size)
         gaus_blur_path_func = GaussianBlurPath_2d(sigma, fold, l)
 
-        interpolated_grad_numpy, result_numpy, interpolated_numpy = Path_gradient_2d(tensor_lr[:,:,z_idx_lr].numpy(), model.netG, attr_objective, gaus_blur_path_func, cuda=True)
+        interpolated_grad_numpy, result_numpy, interpolated_numpy = Path_gradient_2d(tensor_lr[:,:,:,z_idx_lr].numpy(), model.netG, attr_objective, gaus_blur_path_func, cuda=True)
         grad_numpy, result = saliency_map(interpolated_grad_numpy, result_numpy)
         abs_normed_grad_numpy = grad_abs_norm_2d(grad_numpy)
 
