@@ -33,15 +33,25 @@ def upscale_slices(model, img_L, up_factor=2):
     return output_tensor
 
 
-def generate_patch_coords(D, H, W, stride, f):
-    z_idx = np.arange(0, D, stride)
-    y_idx = np.arange(0, H, stride)
-    x_idx = np.arange(0, W, stride)
+def generate_patch_coords(D, H, W, stride, f, context_width=0):
+    z_idx = np.arange(0, D - 2 * context_width, stride)
+    y_idx = np.arange(0, H - 2 * context_width, stride)
+    x_idx = np.arange(0, W - 2 * context_width, stride)
     # print(len(z_idx))
 
     zz, yy, xx = np.meshgrid(z_idx, y_idx, x_idx, indexing='ij')
     coords_lr = np.stack([zz, yy, xx], axis=-1).reshape(-1, 3)
-    coords_hr = coords_lr * f
+    if context_width == 0:
+        coords_hr = coords_lr * f
+    else:
+        z_idx = np.arange(0, (D - 2 * context_width) * f, stride * f)
+        y_idx = np.arange(0, (H - 2 * context_width) * f, stride * f)
+        x_idx = np.arange(0, (W - 2 * context_width) * f, stride * f)
+        # print(len(z_idx))
+
+        zz, yy, xx = np.meshgrid(z_idx, y_idx, x_idx, indexing='ij')
+        coords_hr = np.stack([zz, yy, xx], axis=-1).reshape(-1, 3)
+
     return coords_lr, coords_hr
 
 #from utils.utils_3D_image import run_strided_inference
@@ -133,6 +143,88 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     img_E = img_E.astype(np.uint16)  # Scale to uint16
 
     return img_E
+
+
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D'):
+
+    global_min = 0
+    global_max = 65535
+
+    img_E = torch.zeros((img_L.shape[0], int(img_L.shape[1] * f), int(img_L.shape[2] * f), int(img_L.shape[3] * f)), dtype=torch.float32)
+    weight = torch.zeros_like(img_E)
+
+    C, D_hr, H_hr, W_hr = img_E.shape
+
+    if context_width > 0:
+        # Pad img L
+        pad_width = (context_width, context_width, context_width, context_width, context_width, context_width)
+        img_L = F.pad(img_L, pad_width, mode='constant', value=0)
+
+    C, D, H, W = img_L.shape
+    stride = size_lr - border
+
+    coords_lr, coords_hr = generate_patch_coords(D, H, W, stride, f, context_width)
+    #coords_lr = coords_lr + size_lr // 2
+    #coords_hr = coords_hr + size_hr // 2
+    N = coords_lr.shape[0]
+
+    patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=torch.float32)
+
+    if overlap_mode == "hann":
+        hann_window = get_hann_window((size_hr, size_hr, size_hr))
+        hann_window = hann_window.reshape(1, size_hr, size_hr, size_hr)
+
+    model.netG.eval()
+    with torch.inference_mode():
+        for i in range(0, N, batch_size):
+            if i % 10 == 0:
+                print("Processing batch %d-%d/%d" % (i, i+batch_size, N))
+            batch_coords_lr = coords_lr[i:i+batch_size]
+            batch_coords_hr = coords_hr[i:i+batch_size]
+
+            for j, (z, y, x) in enumerate(batch_coords_lr):
+                patch = torch.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
+                data_L = img_L[:, z:z+size_lr, y:y+size_lr, x:x+size_lr]  # Extract data
+
+                patch[:, :data_L.shape[1], :data_L.shape[2], :data_L.shape[3]] = data_L  # Fill patch with data
+                patch_batch[j] = patch  # Fill batch with patch
+
+            patch_batch = patch_batch.float()  # Ensure data is float32
+            patch_batch = (patch_batch - global_min) / (global_max - global_min)
+
+            if model_input_type == '2D':
+                upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
+            else:
+                model.L = patch_batch.to(model.device)
+                model.netG_forward()
+                upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
+
+            for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
+                dz = min(z_hr+size_hr, D_hr) - z_hr
+                dy = min(y_hr+size_hr, H_hr) - y_hr
+                dx = min(x_hr+size_hr, W_hr) - x_hr
+                patch_E = upsampled_batch[j, :, :dz, :dy, :dx].numpy()
+
+                if overlap_mode == "hann":
+                    window = hann_window[:, :dz, :dy, :dx].numpy()
+                    img_E[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += patch_E * window
+                    weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += window
+                elif overlap_mode == "mean":
+                    img_E[:, z_hr:z_hr + dz, y_hr:y_hr + dy, x_hr:x_hr + dx] += patch_E
+                    weight[:, z_hr:z_hr+dz, y_hr:y_hr+dy, x_hr:x_hr+dx] += 1
+
+    if overlap_mode == "mean":
+        weight[weight == 0] = 1
+
+    img_E /= weight  # Normalize data by weights
+    img_E = img_E.numpy()  # Convert to numpy array
+    np.clip(img_E, 0.0, 1.0, out=img_E)  # Clip to [0, 1]
+
+    img_E *= 65535  # Scale to [0, 65535]
+    img_E = img_E.astype(np.uint16)  # Scale to uint16
+
+    return img_E
+
 
 
 def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, size_hr, border, batch_size, overlap_mode="hann", model_input_type='3D'):

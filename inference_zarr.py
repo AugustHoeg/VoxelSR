@@ -19,7 +19,7 @@ from tqdm import tqdm
 import config
 from utils import utils_3D_image
 from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nrmse_2D
-from utils.utils_3D_image import run_strided_inference_zarr, run_strided_inference
+from utils.utils_3D_image import run_strided_inference_zarr, run_strided_inference, run_strided_inference_pad
 from utils.load_options import load_options_from_experiment_id
 
 def get_mean_and_ci(data_sequence, confidence=0.95):
@@ -293,14 +293,15 @@ def main(opt: DictConfig):
                     img_L = np.reshape(img_L, (1, *img_L.shape))
                     img_L = torch.from_numpy(img_L)
 
-                    img_E = run_strided_inference(
+                    img_E = run_strided_inference_pad(
                         model=model,
                         img_L=img_L,
                         f=opt['up_factor'],
                         size_lr=opt.dataset_opt.patch_size,
                         size_hr=patch_size_hr,
                         border=4+context_width*2,
-                        batch_size=batch_size // 2,
+                        context_width=context_width,
+                        batch_size=batch_size,
                         overlap_mode="hann",
                         model_input_type=opt['input_type']
                     )
