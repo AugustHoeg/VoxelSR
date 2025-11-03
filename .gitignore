@@ -29,6 +29,7 @@ LAM_3d/*.sh
 
 **/*.h5
 *.h5
+*.png
 
 *.log
 *.wandb
