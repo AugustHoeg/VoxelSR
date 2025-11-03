@@ -234,7 +234,7 @@ def main(opt: DictConfig):
 
 
         # %% Make visualizations
-        if model_name == "MTVNet" and (opt['netG']['num_levels'] > 1):
+        if model_name == "MTVNet" and (opt['model_opt']['netG']['num_levels'] > 1):
             abs_normed_grad_numpy = pad_to_shape_numpy(abs_normed_grad_numpy, (128, 128, 128))
             crop_idx = (128 - 32) // 2
 
