@@ -155,7 +155,7 @@ def main(opt: DictConfig):
 
     # %% Show image
     if model_name == "MTVNet":
-        lr_pred_area = opt['netG']['context_sizes'][-1]
+        lr_pred_area = opt['model_opt']['netG']['context_sizes'][-1]
         z_idx_lr = (2 * d + window_size) // (2 * up_factor) + (input_size - lr_pred_area) // 2
     else:
         z_idx_lr = d // up_factor + window_size // (2 * up_factor)
