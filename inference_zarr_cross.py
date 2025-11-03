@@ -19,7 +19,7 @@ from tqdm import tqdm
 import config
 from utils import utils_3D_image
 from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nrmse_2D
-from utils.utils_3D_image import run_strided_inference_zarr, run_strided_inference
+from utils.utils_3D_image import run_strided_inference_zarr, run_strided_inference, run_strided_inference_pad
 from utils.load_options import load_options_from_experiment_id
 
 def get_mean_and_ci(data_sequence, confidence=0.95):
@@ -128,6 +128,51 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9):
 
     return psnr_slice_list, ssim_slice_list, nrmse_slice_list
 
+def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-10, max_val=65535.0):
+
+    num_slices = img_H.shape[slice_dim]
+
+    # Compute PSNR, SSIM and NRMSE slice-wise. Slice-wise approach is chosen as some dataset samples are very large.
+    psnr_slice_list = []
+    ssim_slice_list = []
+    nrmse_slice_list = []
+
+    for i in range(0, num_slices, slice_step):
+        if i % 100 == 0:
+            print(f"Evaluating slice {i}/{num_slices}")
+
+        if slice_dim == 0:
+            H_slice = img_H[i, :, :]
+            E_slice = img_E[i, :, :]
+        elif slice_dim == 1:
+            H_slice = img_H[:, i, :]
+            E_slice = img_E[:, i, :]
+        else:
+            H_slice = img_H[:, :, i]
+            E_slice = img_E[:, :, i]
+
+        # Normalize to [0, 1]
+        H_slice = H_slice / max_val
+        E_slice = E_slice / max_val
+
+        H_min, H_max = H_slice.min(), H_slice.max()
+        if H_max - H_min < eps:
+            continue
+
+        E_slice = np.clip(E_slice, 0.0, 1.0)
+        H_slice = np.clip(H_slice, 0.0, 1.0)
+
+        slice_psnr = calculate_psnr_2D(E_slice, H_slice, border=0)
+        psnr_slice_list.append(slice_psnr)
+
+        slice_ssim = calculate_ssim_2D(E_slice, H_slice, border=0)
+        ssim_slice_list.append(slice_ssim)
+
+        slice_nrmse = calculate_nrmse_2D(E_slice, H_slice, border=0)
+        nrmse_slice_list.append(slice_nrmse)
+
+    return psnr_slice_list, ssim_slice_list, nrmse_slice_list
+
 
 @hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
@@ -178,6 +223,17 @@ def main(opt: DictConfig):
     dataset = D(opt)
     data_dict = dataset.dataset_dict_test
 
+    if opt['model_opt']['model_architecture'] == "MTVNet":
+        patch_size = opt['dataset_opt']['patch_size']
+        center_size = opt['model_opt']['netG']['context_sizes'][-1]  # New
+        context_width = (patch_size - center_size) // 2
+        patch_size_hr = center_size * opt['up_factor']
+    else:
+        patch_size = opt['dataset_opt']['patch_size']
+        context_width = 0
+        patch_size_hr = opt['dataset_opt']['patch_size_hr']
+
+
     # Create directory for test patch comparisons
     image_path = os.path.join(wandb_path, "files/", "media/", "images/")
     print("Saving image comparisons to:", image_path)
@@ -219,6 +275,11 @@ def main(opt: DictConfig):
                 print(f"Processing image {image_idx + 1}/{len(paths)}: {zarr_path}")
                 out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
+                # Skip bone samples for VoDaSuRe OME dataset
+                if "bone_2_ome" in zarr_path:
+                    print("Skipping large bone sample.")
+                    continue
+
                 if inference_mode == 'zarr':
                     run_strided_inference_zarr(
                         model=model,
@@ -227,7 +288,8 @@ def main(opt: DictConfig):
                         group_pair=group_pair,
                         f=opt['up_factor'],
                         size_lr=opt.dataset_opt.patch_size,
-                        border=4,
+                        size_hr=patch_size_hr,
+                        border=4+context_width*2,
                         batch_size=batch_size,
                         overlap_mode="hann",
                         model_input_type=opt['input_type'],
@@ -250,12 +312,14 @@ def main(opt: DictConfig):
                     img_L = np.reshape(img_L, (1, *img_L.shape))
                     img_L = torch.from_numpy(img_L)
 
-                    img_E = run_strided_inference(
+                    img_E = run_strided_inference_pad(
                         model=model,
                         img_L=img_L,
                         f=opt['up_factor'],
                         size_lr=opt.dataset_opt.patch_size,
-                        border=4,
+                        size_hr=patch_size_hr,
+                        border=4 + context_width * 2,
+                        context_width=context_width,
                         batch_size=batch_size,
                         overlap_mode="hann",
                         model_input_type=opt['input_type']
@@ -272,7 +336,8 @@ def main(opt: DictConfig):
                 slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
 
                 start = time.time()
-                psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=slice_step)
+                psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=slice_step, max_val=65535.0)
+                # psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=slice_step)
                 stop = time.time()
                 print("Time elapsed for full sample evaluation:", stop - start)
 
