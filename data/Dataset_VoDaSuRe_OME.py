@@ -126,7 +126,7 @@ class Dataset_VoDaSuRe_OME():
                     print("Test paths: ", test_paths["VoDaSuRe"])
 
                 if "single_sample_test" in opt:
-                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_1.zarr")]
+                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_ome_1.zarr")]
 
                     test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr")]
 
