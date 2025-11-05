@@ -75,7 +75,7 @@ if __name__ == '__main__':
     base_dir = "../downloaded_data/VoDaSuRe/Visual_comparisons/"
 
     dataset = "VoDaSuRe_DOWN"
-    use_registered = True  # Change to False for downsampled data
+    use_registered = False  # Change to False for downsampled data
 
     if use_registered:
         group_dir = "HR0_REG0" # Change for downsampled vs. registered data
@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
         comp_dict = get_comparison_dict(image_paths, img_idx, model_names, large_img_size, large_img_location)
 
-        fig = plt.figure(figsize=(10, 7.0), constrained_layout=True)
+        fig = plt.figure(figsize=(10, 7.4), constrained_layout=True)
 
         # Main structure: narrow left column, wide right grid
         gs_main = gridspec.GridSpec(
@@ -130,7 +130,7 @@ if __name__ == '__main__':
         gs_left = gridspec.GridSpecFromSubplotSpec(
             2, 1,
             subplot_spec=gs_main[0, 0],
-            hspace=0.08,
+            hspace=0.18,
             wspace=0.08
         )
 
@@ -191,7 +191,7 @@ if __name__ == '__main__':
             ax.imshow(img, cmap='gray')
             ax.set_xticks([])
             ax.set_yticks([])
-            ax.text(0.5, -0.05, text, ha='center', va='top', fontsize=16, transform=ax.transAxes)
+            ax.text(0.5, -0.04, text, ha='center', va='top', fontsize=20, transform=ax.transAxes)
 
         # Make figure as compact as possible
         fig.set_constrained_layout_pads(
@@ -200,5 +200,8 @@ if __name__ == '__main__':
             wspace=0.0,
             hspace=0.0
         )
+
+        save_path = f"figures/{dataset}_DOWN_img_idx_{img_idx}.pdf"
+        fig.savefig(save_path, format="pdf")
 
         plt.show()

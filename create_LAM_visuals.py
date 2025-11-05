@@ -51,11 +51,11 @@ if __name__ == '__main__':
     plt.rcParams["text.usetex"] = True
 
     # Configuration
-    model_names = ["RCAN", "HAT", "EDDSR", "ArSSR", "MFER", "mDCSRN", "SuperFormer", "RRDBNet3D", "MTVNet"]
+    model_names = ["RCAN", "HAT", "EDDSR", "MFER", "mDCSRN", "SuperFormer", "RRDBNet3D", "MTVNet"]
     #dataset = "C:/Users/aulho/OneDrive - Danmarks Tekniske Universitet/Dokumenter/Github/downloaded_data/paper_comparisons/LAM/HCP_1200_cube_027_win48_h40-w40-d40_new/"
 
-    cube_no = "027"
-    dataset_name = "CTSpine1K"
+    cube_no = "084"  # "027"
+    dataset_name = "LITS"  # "CTSpine1K"
     dataset = f"LAM_3d/Results/{dataset_name}_cube_{cube_no}_win48_h38-w38-d38_new/"
 
     row, col = 1, len(model_names) + 1
@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     # Prepare subplot labels
     DI_values = {
-        "HAT": 8.48, "RCAN": 7.73, "ArSSR": 8.37, "EDDSR": 6.65,
+        "HAT": 8.48, "RCAN": 7.73, "EDDSR": 6.65,
         "MTVNet": 39.62, "MFER": 15.15, "mDCSRN": 15.49,
         "RRDBNet3D": 27.52, "SuperFormer": 13.92,
     }
@@ -119,5 +119,5 @@ if __name__ == '__main__':
             ax.set_yticks([])
 
     # Save figure
-    fig.savefig(dataset[:-1] + "LAM.pdf", format="pdf")
+    fig.savefig("LAM_3d/Figures/LAM.pdf", format="pdf")
     plt.show()
