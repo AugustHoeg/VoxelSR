@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
@@ -46,16 +47,37 @@ def get_comparison_dict_LAM(image_paths, img_idx, model_names, large_img_size, l
     return comp_dict
 
 
+def read_di_values(di_file):
+    """
+    Reads DI values from a text file and extracts the relevant values for each model.
+    Returns a dictionary with model names as keys and their corresponding DI values.
+    """
+    di_values = {}
+
+    with open(di_file, 'r') as file:
+        lines = file.readlines()
+
+    for line in lines:
+        # Match DI line for MEAN, no pad DI values
+        match = re.search(r"Diffusion index \(MEAN, no pad\) for (\w+),.*: ([\d.]+)", line)
+        if match:
+            model_name = match.group(1)
+            di_value = float(match.group(2))
+            di_values[model_name] = di_value
+
+    return di_values
+
+
 if __name__ == '__main__':
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["text.usetex"] = True
 
     # Configuration
-    model_names = ["RCAN", "HAT", "EDDSR", "ArSSR", "MFER", "mDCSRN", "SuperFormer", "RRDBNet3D", "MTVNet"]
+    model_names = ["RCAN", "HAT", "EDDSR", "MFER", "mDCSRN", "SuperFormer", "RRDBNet3D", "MTVNet"]
     #dataset = "C:/Users/aulho/OneDrive - Danmarks Tekniske Universitet/Dokumenter/Github/downloaded_data/paper_comparisons/LAM/HCP_1200_cube_027_win48_h40-w40-d40_new/"
 
-    cube_no = "027"
-    dataset_name = "CTSpine1K"
+    cube_no = "042"  # "027"
+    dataset_name = "VoDaSuRe"  # "CTSpine1K"
     dataset = f"LAM_3d/Results/{dataset_name}_cube_{cube_no}_win48_h38-w38-d38_new/"
 
     row, col = 1, len(model_names) + 1
@@ -66,22 +88,33 @@ if __name__ == '__main__':
     show_HR_as_large_img = False
 
     # Load LAM images
-    image_paths = glob.glob(dataset + "*_full_log_blend.png")
+    #image_paths = glob.glob(dataset + "*_full_log_blend.png")
+    image_paths = glob.glob(dataset + "*_mean_blend.png")
     comp_dict = get_comparison_dict_LAM(image_paths, 0, model_names, large_img_size, large_img_location)
 
-    # Prepare subplot labels
-    DI_values = {
-        "HAT": 8.48, "RCAN": 7.73, "ArSSR": 8.37, "EDDSR": 6.65,
-        "MTVNet": 39.62, "MFER": 15.15, "mDCSRN": 15.49,
-        "RRDBNet3D": 27.52, "SuperFormer": 13.92,
-    }
+    # Read DI values from the file
+    di_values = read_di_values(os.path.join(dataset, "LAM_DI.txt"))
+    print("di_values", di_values)
 
+    max_DI = di_values[model_names[0]]
+    max_model = model_names[0]
+    for model_name in model_names:
+        DI = di_values[model_name]
+        if DI > max_DI:
+            max_model = model_name
+            max_DI = DI
+
+    # Prepare subplot labels
     subplot_text = ["HR crop"]
     for model in model_names:
-        if model == "MTVNet":
-            subplot_text.append(f"{model}\n DI: $\\mathbf{{{DI_values[model]:.2f}}}$")
+        if model in di_values:
+            di_value = di_values[model]
+            if model == max_model:
+                subplot_text.append(f"{model}\n DI: $\\mathbf{{{di_value:.2f}}}$")
+            else:
+                subplot_text.append(f"{model}\n DI: {di_value:.2f}")
         else:
-            subplot_text.append(f"{model}\n DI: {DI_values[model]:.2f}")
+            subplot_text.append(f"{model}\n DI: N/A")
 
     # Create figure
     fig = plt.figure(figsize=(30, 4.0), constrained_layout=True)
@@ -96,7 +129,8 @@ if __name__ == '__main__':
 
             # Leftmost image: input LR
             if i == 0 and j == 0:
-                lr_image_path = glob.glob(dataset + "lr_full*.png")[0]
+                #lr_image_path = glob.glob(dataset + "lr_full*.png")[0]
+                lr_image_path = glob.glob(dataset + "selection*.png")[0]
                 img_box = np.array(Image.open(lr_image_path)).astype(np.float32) / 255.0
                 ax.imshow(img_box, cmap="Reds")
             else:
@@ -107,17 +141,17 @@ if __name__ == '__main__':
                 img_box = img_box.astype(np.float32) / 255.0
                 ax.imshow(img_box, cmap="Reds")
 
-                rect = patches.Rectangle(
-                    red_box_coords, red_box_size, red_box_size,
-                    linewidth=1.5, edgecolor='b', facecolor='none'
-                )
-                ax.add_patch(rect)
+                #rect = patches.Rectangle(
+                #    red_box_coords, red_box_size, red_box_size,
+                #    linewidth=1.5, edgecolor='b', facecolor='none'
+                #)
+                #ax.add_patch(rect)
 
-            label_text = "Input LR" if (i == 0 and j == 0) else subplot_text[j]
+            label_text = f"LAM crop\n{dataset_name}" if (i == 0 and j == 0) else subplot_text[j]
             ax.text(0.5, -0.03, label_text, ha='center', va='top', fontsize=36, transform=ax.transAxes)
             ax.set_xticks([])
             ax.set_yticks([])
 
     # Save figure
-    fig.savefig(dataset[:-1] + "LAM.pdf", format="pdf")
+    fig.savefig(f"LAM_3d/Figures/LAM_{dataset_name}_{cube_no}.pdf", format="pdf")
     plt.show()

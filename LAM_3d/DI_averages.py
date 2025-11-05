@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     print("Current working directory is:", os.getcwd())
 
-    dataset = "VoDaSuRe"
+    dataset = "LIDC-IDRI"
     print(f"Running DI averages for: {dataset}")
 
     file_paths = glob.glob(f"Results/{dataset}*/LAM_DI.txt")
