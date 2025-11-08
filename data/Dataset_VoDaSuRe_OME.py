@@ -203,10 +203,21 @@ class Dataset_VoDaSuRe_OME():
             group_pairs["CTSpine1K"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
             group_pairs["LIDC-IDRI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
 
-            if self.synthetic:
-                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            #if self.synthetic:
+            #    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+            #else:
+            #    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
+
+            if "ablation_downsampling_test" in opt:
+                if self.synthetic:
+                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/1", "L": "HR/3"}], "2": [{"H": "HR/1", "L": "HR/2"}]}
+                else:
+                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/1", "L": "REG/1"}], "2": [{"H": "HR/2", "L": "REG/1"}]}
             else:
-                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
+                if self.synthetic:
+                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+                else:
+                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
 
             store_type = {"HCP_1200":  "LocalStore",
                           "IXI":       "LocalStore",

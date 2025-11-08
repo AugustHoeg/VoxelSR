@@ -69,58 +69,63 @@ if __name__ == '__main__':
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["text.usetex"] = True
 
-    model_names = ["RCAN", "HAT", "EDDSR", "mDCSRN", "MFER", "SuperFormer", "RRDBNet3D", "MTVNet"]
+    model_names = ["RRDBNet3D"] # ["RCAN", "HAT", "EDDSR", "mDCSRN", "MFER", "SuperFormer", "RRDBNet3D", "MTVNet"]
     base_dir = "../downloaded_data/VoDaSuRe/Visual_comparisons/"
 
-    img_idx_list = [9*33, 9*8] #[9*33, 9*3, 9*8]
+    dataset = "VoDaSuRe"
+    use_registered = True  # Change to False for downsampled data
+    up_factor = 2  # 2, 4
+
+    if use_registered:
+        if up_factor == 4:
+            group_dir = "HR0_REG0"
+            LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+        elif up_factor == 2:
+            group_dir = "HR1_REG0"
+            LR_title = r"Registered LR ($\times 2$)"  # "Downsampled"
+    else:
+        if up_factor == 4:
+            group_dir = "HR0_HR2"
+            LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
+        elif up_factor == 2:
+            group_dir = "HR0_HR1"
+            LR_title = r"Downsampled LR ($\times 2$)"  # "Downsampled"
+
+    model_dirs = [
+        #f"{base_dir}/RCAN/{dataset}/{group_dir}/",
+        #f"{base_dir}/HAT/{dataset}/{group_dir}/",
+        #f"{base_dir}/EDDSR/{dataset}/{group_dir}/",
+        #f"{base_dir}/mDCSRN/{dataset}/{group_dir}/",
+        #f"{base_dir}/MFER/{dataset}/{group_dir}/",
+        #f"{base_dir}/SuperFormer/{dataset}/{group_dir}/",
+        f"{base_dir}/RRDBNet3D/{dataset}/{group_dir}/",
+        #f"{base_dir}/MTVNet/{dataset}/{group_dir}/"
+    ]
+
+    model_dirs = [os.path.join(d, "*.png") for d in model_dirs]
+    image_paths = [glob.glob(path) for path in model_dirs]
+
+    #img_idx_list = [0, 9]  # "WOOD"
+    img_idx_list = [9 * 9, 3 * 9] #  "VoDaSuRe"
 
     row, col = len(img_idx_list), len(model_names) + 1
     show_HR_as_large_img = False
 
     large_img_size = 400
-    large_img_location = (210, 190)
-    #large_img_location = (50, 20)
-    red_box_coords = (100, 112)
+    #large_img_location = (210, 190)
+    large_img_location = (400, 400)
+    red_box_coords = (50, 150)
     red_box_size = 128
 
+    large_image_string = r"VoDaSuRe ($\times 4$)"
     use_other_string = True
     plot_metrics = False
-    fig = plt.figure(figsize=(12, 3 if plot_metrics else 3), constrained_layout=True)
-    # fig.suptitle(large_image_string, fontsize=26)
+
+    fig = plt.figure(figsize=(11, 4 if plot_metrics else 4), constrained_layout=True)
+    #fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
-    datasets = ["CTSpine1K", "LITS", "LIDC-IDRI"]
-
     for i, img_idx in enumerate(img_idx_list):
-        dataset = datasets[i]
-        # tv = total_variation(tv_image, mode="L2")
-        large_image_string = rf"{dataset} ($\times 4$)"
-
-        use_registered = False  # Change to False for downsampled data
-
-        if use_registered:
-            group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
-            LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
-        else:
-            group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
-            LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
-
-        model_dirs = [
-            f"{base_dir}/RCAN/{dataset}/{group_dir}/",
-            f"{base_dir}/HAT/{dataset}/{group_dir}/",
-            f"{base_dir}/EDDSR/{dataset}/{group_dir}/",
-            f"{base_dir}/mDCSRN/{dataset}/{group_dir}/",
-            f"{base_dir}/MFER/{dataset}/{group_dir}/",
-            f"{base_dir}/SuperFormer/{dataset}/{group_dir}/",
-            f"{base_dir}/RRDBNet3D/{dataset}/{group_dir}/",
-            f"{base_dir}/MTVNet/{dataset}/{group_dir}/"
-        ]
-
-        model_dirs = [os.path.join(d, "*.png") for d in model_dirs]
-        image_paths = [glob.glob(path) for path in model_dirs]
-
-        #for hej in [9, 10, 11, 18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]: # [18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]:
-        #img_idx_list = [37, 29, 19]
 
         comp_dict = get_comparison_dict(image_paths, img_idx, model_names, large_img_size, large_img_location)
 
@@ -139,24 +144,24 @@ if __name__ == '__main__':
             box_name = img_box_order[j]
 
             if box_name == "HR":
-                img_box = comp_dict["MTVNet"]['H']
+                img_box = comp_dict["RRDBNet3D"]['H']
             elif box_name == "LR":
-                img_box = comp_dict["MTVNet"]['L']
+                img_box = comp_dict["RRDBNet3D"]['L']
             else:
                 img_box = comp_dict[box_name]['E']
 
-            norm_val = np.max(comp_dict['MTVNet']['H'])
+            norm_val = np.max(comp_dict['RRDBNet3D']['H'])
 
             if (j == 0) and show_HR_as_large_img:
-                large_img = comp_dict['MTVNet']['H'] / norm_val
+                large_img = comp_dict['RRDBNet3D']['H'] / norm_val
                 ax.imshow(large_img)
                 rect = patches.Rectangle(red_box_coords, red_box_size, red_box_size, linewidth=1.5, edgecolor='r', facecolor='none')
                 ax.add_patch(rect)
                 ax.text(0.5, -0.04, header, ha='center', va='top', fontsize=12, transform=ax.transAxes)
             else:
                 if (j == 0):
-                    img_hr = comp_dict["MTVNet"]['H'] / norm_val
-                    img_lr = comp_dict["MTVNet"]['L'] / norm_val
+                    img_hr = comp_dict["RRDBNet3D"]['H'] / norm_val
+                    img_lr = comp_dict["RRDBNet3D"]['L'] / norm_val
                     img_hr, _ = crop_image_at_location(img_hr, red_box_size, red_box_coords)
                     img_lr, _ = crop_image_at_location(img_lr, red_box_size, red_box_coords)
 
@@ -177,6 +182,6 @@ if __name__ == '__main__':
 
     datetime = np.datetime64('now')
     time = str(datetime).replace(":", "-").replace(" ", "_")
-    save_path = f"figures/{dataset}_img_idx_{img_idx_list}_{red_box_size}.pdf"
+    save_path = f"figures/{dataset}_img_idx_{img_idx_list}.pdf"
     fig.savefig(save_path, format="pdf")
     plt.show()
