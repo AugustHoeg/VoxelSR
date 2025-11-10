@@ -85,24 +85,27 @@ if __name__ == '__main__':
 
     #img_idx_list = [0, 1, 2, 9, 10, 11, 18, 19] # For medical datasets:
     img_idx_list = [1, 10, 19, 28, 46, 55, 64, 73]  # For VoDaSuRe_DOWN
-    row, col = 1, len(model_names)
+    img_idx_list = [1, 10, 19, 28, 46, 64, 73, 56, 37, 83]  # For VoDaSuRe_DOWN
+    row, col = 1, len(img_idx_list)
 
     #datasets = ["CTSpine1K", "LITS", "LIDC-IDRI"]
     datasets = ["VoDaSuRe_DOWN", "VoDaSuRe_DOWN", "VoDaSuRe_DOWN"]
 
-    large_image_string = r"VoDaSuRe ($\times 4$)"
+    plot_prediction = True
+    use_registered = False  # Change to False for downsampled data
+
+    large_image_string = r"Downscaled" # r"Registered"
     use_other_string = True
     plot_metrics = False
 
     #fig = plt.figure(figsize=(1.5 * 11, 1.5 * 4 if plot_metrics else 1.5 * 4), constrained_layout=True)
-    fig = plt.figure(figsize=(1.5 * 12, 1.5 * 2 if plot_metrics else 1.5 * 2), constrained_layout=True)
+    fig = plt.figure(figsize=(18, 2 if plot_metrics else 2), constrained_layout=True)
     # fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
     for i in range(row):
 
         dataset = datasets[i]
-        use_registered = False  # Change to False for downsampled data
 
         if use_registered:
             group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
@@ -131,17 +134,22 @@ if __name__ == '__main__':
 
         large_img_size = 400
         #large_img_location = (210, 190)
-        large_img_location = (400, 400)
-        red_box_coords = (50, 150)
-        red_box_size = 512
+        large_img_location = (600, 550)
+        large_img_location = (400, 550)
+        large_img_location = (520, 600)
+        red_box_coords = (150, 150)
+        red_box_size = 256
 
         for j in range(col):
             comp_dict = get_comparison_dict(image_paths, img_idx_list[j], model_names, large_img_size, large_img_location)
 
             ax = fig.add_subplot(gs[i, j])
-            box_name = model_names[j]
+            box_name = "RRDBNet3D" # model_names[j]
 
-            img_box = comp_dict[box_name]['H']
+            if plot_prediction:
+                img_box = comp_dict[box_name]['E']
+            else:
+                img_box = comp_dict[box_name]['H']
 
             tv_image = img_box.transpose(2, 0, 1).astype(np.float32)
             tv = total_variation(tv_image, mode="L2")
@@ -151,12 +159,14 @@ if __name__ == '__main__':
             img_box = img_box / norm_val
             img, _ = crop_image_at_location(img_box, red_box_size, red_box_coords)
             ax.imshow(img.transpose(1, 0, 2))
-            ax.text(0.5, -0.04, f"{dataset}, TV: {tv:.2f}", ha='center', va='top', fontsize=10, transform=ax.transAxes)
+            #ax.text(0.5, -0.04, f"{large_image_string}, TV: {tv:.2f}", ha='center', va='top', fontsize=10, transform=ax.transAxes)
+            ax.text(0.5, -0.04, f"TV: {tv:.2f}", ha='center', va='top', fontsize=14,
+                    transform=ax.transAxes)
 
             ax.set_xticks([])
             ax.set_yticks([])
 
-    save_path = f"../figures/{dataset}_total_variation_examples_{img_idx_list}.pdf"
+    save_path = f"../figures/{large_image_string}_total_variation_examples_{img_idx_list}_{red_box_size}.pdf"
     fig.savefig(save_path, format="pdf")
     plt.show()
 

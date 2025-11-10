@@ -64,39 +64,48 @@ def get_comparison_dict(image_paths, img_idx, model_names, crop_size, crop_locat
 
     return comp_dict
 
+def total_variation(img, mode="L2"):
+    c, h, w = img.shape
+    if mode == "sum_of_squares":
+        tv_x = np.pow(img[:, 1:, :] - img[:, :-1, :], 2).sum()
+        tv_y = np.pow(img[:, :, 1:] - img[:, :, :-1], 2).sum()
+        return (tv_x + tv_y)/(c*h*w)
+    elif mode == "L2":
+        tv_x = np.pow(img[:, 1:, :] - img[:, :-1, :], 2)
+        tv_y = np.pow(img[:, :, 1:] - img[:, :, :-1], 2)
+        return np.sum(np.sqrt(tv_x.flatten() + tv_y.flatten()))/(c*h*w)
+
 
 if __name__ == '__main__':
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["text.usetex"] = True
 
     model_names = ["RCAN", "HAT", "EDDSR", "mDCSRN", "MFER", "SuperFormer", "RRDBNet3D", "MTVNet"]
-    base_dir = "../downloaded_data/VoDaSuRe/Visual_comparisons/"
+    base_dir = "../../downloaded_data/VoDaSuRe/Visual_comparisons/"
 
-    img_idx_list = [9*8]  # [9*33, 9*8] #[9*33, 9*3, 9*8]
+    #img_idx_list = [0, 1, 2, 9, 10, 11, 18, 19] # For medical datasets:
+    img_idx_list = [1, 10, 19, 28, 46, 55, 64, 73]  # For VoDaSuRe_DOWN
+    img_idx_list = [1, 10, 19, 28, 46, 64, 73, 55, 37, 82]  # For VoDaSuRe_DOWN
+    row, col = 1, len(img_idx_list)
 
-    row, col = len(img_idx_list), len(model_names) + 1
-    show_HR_as_large_img = False
+    datasets = ["CTSpine1K", "LITS", "LIDC-IDRI"]
+    #datasets = ["VoDaSuRe", "VoDaSuRe", "VoDaSuRe"]
 
-    large_img_size = 400
-    large_img_location = (50, 50)
-    #large_img_location = (50, 20)
-    red_box_coords = (80, 140)
-    red_box_size = 128
+    plot_prediction = True
+    use_registered = True  # Change to False for downsampled data
 
+    large_image_string = r"VoDaSuRe"
     use_other_string = True
     plot_metrics = False
-    fig = plt.figure(figsize=(16, 2 if plot_metrics else 2), constrained_layout=True)
+
+    #fig = plt.figure(figsize=(1.5 * 11, 1.5 * 4 if plot_metrics else 1.5 * 4), constrained_layout=True)
+    fig = plt.figure(figsize=(18, 2 if plot_metrics else 2), constrained_layout=True)
     # fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
-    datasets = ["CTSpine1K"]  # "LITS", "LIDC-IDRI"
+    for i in range(row):
 
-    for i, img_idx in enumerate(img_idx_list):
         dataset = datasets[i]
-        # tv = total_variation(tv_image, mode="L2")
-        large_image_string = rf"{dataset} ($\times 4$)"
-
-        use_registered = False  # Change to False for downsampled data
 
         if use_registered:
             group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
@@ -121,62 +130,43 @@ if __name__ == '__main__':
 
         #for hej in [9, 10, 11, 18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]: # [18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]:
         #img_idx_list = [37, 29, 19]
+        show_HR_as_large_img = False
 
-        comp_dict = get_comparison_dict(image_paths, img_idx, model_names, large_img_size, large_img_location)
-
-        if use_other_string:
-            #header = "\\hspace{0.35cm} HR \\hspace{0.15cm} REG \\hspace{0.10cm}"
-            header = "HR   \\hspace{1.1cm}   LR"
-        else:
-            header = "HR vs LR"
-
-        subplot_text = ["HR crop"] + model_names
-
-        img_box_order = ["HR"] + model_names
+        large_img_size = 400
+        #large_img_location = (210, 190)
+        large_img_location = (600, 550)
+        large_img_location = (400, 550)
+        large_img_location = (400, 400)
+        red_box_coords = (150, 150)
+        red_box_size = 512
 
         for j in range(col):
-            ax = fig.add_subplot(gs[i, j])
-            box_name = img_box_order[j]
+            comp_dict = get_comparison_dict(image_paths, img_idx_list[j], model_names, large_img_size, large_img_location)
 
-            if box_name == "HR":
-                img_box = comp_dict["MTVNet"]['H']
-            elif box_name == "LR":
-                img_box = comp_dict["MTVNet"]['L']
-            else:
+            ax = fig.add_subplot(gs[i, j])
+            box_name = "RRDBNet3D" # model_names[j]
+
+            if plot_prediction:
                 img_box = comp_dict[box_name]['E']
+            else:
+                img_box = comp_dict[box_name]['H']
+
+            tv_image = img_box.transpose(2, 0, 1).astype(np.float32)
+            tv = total_variation(tv_image, mode="L2")
 
             norm_val = np.max(comp_dict['MTVNet']['H'])
 
-            if (j == 0) and show_HR_as_large_img:
-                large_img = comp_dict['MTVNet']['H'] / norm_val
-                ax.imshow(large_img)
-                rect = patches.Rectangle(red_box_coords, red_box_size, red_box_size, linewidth=1.5, edgecolor='r', facecolor='none')
-                ax.add_patch(rect)
-                ax.text(0.5, -0.04, header, ha='center', va='top', fontsize=14, transform=ax.transAxes)
-            else:
-                if (j == 0):
-                    img_hr = comp_dict["MTVNet"]['H'] / norm_val
-                    img_lr = comp_dict["MTVNet"]['L'] / norm_val
-                    img_hr, _ = crop_image_at_location(img_hr, red_box_size, red_box_coords)
-                    img_lr, _ = crop_image_at_location(img_lr, red_box_size, red_box_coords)
-
-                    img = np.zeros_like(img_hr)
-                    img[:img_hr.shape[0] // 2, :, :] = img_hr[:img_hr.shape[0] // 2, :, :]
-                    img[img_hr.shape[0] // 2:, :, :] = img_lr[img_hr.shape[0] // 2:, :, :]
-                    ax.imshow(img.transpose(1, 0, 2))
-                    ax.vlines(red_box_size // 2 - 0.5, ymin=0, ymax=red_box_size - 0.5, colors="red")
-                    ax.text(0.5, -0.04, header, ha='center', va='top', fontsize=14, transform=ax.transAxes)
-                else:
-                    img_box = img_box / norm_val
-                    img, _ = crop_image_at_location(img_box, red_box_size, red_box_coords)
-                    ax.imshow(img.transpose(1, 0, 2))
-                    ax.text(0.5, -0.04, subplot_text[j], ha='center', va='top', fontsize=14, transform=ax.transAxes)
+            img_box = img_box / norm_val
+            img, _ = crop_image_at_location(img_box, red_box_size, red_box_coords)
+            ax.imshow(img.transpose(1, 0, 2))
+            ax.text(0.5, -0.04, f"{large_image_string}, TV: {tv:.2f}", ha='center', va='top', fontsize=10, transform=ax.transAxes)
 
             ax.set_xticks([])
             ax.set_yticks([])
 
-    datetime = np.datetime64('now')
-    time = str(datetime).replace(":", "-").replace(" ", "_")
-    save_path = f"figures/{dataset}_img_idx_{img_idx_list}_{red_box_size}.pdf"
+    save_path = f"../figures/{large_image_string}_total_variation_examples_{img_idx_list}.pdf"
     fig.savefig(save_path, format="pdf")
     plt.show()
+
+
+

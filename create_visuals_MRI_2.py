@@ -72,7 +72,7 @@ if __name__ == '__main__':
     model_names = ["RCAN", "HAT", "EDDSR", "mDCSRN", "MFER", "SuperFormer", "RRDBNet3D", "MTVNet"]
     base_dir = "../downloaded_data/VoDaSuRe/Visual_comparisons/"
 
-    img_idx_list = [9*8]  # [9*33, 9*8] #[9*33, 9*3, 9*8]
+    img_idx_list = [9*8] # [9*8]  # [9*33, 9*8] #[9*33, 9*3, 9*8]
 
     row, col = len(img_idx_list), len(model_names) + 1
     show_HR_as_large_img = False
@@ -80,7 +80,7 @@ if __name__ == '__main__':
     large_img_size = 400
     large_img_location = (50, 50)
     #large_img_location = (50, 20)
-    red_box_coords = (80, 140)
+    red_box_coords = (25, 230)
     red_box_size = 128
 
     use_other_string = True
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     # fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
-    datasets = ["CTSpine1K"]  # "LITS", "LIDC-IDRI"
+    datasets = ["LIDC-IDRI"]  # "LITS", "LIDC-IDRI"
 
     for i, img_idx in enumerate(img_idx_list):
         dataset = datasets[i]

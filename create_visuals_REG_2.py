@@ -72,55 +72,55 @@ if __name__ == '__main__':
     model_names = ["RCAN", "HAT", "EDDSR", "mDCSRN", "MFER", "SuperFormer", "RRDBNet3D", "MTVNet"]
     base_dir = "../downloaded_data/VoDaSuRe/Visual_comparisons/"
 
-    img_idx_list = [9*8]  # [9*33, 9*8] #[9*33, 9*3, 9*8]
+    dataset = "VoDaSuRe"
+    use_registered = True  # Change to False for downsampled data
 
+    if use_registered:
+        group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
+        LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+    else:
+        group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
+        LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
+
+    model_dirs = [
+        f"{base_dir}/RCAN/{dataset}/{group_dir}/",
+        f"{base_dir}/HAT/{dataset}/{group_dir}/",
+        f"{base_dir}/EDDSR/{dataset}/{group_dir}/",
+        f"{base_dir}/mDCSRN/{dataset}/{group_dir}/",
+        f"{base_dir}/MFER/{dataset}/{group_dir}/",
+        f"{base_dir}/SuperFormer/{dataset}/{group_dir}/",
+        f"{base_dir}/RRDBNet3D/{dataset}/{group_dir}/",
+        f"{base_dir}/MTVNet/{dataset}/{group_dir}/"
+    ]
+
+    model_dirs = [os.path.join(d, "*.png") for d in model_dirs]
+    image_paths = [glob.glob(path) for path in model_dirs]
+
+    #for hej in [9, 10, 11, 18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]: # [18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]:
+    #img_idx_list = [37, 29, 19]
+    #img_idx_list = [1, 19, 28]
+    #img_idx_list = [1, 19, 28]
+    #img_idx_list = [0, 28]
+    img_idx_list = [2*9]
     row, col = len(img_idx_list), len(model_names) + 1
     show_HR_as_large_img = False
 
     large_img_size = 400
-    large_img_location = (50, 50)
-    #large_img_location = (50, 20)
-    red_box_coords = (80, 140)
+    #large_img_location = (200, 200)
+    large_img_location = (640, 260)
+    #large_img_location = (500, 400)
+    red_box_coords = (50, 150)
     red_box_size = 128
 
+    large_image_string = r"VoDaSuRe ($\times 4$)"
     use_other_string = True
     plot_metrics = False
+
     fig = plt.figure(figsize=(16, 2 if plot_metrics else 2), constrained_layout=True)
-    # fig.suptitle(large_image_string, fontsize=26)
+    #fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
-    datasets = ["CTSpine1K"]  # "LITS", "LIDC-IDRI"
-
     for i, img_idx in enumerate(img_idx_list):
-        dataset = datasets[i]
-        # tv = total_variation(tv_image, mode="L2")
-        large_image_string = rf"{dataset} ($\times 4$)"
-
-        use_registered = False  # Change to False for downsampled data
-
-        if use_registered:
-            group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
-            LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
-        else:
-            group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
-            LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
-
-        model_dirs = [
-            f"{base_dir}/RCAN/{dataset}/{group_dir}/",
-            f"{base_dir}/HAT/{dataset}/{group_dir}/",
-            f"{base_dir}/EDDSR/{dataset}/{group_dir}/",
-            f"{base_dir}/mDCSRN/{dataset}/{group_dir}/",
-            f"{base_dir}/MFER/{dataset}/{group_dir}/",
-            f"{base_dir}/SuperFormer/{dataset}/{group_dir}/",
-            f"{base_dir}/RRDBNet3D/{dataset}/{group_dir}/",
-            f"{base_dir}/MTVNet/{dataset}/{group_dir}/"
-        ]
-
-        model_dirs = [os.path.join(d, "*.png") for d in model_dirs]
-        image_paths = [glob.glob(path) for path in model_dirs]
-
-        #for hej in [9, 10, 11, 18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]: # [18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]:
-        #img_idx_list = [37, 29, 19]
 
         comp_dict = get_comparison_dict(image_paths, img_idx, model_names, large_img_size, large_img_location)
 
