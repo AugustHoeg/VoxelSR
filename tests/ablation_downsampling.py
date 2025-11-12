@@ -80,71 +80,82 @@ if __name__ == '__main__':
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["text.usetex"] = True
 
-    model_names = ["RCAN", "HAT", "EDDSR", "mDCSRN", "MFER", "SuperFormer", "RRDBNet3D", "MTVNet"]
+    model_names = ["RRDBNet3D", "MTVNet"]
     base_dir = "../../downloaded_data/VoDaSuRe/Visual_comparisons/"
 
     #img_idx_list = [0, 1, 2, 9, 10, 11, 18, 19] # For medical datasets:
-    img_idx_list = [1, 10, 19, 28, 46, 55, 64, 73]  # For VoDaSuRe_DOWN
-    img_idx_list = [1, 10, 19, 28, 46, 64, 73, 56, 37, 83]  # For VoDaSuRe_DOWN
-    row, col = 1, len(img_idx_list)
+    row = 1
+    col = 4
 
     #datasets = ["CTSpine1K", "LITS", "LIDC-IDRI"]
-    datasets = ["VoDaSuRe", "VoDaSuRe", "VoDaSuRe"]
 
     plot_prediction = True
     use_registered = True  # Change to False for downsampled data
 
-    large_image_string = r"Registered" # r"Registered"
+    large_image_string = r"Ablation_DOWN" # r"Registered"
     use_other_string = True
     plot_metrics = False
 
     #fig = plt.figure(figsize=(1.5 * 11, 1.5 * 4 if plot_metrics else 1.5 * 4), constrained_layout=True)
-    fig = plt.figure(figsize=(18, 2 if plot_metrics else 2), constrained_layout=True)
+    fig = plt.figure(figsize=(7*1.5, 2.2*1.5 if plot_metrics else 2.05*1.5), constrained_layout=True)
     # fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
     for i in range(row):
-
-        dataset = datasets[i]
-
-        if use_registered:
-            group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
-            LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
-        else:
-            group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
-            LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
-
-        model_dirs = [
-            f"{base_dir}/RCAN/{dataset}/{group_dir}/",
-            f"{base_dir}/HAT/{dataset}/{group_dir}/",
-            f"{base_dir}/EDDSR/{dataset}/{group_dir}/",
-            f"{base_dir}/mDCSRN/{dataset}/{group_dir}/",
-            f"{base_dir}/MFER/{dataset}/{group_dir}/",
-            f"{base_dir}/SuperFormer/{dataset}/{group_dir}/",
-            f"{base_dir}/RRDBNet3D/{dataset}/{group_dir}/",
-            f"{base_dir}/MTVNet/{dataset}/{group_dir}/"
-        ]
-
-        model_dirs = [os.path.join(d, "*.png") for d in model_dirs]
-        image_paths = [glob.glob(path) for path in model_dirs]
-
-        #for hej in [9, 10, 11, 18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]: # [18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]:
-        #img_idx_list = [37, 29, 19]
-        show_HR_as_large_img = False
-
-        large_img_size = 400
-        #large_img_location = (210, 190)
-        large_img_location = (600, 550)
-        large_img_location = (400, 550)
-        large_img_location = (520, 600)
-        red_box_coords = (150, 150)
-        red_box_size = 256
-
         for j in range(col):
-            comp_dict = get_comparison_dict(image_paths, img_idx_list[j], model_names, large_img_size, large_img_location)
+
+            if j % 2 == 0:
+                img_idx = 0
+                dataset = "VoDaSuRe_ablation"
+                group_dir = "HR1_REG1"  # Change for downsampled vs. registered data
+                LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+
+                #large_img_size = 400
+                #large_img_location = (520, 600)
+                #red_box_coords = (150, 150)
+                #red_box_size = 256
+
+                large_img_size = 512
+                large_img_location = (520, 600)
+                red_box_coords = (150, 150)
+                red_box_size = 128
+
+            else:
+                img_idx = 19
+                dataset = "VoDaSuRe"
+                group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
+                LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+
+                #large_img_size = 1920
+                #large_img_location = (520 * 4, 600 * 4)
+                #red_box_coords = (150, 150)
+                #red_box_size = 512
+
+                large_img_size = 512
+                large_img_location = (520 * 2 + 5, 600 * 2 - 150 - 3)
+                red_box_coords = (150, 150)
+                red_box_size = 256
+
+
+            model_dirs = [
+                f"{base_dir}/MTVNet/{dataset}/{group_dir}/",
+                f"{base_dir}/RRDBNet3D/{dataset}/{group_dir}/"
+            ]
+
+            model_dirs = [os.path.join(d, "*.png") for d in model_dirs]
+            image_paths = [glob.glob(path) for path in model_dirs]
+
+            #for hej in [9, 10, 11, 18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]: # [18, 19, 20, 27, 28, 29, 36, 37, 38, 45, 46, 47, 54, 55, 56]:
+            #img_idx_list = [37, 29, 19]
+            show_HR_as_large_img = False
+
+            comp_dict = get_comparison_dict(image_paths, img_idx, model_names, large_img_size, large_img_location)
 
             ax = fig.add_subplot(gs[i, j])
-            box_name = "RRDBNet3D" # model_names[j]
+            if j >= 2:
+                box_name = "RRDBNet3D"
+            else:
+                box_name = "MTVNet" # model_names[j]
 
             if plot_prediction:
                 img_box = comp_dict[box_name]['E']
@@ -154,20 +165,25 @@ if __name__ == '__main__':
             tv_image = img_box.transpose(2, 0, 1).astype(np.float32)
             tv = total_variation(tv_image, mode="L2")
 
-            norm_val = np.max(comp_dict['MTVNet']['H'])
+            norm_val = np.max(comp_dict[box_name]['H'])
 
             img_box = img_box / norm_val
             img, _ = crop_image_at_location(img_box, red_box_size, red_box_coords)
             ax.imshow(img.transpose(1, 0, 2))
             #ax.text(0.5, -0.04, f"{large_image_string}, TV: {tv:.2f}", ha='center', va='top', fontsize=10, transform=ax.transAxes)
-            ax.text(0.5, -0.04, f"TV: {tv:.2f}", ha='center', va='top', fontsize=14,
+            if j % 2 == 0:
+                ax.set_title(f"W/ downsampling", fontsize=17, pad=0., y=1.03)
+            else:
+                ax.set_title(f"W/O downsampling", fontsize=17, pad=0., y=1.03)
+            ax.text(0.5, -0.02, f"{box_name}, TV: {tv:.2f}", ha='center', va='top', fontsize=16,
                     transform=ax.transAxes)
 
             ax.set_xticks([])
             ax.set_yticks([])
 
-    img_text = f"pred_{plot_prediction}_real_{use_registered}"
-    save_path = f"../figures/{large_image_string}_{img_text}_total_variation_examples_{img_idx_list}_{red_box_size}.pdf"
+    #plt.subplots_adjust(hspace=0.45)
+    save_path = f"../figures/{large_image_string}_ablation_downsampling_{img_idx}_{red_box_size}.pdf"
+    #plt.tight_layout(h_pad=0.1, w_pad=0.1)
     fig.savefig(save_path, format="pdf")
     plt.show()
 
