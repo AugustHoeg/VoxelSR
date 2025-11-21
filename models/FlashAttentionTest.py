@@ -204,7 +204,8 @@ class WindowAttention3D(nn.Module):
         return x
 
     def forward(self, x, mask=None):
-        return self.forward_flash(x, mask)
+        #return self.forward_flash(x, mask)
+        return self.forward_original(x, mask)
 
     def extra_repr(self) -> str:
         return f'dim={self.dim}, window_size={self.window_size}, ' \
