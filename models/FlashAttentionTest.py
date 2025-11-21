@@ -8,15 +8,6 @@ import torch.nn.functional as F
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
 
-print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
-print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
-print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
-
-device = torch.cuda.get_device_name()
-print("GPU:", device)
-print("PyTorch:", torch.__version__)
-
-
 if False:
     class FlashAttentionLayer(torch.nn.Module):
         def __init__(self, dim, heads):
@@ -276,6 +267,14 @@ def window_reverse3D(windows, window_size, dims):
     return x
 
 if __name__ == "__main__":
+
+    print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
+    print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
+    print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
+
+    device = torch.cuda.get_device_name()
+    print("GPU:", device)
+    print("PyTorch:", torch.__version__)
 
     batch_size = 1
     dim = 256
