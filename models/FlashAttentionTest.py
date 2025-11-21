@@ -8,6 +8,8 @@ import torch.nn.functional as F
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
 torch.backends.cuda.enable_flash_sdp(True)
+torch.backends.cuda.sdp_kernel.is_flash_enabled()
+
 
 if False:
     class FlashAttentionLayer(torch.nn.Module):
