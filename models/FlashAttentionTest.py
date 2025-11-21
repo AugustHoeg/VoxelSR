@@ -7,8 +7,14 @@ import torch.nn.functional as F
 #from flash_attn import flash_attn_qkvpacked_func, flash_attn_func
 
 from torch.nn.attention import SDPBackend, sdpa_kernel
-torch.backends.cuda.enable_flash_sdp(True)
-torch.backends.cuda.sdp_kernel.is_flash_enabled()
+
+print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
+print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
+print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
+
+device = torch.cuda.get_device_name()
+print("GPU:", device)
+print("PyTorch:", torch.__version__)
 
 
 if False:
