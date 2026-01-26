@@ -12,6 +12,9 @@ from torch import Tensor, nn
 
 from models.models_3D import SRBlock3D
 from utils.utils_3D_image import numel
+from timm.models.layers import to_3tuple
+
+from models.FlashAttentionTest import STLayerV2, WindowCrossAttention3D_FAST
 
 from monai.networks.nets.swin_unetr import SwinTransformerBlock
 
@@ -171,10 +174,17 @@ class PatchEmbed3D(nn.Module):
         self.method = method
         self.out_format = out_format
 
-        pad = 1 if patch_size >= 3 else 0
+        if patch_size == 1:
+            kernel_size = 3
+            stride = 1
+            pad = 1
+        else:
+            kernel_size = patch_size
+            stride = patch_size
+            pad = 1 if patch_size >= 3 else 0
 
         if self.method == "proj":
-            self.proj = nn.Conv3d(in_channels, dim, kernel_size=patch_size, stride=patch_size, padding=pad, bias=False)
+            self.proj = nn.Conv3d(in_channels, dim, kernel_size=kernel_size, stride=stride, padding=pad, bias=False)
         else:
             # fallback: flatten (used rarely)
             self.proj = None
@@ -306,10 +316,60 @@ class WindowCrossAttention3D(nn.Module):
         return flops
 
 
+class CrossScaleMerge(nn.Module):
+    def __init__(self, dim, prev_dim, window_size, num_heads, query_token_size, key_token_size, csm_method="crossattn"):
+        super().__init__()
+
+        self.csm_method = csm_method  # "adaLN" or "crossattn"
+        self.window_size = window_size  # hardcoded for now
+        self.num_heads = num_heads
+        self.query_token_size = query_token_size
+        self.key_token_size = key_token_size
+
+        if self.csm_method == "adaLN":
+            raise NotImplementedError("adaLN not implemented yet.")
+
+        elif self.csm_method == "crossattn":
+            self.mlp_match = Mlp(in_features=prev_dim,
+                                 hidden_features=prev_dim * 1,
+                                 out_features=dim)
+
+            self.cross_attn = WindowCrossAttention3D_FAST(dim,
+                                                          window_size=to_3tuple(self.window_size),
+                                                          num_heads=self.num_heads,
+                                                          qkv_bias=True,
+                                                          attn_drop=0.0,
+                                                          query_token_size=query_token_size,
+                                                          key_token_size=key_token_size)
+
+            self.cross_norm = nn.LayerNorm(dim)
+
+    def forward(self, x, prev_x):
+
+        B, D, H, W, C = x.shape  # assume channel-last input
+
+        if self.csm_method == "adaLN":  # Adaptive Layer Norm Zero (adaLN-Zero) conditioning from DiT paper.
+            raise NotImplementedError("adaLN not implemented yet.")
+
+        elif self.csm_method == "crossattn":
+            # MLP to match channel dimensions
+            prev_x_windows = self.mlp_match(prev_x)
+            # Repartition previous-level patches using current-level window size
+            prev_x_windows = window_partition3D(prev_x_windows, window_size=self.window_size)
+            # Window cross-attention
+            x_windows = window_partition3D(x, window_size=self.window_size)
+            cross_attn_windows = self.cross_attn(x_windows, prev_x_windows)  # nW*B, window_size*window_size, C
+            # Add cross-attention output to x_windows
+            x_windows = x_windows + self.cross_norm(cross_attn_windows)
+            # Reverse windows
+            x = window_reverse3D(x_windows, self.window_size, dims=(B, H, W, D))
+
+        return x
+
 
 class Group(nn.Module):
 
-    def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None, prev_dim=None):
+    def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None, prev_dim=None, prev_patch_size=2):
         super().__init__()
 
         self.layers = nn.ModuleList()
@@ -325,18 +385,27 @@ class Group(nn.Module):
             self.num_heads = num_heads
 
             self.layers.append(
-                    SwinTransformerBlock(
-                        dim=channel_dim,
-                        num_heads=self.num_heads,
-                        window_size=[self.window_size, self.window_size, self.window_size],
-                        shift_size=[self.shift_size, self.shift_size, self.shift_size],
-                        mlp_ratio=mlp_ratio,
-                        qkv_bias=True,
-                        drop=0.0,
-                        attn_drop=0.0,
-                        drop_path=dp_rates[layer_idx],
-                        norm_layer=nn.LayerNorm,
-                        use_checkpoint=False)
+                    STLayerV2(level=0,
+                            embed_dims=[channel_dim],
+                            context_sizes=[input_size],
+                            patch_sizes=[1],
+                            sizes_p=[(input_size//patch_size, input_size//patch_size, input_size//patch_size)],
+                            num_heads=self.num_heads,
+                            window_sizes=[self.window_size],
+                            shift_size=self.shift_size,
+                            mlp_ratio=mlp_ratio,
+                            qkv_bias=True,
+                            drop=0.,
+                            attn_drop=0.,
+                            drop_path=dp_rates[layer_idx],
+                            act_layer=nn.GELU,
+                            norm_layer=nn.LayerNorm,
+                            pretrained_window_size=0,
+                            enable_ape_x=False,
+                            patch_pe_method="window_relative",
+                            return_x_image=False,
+                            token_upsample_method="Monaipixelshuffle",
+                    )
             )
 
             self.compress_layers.append(
@@ -350,26 +419,16 @@ class Group(nn.Module):
         self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
 
         if prev_dim is not None:
-            ######### Multi-level patch merge #########
-            self.mlp_match = Mlp(in_features=prev_dim,
-                                hidden_features=prev_dim * 1,
-                                out_features=dim)
-
-            self.cross_attn = WindowCrossAttention3D(dim,
-                                                     window_size=[self.window_size, self.window_size, self.window_size],
-                                                     num_heads=self.num_heads,
-                                                     q_bias=True,
-                                                     kv_bias=True,
-                                                     qk_scale=None,
-                                                     attn_drop=0.0,
-                                                     proj_drop=0.0)
-
-            self.cross_norm = nn.LayerNorm(dim)
+            self.csm = CrossScaleMerge(dim=dim,
+                                       prev_dim=prev_dim,
+                                       window_size=self.window_size,
+                                       num_heads=self.num_heads,
+                                       query_token_size=patch_size,
+                                       key_token_size=prev_patch_size,
+                                       csm_method="crossattn")
 
 
     def forward(self, x, prev_x=None):
-
-        B, C, D, H, W = x.shape
 
         x_input = x
         next_x = x
@@ -377,26 +436,16 @@ class Group(nn.Module):
         ###### Dense-connected block structure ######
         for i in range(len(self.layers) - 1):
 
-            x = x.permute(0, 2, 3, 4, 1).contiguous()
+            x = x.permute(0, 2, 3, 4, 1)
 
-            prev_x = None if i > 0 else prev_x
-            if prev_x is not None:
-                prev_x = prev_x.permute(0, 2, 3, 4, 1).contiguous()  # B, D, H, W, C
-                prev_x = self.mlp_match(prev_x)
-
-                x = window_partition3D(x, window_size=self.window_size)
-                prev_x = window_partition3D(prev_x, window_size=self.window_size)
-
-                cross_attn_windows = self.cross_attn(x, prev_x)  # nW*B, window_size*window_size, C
-                x = x + self.cross_norm(cross_attn_windows)
-                x = window_reverse3D(x, window_size=self.window_size, dims=(B, D, H, W))
+            # Merge of previous level patch features
+            if prev_x is not None and i == 0:
+                prev_x = prev_x.permute(0, 2, 3, 4, 1)  # B, D, H, W, C
+                x = self.csm(x, prev_x)
 
             # Main layer
-            x = self.layers[i](x, self.mask_matrix)
-
+            x = self.layers[i](x)
             x = x.permute(0, 4, 1, 2, 3).contiguous()  # B, C, D, H, W
-
-            # Compress
             x = self.act(self.compress_layers[i](x))
 
             # Concatenate
@@ -404,12 +453,9 @@ class Group(nn.Module):
             x = next_x
 
         # Final layer
-        next_x = next_x.permute(0, 2, 3, 4, 1).contiguous()
-
-        x = self.layers[-1](next_x, prev_x)
-
+        next_x = next_x.permute(0, 2, 3, 4, 1)
+        x = self.layers[-1](next_x)
         x = x.permute(0, 4, 1, 2, 3).contiguous()
-
         x = self.act(self.compress_layers[-1](x))
 
         x = 0.2 * x + x_input
@@ -417,7 +463,7 @@ class Group(nn.Module):
         return x
 
 
-class MTVNet_monai(nn.Module):
+class MTVNet_flashattn(nn.Module):
     """
     Cleaned, minimal MTVNet that only takes used args.
 
@@ -486,8 +532,8 @@ class MTVNet_monai(nn.Module):
             if level == num_levels - 1:
                 sfe_blk = nn.Sequential(
                     nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.LeakyReLU(negative_slope=0.2, inplace=True),
-                    nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
+                    #nn.LeakyReLU(negative_slope=0.2, inplace=True),
+                    #nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
                 )
             else:
                 sfe_blk = nn.Sequential(
@@ -532,7 +578,8 @@ class MTVNet_monai(nn.Module):
                           num_heads=self.num_heads,
                           mlp_ratio=self.mlp_ratio,
                           dp_rates=dp,
-                          prev_dim=self.embed_dims[level-1] if level > 0 else None)
+                          prev_dim=self.embed_dims[level-1] if level > 0 else None,
+                          prev_patch_size=patch_sizes[level-1] if level > 0 else None)
                 )
             self.LX_blocks.append(blocks)
 
@@ -652,34 +699,42 @@ class MTVNet_monai(nn.Module):
 
 
 if __name__ == "__main__":
+
+    print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
+    print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
+    print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
+
+    device = torch.cuda.get_device_name()
+    print("GPU:", device)
+    print("PyTorch:", torch.__version__)
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 64
+    img_size = 32
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).to(device)
     B, C, H, W, D = x.shape
 
     # small config for quick run
-    context_sizes = [64]
+    context_sizes = [img_size]
     num_levels = len(context_sizes)
     shallow_feats = [128]
     pre_up_feats = [64, 64]
     num_blks = [3]
     blk_layers = [6]
-    patch_sizes = [2]
+    patch_sizes = [1]
     skip_dims = [60]
-    embed_dims = [120]
-    num_heads = 4
+    embed_dims = [180]
+    num_heads = 6
     mlp_ratio = 4
     attn_window_sizes = [8, 8, 8]
     up_factor = 2
     input_size = (H, W, D)
     use_checkpoint = True
 
-    # TODO: Add merge of features from previous network levels.
-    net = MTVNet_monai(input_size=input_size,
+    net = MTVNet_flashattn(input_size=input_size,
                   up_factor=up_factor,
                   num_levels=num_levels,
                   context_sizes=context_sizes,
@@ -708,8 +763,9 @@ if __name__ == "__main__":
                               up_factor * context_sizes[-1])).to(device)
 
     start = time.time()
-    out = net(x)
-    loss = loss_func(out, x_hr)
+    with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+        out = net(x)
+        loss = loss_func(out, x_hr)
     stop = time.time()
     print("Time elapsed:", stop - start)
 

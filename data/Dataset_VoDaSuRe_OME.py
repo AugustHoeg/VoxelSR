@@ -134,6 +134,15 @@ class Dataset_VoDaSuRe_OME():
                     print("Train paths: ", train_paths["VoDaSuRe"])
                     print("Test paths: ", test_paths["VoDaSuRe"])
 
+                if "test_registration" in opt:
+                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_shifted_ome_1.zarr")]
+
+                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_shifted_ome_0.zarr")]
+
+                    print("Running single sample test on: Elm_A_bin1x1_shifted_ome_0.zarr")
+                    print("Train paths: ", train_paths["VoDaSuRe"])
+                    print("Test paths: ", test_paths["VoDaSuRe"])
+
             sampling_weights = {"HCP_1200":  3.0,
                                 "IXI":       1.0,
                                 "LITS":      2.0,
