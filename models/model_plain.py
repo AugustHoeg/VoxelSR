@@ -12,7 +12,7 @@ from torch.optim import Adam, AdamW
 from torch.optim import lr_scheduler
 
 import config
-from loss_functions.loss_functions_simple import compute_generator_loss
+from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D
 from models.model_base import ModelBase
 from models.select_network import define_G
 from utils import utils_3D_image
@@ -275,11 +275,16 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def define_loss(self):
 
+        LPIPS_axes = [0]  # only along slice axis
+        print("Using LPIPS loss along axes:", LPIPS_axes)
+
         self.loss_fn_dict = {
             "MSE": nn.MSELoss(),
             "L1": nn.L1Loss(),
             "BCE_Logistic": nn.BCEWithLogitsLoss(),
-            "BCE": nn.BCELoss()
+            "BCE": nn.BCELoss(),
+            "LPIPS": LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes)
+
             #"VGG": VGGLoss(layer_idx=36, device=self.device),
             #"VGG3D": VGGLoss3D(num_parts=2*self.opt['up_factor'], layer_idx=35, loss_func=nn.MSELoss(), device=self.device),
             #"GRAD": GradientLoss3D(kernel='diff', order=1, loss_func=nn.L1Loss(), sigma=None),  # sigma = 0.8,

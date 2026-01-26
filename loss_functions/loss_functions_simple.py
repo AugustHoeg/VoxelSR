@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torch.cuda.amp
+import lpips
 
 
 def compute_discriminator_loss(prop_real, prop_fake):
@@ -53,6 +54,57 @@ def bce_loss(y_real, y_pred):
     :return: loss
     """
     return torch.mean(y_pred - y_real*y_pred + torch.log(1 + torch.exp(-y_pred)))
+
+
+class LPIPSLoss3D(torch.nn.Module):
+    def __init__(self, net_type='alex', version='0.1', device="cuda", axes=(0, 1, 2)):
+        super(LPIPSLoss3D, self).__init__()
+        self.device = device
+        self.loss_fn = lpips.LPIPS(net=net_type, version=version)
+        self.loss_fn.to(self.device)
+        self.axes = axes
+
+    def forward(self, img_ref, img_pred):
+
+        # Compute LPIPS loss for 3D images
+        B, C, D, H, W = img_ref.shape
+
+        # Tile to 3 channels, since LPIPS expects RGB images
+        img1 = torch.tile(img_ref, dims=(1, 3, 1, 1, 1))
+        img2 = torch.tile(img_pred, dims=(1, 3, 1, 1, 1))
+
+        # Scale to [-1, 1]
+        img1 = img1 * 2.0 - 1.0
+        img2 = img2 * 2.0 - 1.0
+
+        loss = 0.0
+
+        if 0 in self.axes:
+            # Along D axis
+            loss = loss + self.loss_fn.forward(
+                img1.permute(0, 2, 1, 3, 4).contiguous().view(-1, C, H, W),
+                img2.permute(0, 2, 1, 3, 4).contiguous().view(-1, C, H, W)
+            ).mean()
+
+        if 1 in self.axes:
+            # Along H axis
+            loss = loss + self.loss_fn.forward(
+                img1.permute(0, 3, 2, 1, 4).contiguous().view(-1, C, D, W),
+                img2.permute(0, 3, 2, 1, 4).contiguous().view(-1, C, D, W)
+            ).mean()
+
+        if 2 in self.axes:
+            # Along W axis
+            loss = loss + self.loss_fn.forward(
+                img1.permute(0, 4, 2, 3, 1).contiguous().view(-1, C, D, H),
+                img2.permute(0, 4, 2, 3, 1).contiguous().view(-1, C, D, H)
+            ).mean()
+
+        return loss / len(self.axes)
+
+
+
+
 
 if __name__ == "__main__":
 
