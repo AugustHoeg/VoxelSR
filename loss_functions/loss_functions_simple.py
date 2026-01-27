@@ -78,6 +78,7 @@ class LPIPSLoss3D(torch.nn.Module):
         img2 = img2 * 2.0 - 1.0
 
         loss = 0.0
+        #loss = torch.zeros(1).to(self.device)
 
         if 0 in self.axes:
             # Along D axis

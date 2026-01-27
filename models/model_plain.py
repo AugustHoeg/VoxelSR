@@ -275,7 +275,7 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def define_loss(self):
 
-        LPIPS_axes = [0]  # only along slice axis
+        LPIPS_axes = [0, 1, 2]  # only along slice axis
         print("Using LPIPS loss along axes:", LPIPS_axes)
 
         self.loss_fn_dict = {
@@ -283,7 +283,7 @@ class ModelPlain(ModelBase):
             "L1": nn.L1Loss(),
             "BCE_Logistic": nn.BCEWithLogitsLoss(),
             "BCE": nn.BCELoss(),
-            "LPIPS": LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes)
+            "LPIPS": LPIPSLoss3D(net_type='vgg', version='0.1', device=self.device, axes=LPIPS_axes)
 
             #"VGG": VGGLoss(layer_idx=36, device=self.device),
             #"VGG3D": VGGLoss3D(num_parts=2*self.opt['up_factor'], layer_idx=35, loss_func=nn.MSELoss(), device=self.device),

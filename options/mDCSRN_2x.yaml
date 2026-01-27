@@ -49,7 +49,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    LPIPS: 0.006
+    LPIPS: 0.02
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -59,14 +59,14 @@ dataset_opt:
   datasets: [HCP_1200] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 1
+    num_load_workers: 1
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 1
+    num_load_workers: 1
     persist_workers: true
     pin_memory: false
 
