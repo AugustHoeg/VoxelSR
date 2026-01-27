@@ -275,7 +275,7 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def define_loss(self):
 
-        LPIPS_axes = [0, 1, 2]  # only along slice axis
+        LPIPS_axes = [0]  # only along slice axis
         print("Using LPIPS loss along axes:", LPIPS_axes)
 
         self.loss_fn_dict = {
