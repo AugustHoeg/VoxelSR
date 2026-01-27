@@ -101,7 +101,7 @@ class LPIPSLoss3D(torch.nn.Module):
                 img2.permute(0, 4, 2, 3, 1).contiguous().view(-1, C, D, H)
             ).mean()
 
-        return loss / len(self.axes)
+        return loss
 
 
 
