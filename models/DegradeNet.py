@@ -1,9 +1,13 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
 import torch.utils.checkpoint as checkpoint
 from utils.utils_3D_image import ICNR, numel
+
+from models.FlashAttentionTest import STLayerV2, compute_mask
+from models.models_3D import SRBlock3D
 
 from collections import namedtuple
 
@@ -137,140 +141,226 @@ class DegradeNet(nn.Module):
             return z
 
 
+class PatchEmbed3D(nn.Module):
+    """
+    Very small 3D patch embedder: conv projection (proj) or flatten fallback.
+    """
+
+    def __init__(self, in_channels=1, dim=96, patch_size=4, method="proj", out_format="image"):
+        super().__init__()
+        self.in_channels = in_channels
+        self.dim = dim
+        self.patch_size = patch_size
+        self.method = method
+        self.out_format = out_format
+
+        if patch_size == 1:
+            kernel_size = 3
+            stride = 1
+            pad = 1
+        else:
+            kernel_size = patch_size
+            stride = patch_size
+            pad = 1 if patch_size >= 3 else 0
+
+        if self.method == "proj":
+            self.proj = nn.Conv3d(in_channels, dim, kernel_size=kernel_size, stride=stride, padding=pad, bias=False)
+        else:
+            # fallback: flatten (used rarely)
+            self.proj = None
+
+    def forward(self, x):
+        # x: (B, C, H, W, D)
+        if self.method == "proj":
+            x = self.proj(x)  # (B, dim, Hp, Wp, Dp)
+            if self.out_format == "tokens":
+                x = x.flatten(2).transpose(1, 2)  # (B, N, C)
+            elif self.out_format == "image":
+                x = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Hp, Wp, Dp, C)
+            elif self.out_format == "same":
+                pass
+        else:
+            x = x.flatten(2).transpose(1, 2)
+        return x
+class Group(nn.Module):
+
+    def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None):
+        super().__init__()
+
+        self.layers = nn.ModuleList()
+        self.compress_layers = nn.ModuleList()
+        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+        for layer_idx in range(depth):
+            channel_dim = dim + skip_dim * layer_idx
+            compress_dim = skip_dim if layer_idx < depth - 1 else dim
+
+            self.window_size = window_size
+            self.shift_size = window_size // 2 if (layer_idx % 2) == 1 else 0
+            self.num_heads = num_heads
+
+            self.layers.append(
+                    STLayerV2(level=0,
+                            embed_dims=[channel_dim],
+                            context_sizes=[input_size],
+                            patch_sizes=[1],
+                            sizes_p=[(input_size//patch_size, input_size//patch_size, input_size//patch_size)],
+                            num_heads=self.num_heads,
+                            window_sizes=[self.window_size],
+                            shift_size=self.shift_size,
+                            mlp_ratio=mlp_ratio,
+                            qkv_bias=True,
+                            drop=0.,
+                            attn_drop=0.,
+                            drop_path=dp_rates[layer_idx],
+                            act_layer=nn.GELU,
+                            norm_layer=nn.LayerNorm,
+                            pretrained_window_size=0,
+                            enable_ape_x=False,
+                            patch_pe_method="window_relative",
+                            return_x_image=False,
+                            token_upsample_method="Monaipixelshuffle",
+                    )
+            )
+
+            self.compress_layers.append(
+                nn.Conv3d(channel_dim, compress_dim, kernel_size=1, stride=1, padding=0)
+            )
+
+            if layer_idx % 2 == 1:
+                mlp_ratio = max(1, mlp_ratio // 2)
+
+        Dp, Hp, Wp = [input_size // patch_size] * 3  # hardcoded for now
+        self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
+
+    def forward(self, x):
+
+        x_input = x
+        next_x = x
+
+        ###### Dense-connected block structure ######
+        for i in range(len(self.layers) - 1):
+
+            x = x.permute(0, 2, 3, 4, 1)
+
+            # Main layer
+            x = self.layers[i](x)
+            x = x.permute(0, 4, 1, 2, 3).contiguous()  # B, C, D, H, W
+            x = self.act(self.compress_layers[i](x))
+
+            # Concatenate
+            next_x = torch.cat([next_x, x], 1)
+            x = next_x
+
+        # Final layer
+        next_x = next_x.permute(0, 2, 3, 4, 1)
+        x = self.layers[-1](next_x)
+        x = x.permute(0, 4, 1, 2, 3).contiguous()
+        x = self.act(self.compress_layers[-1](x))
+
+        x = 0.2 * x + x_input
+
+        return x
+
+
+class TransitionLayer(nn.Module):
+    def __init__(self, in_dim, out_dim, stride=2):
+        super().__init__()
+        self.conv = nn.Conv3d(in_dim, out_dim, kernel_size=3, stride=stride, padding=1)
+        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+    def forward(self, x):
+        return self.act(self.conv(x))
+
+
 class DegradeNetV2(nn.Module):
-    def __init__(self, down_factor=4, in_channels=1, out_channels=1, num_feats=64, use_checkpoint=True, requires_grad=True):
+    def __init__(self,
+                 input_size,
+                 down_factor,
+                 num_blks,
+                 blk_layers,
+                 in_chans,
+                 shallow_feat,
+                 embed_dims,
+                 num_heads,
+                 mlp_ratio,
+                 attn_window_size,
+                 patch_size,
+                 skip_dims,
+                 drop_path_rate=0.0,
+                 use_checkpoint=False,
+                 upsample_method="nearest",
+                 requires_grad=True):
         super(DegradeNetV2, self).__init__()
 
-        raise NotImplementedError("DegradeNetV2 is not implemented yet. Please use DegradeNet instead.")
-
-        # minimal retained attributes
-        self.num_blks = num_blks
-        self.blk_layers = blk_layers
-        self.up_factor = up_factor
-        self.upsample_method = upsample_method
-        self.input_size = input_size
-        self.num_levels = num_levels
-        self.context_sizes = context_sizes
-        self.patch_sizes = patch_sizes
-        self.shallow_feats = shallow_feats
-        self.pre_up_feats = pre_up_feats
-        self.embed_dims = embed_dims
-        self.num_heads = num_heads
-        self.mlp_ratio = mlp_ratio
-        self.attn_window_sizes = attn_window_sizes
+        self.use_checkpoint = use_checkpoint
 
         # Shallow feature extraction blocks (simple convs)
-        self.sfe_blks = nn.ModuleList()
-        for level in range(num_levels):
-            input_feats = in_chans if level == 0 else shallow_feats[level - 1]
-            shallow_feat = shallow_feats[level]
-            if level == num_levels - 1:
-                sfe_blk = nn.Sequential(
-                    nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
-                    nn.LeakyReLU(negative_slope=0.2, inplace=True),
-                    nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
-                )
-            else:
-                sfe_blk = nn.Sequential(
-                    nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True)
-                )
-            self.sfe_blks.append(sfe_blk)
+        self.sfe_blk = nn.Conv3d(in_chans, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True)
 
         # Patch embedding blocks (proj only)
-        self.patch_embedding_blks = nn.ModuleList()
-        for level in range(num_levels):
-            self.patch_embedding_blks.append(
-                PatchEmbed3D(in_channels=shallow_feats[level],
-                             dim=self.embed_dims[level],
-                             patch_size=patch_sizes[level],
-                             method="proj",
-                             out_format="same")
-            )
+        self.patch_embedding = PatchEmbed3D(
+            in_channels=shallow_feat,
+            dim=self.embed_dims[0],
+            patch_size=patch_size,
+            method="proj",
+            out_format="same"
+        )
         #
         # # dropout (kept for API)
         # self.pos_drop = nn.Dropout(p=0.0)
 
         self.LX_blocks = nn.ModuleList()
         cur = 0
-        for level in range(num_levels):
-            blocks = nn.ModuleList()
-            dp_rates = [x for x in np.linspace(0, drop_path_rate, self.num_blks[level] * self.blk_layers[level])]
-            dp = dp_rates[cur: cur + self.blk_layers[level]]
-            for _ in range(self.num_blks[level]):
-                blocks.append(
-                    STGroup(input_size=context_sizes[level],
-                            patch_size=patch_sizes[level],
-                            dim=self.embed_dims[level],
-                            skip_dim=skip_dims[level],
-                            depth=self.blk_layers[level],
-                            window_size=self.attn_window_sizes[level],
-                            num_heads=self.num_heads,
-                            mlp_ratio=self.mlp_ratio,
-                            dp_rates=dp,
-                            prev_dim=self.embed_dims[level - 1] if level > 0 else None,
-                            prev_patch_size=patch_sizes[level - 1] if level > 0 else None)
+        blocks = nn.ModuleList()
+        dp_rates = [x for x in np.linspace(0, drop_path_rate, num_blks * blk_layers)]
+        for i in range(num_blks):
+            dp = dp_rates[cur: cur + self.blk_layers]
+            blocks.append(
+                Group(input_size=input_size // patch_size,  # reduction by patch embedding
+                        patch_size=patch_size,  # keep patch size constant across blocks
+                        dim=embed_dims[i],  # TODO add increasing dim across blocks
+                        skip_dim=skip_dims[i],  # TODO add increasing dim across blocks
+                        depth=blk_layers,
+                        window_size=attn_window_size,
+                        num_heads=num_heads,
+                        mlp_ratio=mlp_ratio,
+                        dp_rates=dp
                 )
-            self.LX_blocks.append(blocks)
+            )
+            if down_factor >= 2 and i < num_blks - 1:
+                input_size = input_size // 2  # downsample by 2 at each block
+            cur += self.blk_layers
+        self.LX_blocks.append(blocks)
 
         self.Final_blk = nn.Sequential(
             nn.Identity()
         )
-        if patch_sizes[-1] > 1:
+        if patch_size > 1:
             self.Final_blk.append(
-                SRBlock3D(self.embed_dims[-1],
-                          self.embed_dims[-1],
+                SRBlock3D(embed_dims[-1],
+                          embed_dims[-1],
                           k_size=6, pad=2,
-                          upsample_method="nearest",
-                          upscale_factor=patch_sizes[-1],
+                          upsample_method=upsample_method,
+                          upscale_factor=patch_size,
                           use_checkpoint=False)
             )
 
-        # convolution to map final features (image space)
-        self.conv_image = nn.Conv3d(in_channels=self.embed_dims[-1],
-                                    out_channels=shallow_feats[-1],
+        self.conv_sfe = nn.Conv3d(in_channels=self.embed_dims[-1],
+                                    out_channels=shallow_feat,
                                     kernel_size=3, stride=1, padding=1, bias=True)
 
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
-        # Upsampling SR blocks (supports 2/3/4)
-        recon_feats = shallow_feats[-1]
-        if self.up_factor == 2:
-            feats_2x = pre_up_feats[0]
-            self.SR0 = SRBlock3D(shallow_feats[-1], feats_2x, k_size=6, pad=2,
-                                 upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
-            recon_feats = feats_2x
-        elif self.up_factor == 3:
-            feats_3x = pre_up_feats[0]
-            self.SR0 = SRBlock3D(shallow_feats[-1], feats_3x, k_size=6, pad=2,
-                                 upsample_method=upsample_method, upscale_factor=3, use_checkpoint=False)
-            recon_feats = feats_3x
-        elif self.up_factor == 4:
-            feats_2x = pre_up_feats[0]
-            feats_4x = pre_up_feats[1]
-            self.SR0 = SRBlock3D(shallow_feats[-1], feats_2x, k_size=6, pad=2,
-                                 upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
-            self.SR1 = SRBlock3D(feats_2x, feats_4x, k_size=6, pad=2,
-                                 upsample_method=upsample_method, upscale_factor=2, use_checkpoint=False)
-            recon_feats = feats_4x
-
-        self.HRconv = nn.Conv3d(recon_feats, recon_feats, 3, 1, 1, bias=True)
         self.conv_last = nn.Sequential(
-            nn.Conv3d(in_channels=recon_feats, out_channels=in_chans, kernel_size=3, stride=1, padding=1, bias=True)
+            nn.Conv3d(in_channels=shallow_feat, out_channels=in_chans, kernel_size=3, stride=1, padding=1, bias=True)
         )
 
-    def crop_next(self, x, level):
-        _, _, H, W, D = x.shape
-        size = self.context_sizes[level]
+        self.output_names = ['blk%d' % i for i in range(len(self.LX_blocks))] + ['output']
 
-        start_h = (H - size) // 2
-        start_w = (W - size) // 2
-        start_d = (D - size) // 2
-
-        end_h = start_h + size
-        end_w = start_w + size
-        end_d = start_d + size
-
-        return x[:, :, start_h:end_h, start_w:end_w, start_d:end_d]
+        if not requires_grad:
+            for param in self.parameters():
+                param.requires_grad = False
 
     def forward(self, x):
         """
@@ -278,52 +368,26 @@ class DegradeNetV2(nn.Module):
         returns: upsampled output (B, C, up_H, up_W, up_D)
         """
 
-        LX = x  # image-space features (B, C_img, D, H, W)
-        prev_x = None
+        # SFE
+        x = self.sfe_blk(x)  # (B, shallow_feats[level], D, H, W)
 
-        for level in range(0, self.num_levels):
-            # SFE
-            LX = self.sfe_blks[level](LX)  # (B, shallow_feats[level], D, H, W)
+        # Patch embedding
+        emb = self.patch_embedding(x)
 
-            # Patch embedding
-            LX_emb = self.patch_embedding_blks[level](LX)
-
-            # Pass through LX blocks (placeholder identity blocks)
-            for i, blk in enumerate(self.LX_blocks[level]):
-                if self.use_checkpoint:
-                    LX_emb = checkpoint.checkpoint(blk, LX_emb, prev_x)
-                else:
-                    LX_emb = blk(LX_emb, prev_x)
-
-                if i == self.num_blks[level] - 1 and level != self.num_levels - 1:
-                    prev_x = LX_emb
-
-            # Optionally crop next input image for the next level
-            if level < self.num_levels - 1:
-                LX = self.crop_next(LX, level + 1)
+        # Pass through blocks
+        for i, blk in enumerate(self.LX_blocks):
+            if self.use_checkpoint:
+                emb = checkpoint.checkpoint(blk)
+            else:
+                emb = blk(emb)
 
         if self.use_checkpoint:
-            final_feats = checkpoint.checkpoint(self.Final_blk, LX_emb)
+            final_feats = checkpoint.checkpoint(self.Final_blk, emb)
         else:
-            final_feats = self.Final_blk(LX_emb)
+            final_feats = self.Final_blk(emb)
 
-        # final_feats: use highest-level image features
-        final_feats = self.lrelu(self.conv_image(final_feats))  # image-space conv + act
-
-        # Long skip connection
-        out = LX + final_feats
-
-        # Upsampling
-        if self.up_factor == 2:
-            out = self.SR0(out)
-        elif self.up_factor == 3:
-            out = self.SR0(out)
-        elif self.up_factor == 4:
-            out = self.SR0(out)
-            out = self.SR1(out)
-
-        # Recon
-        out = self.conv_last(self.lrelu(self.HRconv(out)))
+        # output
+        out = self.conv_last(self.lrelu(self.conv_sfe(final_feats)))
         return out
 
 
