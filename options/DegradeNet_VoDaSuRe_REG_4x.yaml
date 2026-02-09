@@ -58,7 +58,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 128
+  patch_size: 32
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
