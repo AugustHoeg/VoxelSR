@@ -7,7 +7,7 @@ netG:
   in_channels: 1
   out_channels: 1
   num_feats: 64
-  use_checkpoint: false
+  use_checkpoint: true
 
   init_type: default
   init_bn_type: uniform  # "uniform" | "constant"
