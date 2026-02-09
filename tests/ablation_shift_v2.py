@@ -3,6 +3,7 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+from matplotlib.patches import ConnectionPatch
 from PIL import Image
 from skimage.util import compare_images
 from skimage import exposure
@@ -86,16 +87,16 @@ if __name__ == '__main__':
     row, col = 1, 4
     show_HR_as_large_img = False
 
-    red_box_size = 512 # 512
+    red_box_size = 276 # 512
     #red_box_coords = (1920//2 - red_box_size//2, 1920//2 - red_box_size//2)
-    red_box_coords = (1920 // 2 - red_box_size // 2 + 250, 1920 // 2 - red_box_size // 2 - 250)
+    red_box_coords = (1920 // 2 - red_box_size // 2 + 600, 1920 // 2 - red_box_size // 2 - 500)
     #red_box_coords = (1600 // 2 - red_box_size // 2 + 250, 1440 // 2 - red_box_size // 2 +290)
 
     large_image_string = r"VoDaSuRe ($\times 4$)"
     use_other_string = True
     plot_metrics = False
 
-    fig = plt.figure(figsize=(14, 3.9 if plot_metrics else 3.9), constrained_layout=True)
+    fig = plt.figure(figsize=(7*1.5, 2.1*1.5), constrained_layout=True)
     #fig.suptitle(large_image_string, fontsize=26)
     gs = fig.add_gridspec(row, col)
 
@@ -153,19 +154,69 @@ if __name__ == '__main__':
             LR_crop = LR_crop.astype(np.float32)
             HR_crop = HR_crop.astype(np.float32)
 
-            difference = np.abs(LR_crop - HR_crop)
+            difference_abs = np.abs(LR_crop - HR_crop)
+            difference = LR_crop - HR_crop
+            difference_full = LR.astype(np.float32) - HR.astype(np.float32)
+            difference_full = (difference_full - np.min(difference_full)) / (np.max(difference_full) - np.min(difference_full)) * 255.0
 
             # scale difference  to 0-255
             difference = (difference - np.min(difference)) / (np.max(difference) - np.min(difference)) * 255.0
+            #ax.imshow(difference, cmap='gray', vmin=0, vmax=255)
 
-            ax.imshow(difference, cmap='gray', vmin=0, vmax=255)
-
-            #ax.imshow(np.abs(LR.astype(np.float32) - HR.astype(np.float32)), cmap='gray')
-            ax.text(0.5, -0.02, "Absolute difference", ha='center', va='top', fontsize=18, transform=ax.transAxes)
+            ax.imshow(difference_full, cmap='gray')
+            ax.text(0.5, -0.03, "Difference image:\n HR, LR w. shift", ha='center', va='top', fontsize=18, transform=ax.transAxes)
 
             rect = patches.Rectangle(red_box_coords, red_box_size, red_box_size, linewidth=1.5, edgecolor='r',
                                      facecolor='none')
             ax.add_patch(rect)
+
+            # 2. Create an inset axes
+            # [x, y, width, height] in relative axes coordinates (0 to 1)
+            # This places the inset at 70% x, 70% y, taking up 25% width/height
+            ax_inset = ax.inset_axes([0.5, 0.0, 0.50, 0.50])
+
+            # 3. Display the small image in the inset
+            ax_inset.imshow(difference, cmap='gray', vmin=0, vmax=255)
+
+            for spine in ax_inset.spines.values():
+                spine.set_edgecolor('red')  # Set color to red
+                spine.set_linewidth(1.5)  # Make it thicker so it's visible
+
+            ax_inset.set_xticks([])
+            ax_inset.set_yticks([])
+
+            # ... existing code ...
+            ax_inset.set_yticks([])
+
+            # --- NEW CODE STARTS HERE ---
+
+            # 1. Define coordinates for the bottom corners of the Red Rectangle
+            # (x, y) is the top-left of the rect.
+            # Since images have origin='upper', y + height is the visual "bottom".
+            rect_bottom_left = (red_box_coords[0], red_box_coords[1] + red_box_size)
+            rect_bottom_right = (red_box_coords[0] + red_box_size, red_box_coords[1] + red_box_size)
+
+            # 2. Create the first connector (Left side)
+            # Connects Rect Bottom-Left (Data Coords) -> Inset Top-Left (Axes Fraction 0,1)
+            con1 = ConnectionPatch(
+                xyA=rect_bottom_left, coordsA=ax.transData,
+                xyB=(0, 1), coordsB=ax_inset.transAxes,
+                axesA=ax, axesB=ax_inset,
+                color="red", linewidth=1.5
+            )
+
+            # 3. Create the second connector (Right side)
+            # Connects Rect Bottom-Right (Data Coords) -> Inset Top-Right (Axes Fraction 1,1)
+            con2 = ConnectionPatch(
+                xyA=rect_bottom_right, coordsA=ax.transData,
+                xyB=(1, 1), coordsB=ax_inset.transAxes,
+                axesA=ax, axesB=ax_inset,
+                color="red", linewidth=1.5
+            )
+
+            # 4. Add the artists to the figure
+            fig.add_artist(con1)
+            fig.add_artist(con2)
 
 
         elif j == 1:  # show crop region
@@ -173,21 +224,20 @@ if __name__ == '__main__':
             SR_crop, _ = crop_image_at_location(SR, red_box_size, red_box_coords)
 
             ax.imshow(SR_crop, cmap='gray', vmin=0, vmax=255)
-            ax.text(0.5, -0.02, r"Misaligned downsampled ($\times 4$)", ha='center', va='top', fontsize=18,
-                    transform=ax.transAxes)
-
+            text = r"RRDBNet3D ($\times 4$)"
+            ax.text(0.5, -0.03, f"Downsampled w. shift \n {text}", ha='center', va='top', fontsize=18, transform=ax.transAxes)
 
         elif j == 2:  # show crop region
 
             SR_no_shift_crop, _ = crop_image_at_location(SR_no_shift, red_box_size, red_box_coords)
 
             ax.imshow(SR_no_shift_crop, cmap='gray', vmin=0, vmax=255)
-            ax.text(0.5, -0.02, r"Downsampled ($\times 4$)", ha='center', va='top', fontsize=18, transform=ax.transAxes)
+            text = r"RRDBNet3D ($\times 4$)"
+            ax.text(0.5, -0.03, f"Downsampled w.o shift \n {text}", ha='center', va='top', fontsize=18, transform=ax.transAxes)
 
 
         elif j == 3:  # show difference image
 
-            img_idx = 20
             model_dirs = ["../../downloaded_data/VoDaSuRe/Visual_comparisons/RRDBNet3D/VoDaSuRe/HR0_REG0/*.png"]
 
             image_paths = [glob.glob(path) for path in model_dirs]
@@ -201,8 +251,9 @@ if __name__ == '__main__':
             SR_REG_crop, _ = crop_image_at_location(SR_REG, red_box_size, red_box_coords)
 
             ax.imshow(SR_REG_crop, cmap='gray', vmin=0, vmax=255)
-            ax.text(0.5, -0.02, r"Registered ($\times 4$)", ha='center', va='top', fontsize=18, transform=ax.transAxes)
-
+            text = r"RRDBNet3D ($\times 4$)"
+            ax.text(0.5, -0.03, f"Registered w.o shift \n {text}", ha='center', va='top', fontsize=18,
+                    transform=ax.transAxes)
 
         ax.set_xticks([])
         ax.set_yticks([])

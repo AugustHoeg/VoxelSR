@@ -27,6 +27,10 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.tif']
 
 
+def shares_memory(A, B):
+    return A.untyped_storage().data_ptr() == B.untyped_storage().data_ptr()
+
+
 def write_tiff(image, output_path, ret=False):
     """
     saves a tiff from numpy array.

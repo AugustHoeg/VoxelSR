@@ -2,6 +2,12 @@ import monai
 from monai.data import SmartCacheDataset, CacheDataset
 
 def define_Dataset(opt, return_filepaths=False, apply_split=True):
+
+    if opt.task == 'superresolution':
+        res_factor = opt.up_factor
+    elif opt.task == 'degradation':
+        res_factor = opt.down_factor
+
     dataset_opt = opt['dataset_opt']
     dataset_name = dataset_opt['name']
     dataset_type = dataset_opt['dataset_type']
@@ -285,7 +291,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                             patch_shape,
                                             patch_shape_hr,
                                             patch_transform=transforms,
-                                            up_factor=opt.up_factor,
+                                            up_factor=res_factor,
                                             num_workers=8,
                                             queue_size=128,
                                             store_type='DirectoryStore',
@@ -297,7 +303,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                            patch_shape,
                                            patch_shape_hr,
                                            patch_transform=test_transforms,
-                                           up_factor=opt.up_factor,
+                                           up_factor=res_factor,
                                            num_workers=8,
                                            queue_size=128,
                                            store_type='DirectoryStore',
@@ -317,7 +323,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                             patch_shape,
                                             patch_shape_hr,
                                             patch_transform=transforms,
-                                            up_factor=opt.up_factor,
+                                            up_factor=res_factor,
                                             store_type='DirectoryStore',
                                             num_samples=opt.train_opt.iterations//10,
                                             sampling_method='random',  # 'random' or 'in_chunk'
@@ -327,7 +333,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
                                            patch_shape,
                                            patch_shape_hr,
                                            patch_transform=test_transforms,
-                                           up_factor=opt.up_factor,
+                                           up_factor=res_factor,
                                            store_type='DirectoryStore',
                                            num_samples=opt.train_opt.validation_iterations,
                                            sampling_method='random',  # 'random' or 'in_chunk'

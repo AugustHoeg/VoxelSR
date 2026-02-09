@@ -367,7 +367,7 @@ class CrossScaleMerge(nn.Module):
         return x
 
 
-class Group(nn.Module):
+class STGroup(nn.Module):
 
     def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None, prev_dim=None, prev_patch_size=2):
         super().__init__()
@@ -532,8 +532,8 @@ class MTVNet_flashattn(nn.Module):
             if level == num_levels - 1:
                 sfe_blk = nn.Sequential(
                     nn.Conv3d(input_feats, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
-                    #nn.LeakyReLU(negative_slope=0.2, inplace=True),
-                    #nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
+                    nn.LeakyReLU(negative_slope=0.2, inplace=True),
+                    nn.Conv3d(shallow_feat, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True),
                 )
             else:
                 sfe_blk = nn.Sequential(
@@ -555,12 +555,6 @@ class MTVNet_flashattn(nn.Module):
         # # dropout (kept for API)
         # self.pos_drop = nn.Dropout(p=0.0)
 
-        self.transition_layers = nn.ModuleList()
-        for level in range(num_levels):
-            self.transition_layers.append(
-                TransitionLayer(in_dim=self.shallow_feats[level], out_dim=self.embed_dims[level])
-            )
-
         self.LX_blocks = nn.ModuleList()
         cur = 0
         for level in range(num_levels):
@@ -569,7 +563,7 @@ class MTVNet_flashattn(nn.Module):
             dp = dp_rates[cur: cur + self.blk_layers[level]]
             for _ in range(self.num_blks[level]):
                 blocks.append(
-                    Group(input_size=context_sizes[level],
+                    STGroup(input_size=context_sizes[level],
                           patch_size=patch_sizes[level],
                           dim=self.embed_dims[level],
                           skip_dim=skip_dims[level],
@@ -724,7 +718,7 @@ if __name__ == "__main__":
     pre_up_feats = [64, 64]
     num_blks = [3]
     blk_layers = [6]
-    patch_sizes = [1]
+    patch_sizes = [2]
     skip_dims = [60]
     embed_dims = [180]
     num_heads = 6
@@ -761,6 +755,9 @@ if __name__ == "__main__":
     x_hr = torch.randn((batch_size, 1, up_factor * context_sizes[-1],
                               up_factor * context_sizes[-1],
                               up_factor * context_sizes[-1])).to(device)
+
+    # Compile
+    net = torch.compile(net)
 
     start = time.time()
     with torch.cuda.amp.autocast(dtype=torch.bfloat16):

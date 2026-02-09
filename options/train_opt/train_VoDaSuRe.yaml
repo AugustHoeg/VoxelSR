@@ -15,6 +15,7 @@ G_loss_weights:
   BCE_Logistic: 0
   BCE: 0
   LPIPS: 0
+  Degradation: 0
 
 E_decay: 0
 G_optimizer_type: adam

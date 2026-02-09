@@ -17,12 +17,14 @@ from models.model_base import ModelBase
 from models.select_network import define_G
 from utils import utils_3D_image
 
+from utils.utils_3D_image import crop_center
+
 from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
-class ModelPlain(ModelBase):
+class ModelDegradation(ModelBase):
     """Train with pixel-VGG-GAN loss"""
     def __init__(self, opt, mode='train'):
-        super(ModelPlain, self).__init__(opt)
+        super(ModelDegradation, self).__init__(opt)
         # ------------------------------------
         # define network
         # ------------------------------------
@@ -183,7 +185,6 @@ class ModelPlain(ModelBase):
                 print('Loading scheduler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_scheduler_file).split(os.sep)[-4:])))
                 self.load_scheduler(G_scheduler_file, self.schedulers[0])
 
-
     def load_gradscalers(self, experiment_id=None):
 
         pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
@@ -251,7 +252,7 @@ class ModelPlain(ModelBase):
                 "G_learning_rate": self.opt['train_opt']['G_optimizer_lr'],
                 "batch_size": self.opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size'],
                 "dataset": self.opt['dataset_opt']['name'],
-                "up_factor": self.opt['up_factor'],
+                "down_factor": self.opt['down_factor'],
                 "architecture": self.opt['model_opt']['model_architecture'],
             })
 
@@ -289,23 +290,13 @@ class ModelPlain(ModelBase):
             elif key == "BCE" and value > 0:
                 self.loss_fn_dict["BCE"] = nn.BCELoss()
             elif key == "LPIPS" and value > 0:
-                LPIPS_axes = [0, 1, 2]  # Choose which axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis, or any combination thereof
+                LPIPS_axes = [0, 1, 2]  # only along slice axis
                 print("Using LPIPS loss along axes:", LPIPS_axes)
-                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes)
+                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device,
+                                                         axes=LPIPS_axes)
             elif key == "FSC" and value > 0:
-                self.loss_fn_dict["FSC"] = FSCLoss3D(size_hr=self.opt['dataset_opt']['patch_size_hr'], delta=1, device=self.device)
-            elif key == "Degradation" and value > 0:
-                from loss_functions.loss_functions_simple import DegradationLoss
-                self.loss_fn_dict["Degradation"] = DegradationLoss(
-                    model_id="DegradeNet_VoDaSuRe_OME_ID000000",
-                    eval_mode=True,
-                    verbose=True,
-                    feat_dist_func='FSC',
-                    compare_input=False,
-                    device=self.device,
-                    size_hr=self.opt['dataset_opt']['patch_size_hr']
-                )
-
+                self.loss_fn_dict["FSC"] = FSCLoss3D(size_hr=self.opt['dataset_opt']['patch_size_hr'], delta=1,
+                                                     device=self.device)
 
         # self.loss_fn_dict = {
         #     "MSE": nn.MSELoss(),
@@ -440,16 +431,18 @@ class ModelPlain(ModelBase):
     def define_visual_eval(self):
 
         if self.opt['input_type'] == '2D':
-            from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
+            raise NotImplementedError("Visual evaluation not implemented for 2D images yet.")
 
         elif self.opt['input_type'] == '3D':
-            from utils.utils_3D_image import ImageComparisonTool3D as comparison_tool
+            from utils.utils_degradation import DegradationComparisonTool3D_V2 as comparison_tool
 
-        self.comparison_tool = comparison_tool(patch_size_hr=self.opt['dataset_opt']['patch_size_hr'],
-                                               upscaling_methods=["tio_nearest", "tio_linear"],
-                                               unnorm=self.opt['dataset_opt']['norm_type'] == 'znormalization',
-                                               div_max=self.opt['dataset_opt']['norm_type'] == 'znormalization',
-                                               out_dtype=np.uint8)
+            self.comparison_tool = comparison_tool(patch_size_hr=self.opt['dataset_opt']['patch_size_hr'],
+                                                   down_factor=self.opt['down_factor'],
+                                                   upscaling_methods=["tio_nearest"],
+                                                   unnorm=self.opt['dataset_opt']['norm_type'] == 'znormalization',
+                                                   div_max=self.opt['dataset_opt']['norm_type'] == 'znormalization',
+                                                   plot_synth_LR=True,
+                                                   out_dtype=np.uint8)
 
     """
     # ----------------------------------------
@@ -482,9 +475,9 @@ class ModelPlain(ModelBase):
         if self.mixed_precision is not None:
             # Evaluate using AMP
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                self.E = self.netG(self.L)  # self.L
+                self.E = self.netG(self.H)  # Feed in HR image, predict LR image
         else:  # Standard precision
-            self.E = self.netG(self.L)
+            self.E = self.netG(self.H)
 
     # ----------------------------------------
     # update parameters and get loss
@@ -499,7 +492,7 @@ class ModelPlain(ModelBase):
             # Forward G
             self.netG_forward()
             #with torch.cuda.amp.autocast(dtype=torch.float64):
-            self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
+            self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -533,7 +526,6 @@ class ModelPlain(ModelBase):
         else:  # Update gradient accumulation count
             self.G_accum_count += 1
 
-
     def optimize_parameters(self, current_step, update=False):
 
         # ------------------------------------
@@ -542,7 +534,7 @@ class ModelPlain(ModelBase):
 
         # Forward G
         self.netG_forward()
-        self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
+        self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -571,9 +563,6 @@ class ModelPlain(ModelBase):
 
         else:  # Update gradient accumulation count
             self.G_accum_count += 1
-        # # ------------------------------------
-        # # TODO Regularizer as in SuperFormer
-        # # ------------------------------------
 
 
     def record_train_log(self, current_step):
@@ -652,14 +641,14 @@ class ModelPlain(ModelBase):
         self.netG_forward()
 
         # Compute loss for G
-        self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
+        self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
         # Compute performance metrics
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.L, self.E, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
     def validation_amp(self):
@@ -669,13 +658,13 @@ class ModelPlain(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             # Compute loss for G
-            self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
+            self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.L, self.E, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
 
     # ----------------------------------------
@@ -690,9 +679,9 @@ class ModelPlain(ModelBase):
     def current_visuals(self, need_H=True):
         out_dict = OrderedDict()
 
-        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
+        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['down_factor'])
         if self.opt['dataset_opt']['patch_size'] > roi:
-            out_dict['L'] = utils_3D_image.crop_center(self.L, center_size=roi).detach()[0].float().cpu()
+            out_dict['L'] = crop_center(self.L, center_size=roi).detach()[0].float().cpu()
         else:
             out_dict['L'] = self.L.detach()[0].float().cpu()
 
@@ -704,7 +693,7 @@ class ModelPlain(ModelBase):
     def log_comparison_image(self, img_dict, current_step):
 
         grid_image = self.comparison_tool.get_comparison_image(img_dict)
-        figure_string = "SR comparison: %s, step %d, %dx upscaling" % (self.opt['model_opt']['model_architecture'], current_step, self.opt['up_factor'])
+        figure_string = "Degradation comparison: %s, step %d, %dx downscaling" % (self.opt['model_opt']['model_architecture'], current_step, self.opt['down_factor'])
 
         if self.opt['run_type'] == "HOME PC":
             height, width = grid_image.shape[:2]
@@ -750,113 +739,3 @@ class ModelPlain(ModelBase):
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
-
-
-# import lightning as L
-#
-# class ModelPlainLit(L.LightningModule):
-#     def __init__(self, opt, model: ModelPlain):
-#         super().__init__()
-#         self.opt = opt
-#         self.model = model
-#
-#     def training_step(self, train_batch, batch_idx):
-#
-#         if self.opt['model_architecture'] == "MTVNet" and not self.opt['dataset_opt']['enable_femur_padding']:
-#             train_batch['H'] = crop_context(train_batch['H'], L=self.model.opt['netG']['num_levels'], level_ratio=self.model.opt['netG']['level_ratio'])
-#
-#         self.model.feed_data(train_batch, need_H=True)
-#
-#         self.model.netG_forward()
-#
-#         loss = compute_generator_loss(self.model.H, self.model.E, self.model.loss_fn_dict, self.model.loss_val_dict, None, self.model.device)
-#
-#         # Log training loss here
-#         self.log("G_train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-#
-#         return loss
-#
-#
-#     def validation_step(self, test_batch, batch_idx):
-#
-#         if self.opt['model_architecture'] == "MTVNet" and not self.opt['dataset_opt']['enable_femur_padding']:
-#             test_batch['H'] = crop_context(test_batch['H'], L=self.model.opt['netG']['num_levels'], level_ratio=self.model.opt['netG']['level_ratio'])
-#
-#         self.model.feed_data(test_batch, need_H=True)
-#
-#         self.model.netG_forward()
-#
-#         loss = compute_generator_loss(self.model.H, self.model.E, self.model.loss_fn_dict, self.model.loss_val_dict, None, self.model.device)
-#
-#         # Log validation loss here
-#         self.log("G_valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-#
-#         # Compute performance metrics
-#         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-#         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-#
-#         return loss
-#
-#
-#     def configure_optimizers(self):
-#         """defines model optimizer and scheduler"""
-#         return {
-#             "optimizer": self.model.G_optimizer,
-#             "lr_scheduler": {
-#                 "scheduler": self.model.schedulers,
-#                 "interval": "step",  # Step after every global_step
-#             },
-#         }
-#
-# from lightning.pytorch.callbacks import Callback
-# from utils.utils_3D_image import crop_context, crop_center
-#
-# class CustomCallback(Callback):
-#     def on_train_start(self, trainer, pl_module):
-#         print("Training started!")
-#
-#     def on_validation_end(self, trainer, pl_module):
-#
-#         if pl_module.opt['model_architecture'] == "MTVNet":
-#             pl_module.model.L = crop_center(pl_module.model.L, center_size=pl_module.model.opt['netG']['context_sizes'][-1])
-#
-#         visuals = pl_module.model.current_visuals()
-#         pl_module.model.log_comparison_image(visuals, trainer.global_step)
-#
-#         print("Validation completed!")
-#
-#
-# from lightning.pytorch.loggers.logger import Logger, rank_zero_experiment
-# from lightning.pytorch.utilities import rank_zero_only
-# class MyLogger(Logger):
-#     @property
-#     def name(self):
-#         return "MyLogger"
-#
-#     @property
-#     def version(self):
-#         # Return the experiment version, int or str.
-#         return "0.1"
-#
-#     @rank_zero_only
-#     def log_hyperparams(self, params):
-#         # params is an argparse.Namespace
-#         # your code to record hyperparameters goes here
-#         pass
-#
-#     @rank_zero_only
-#     def log_metrics(self, metrics, step):
-#         # metrics is a dictionary of metric names and values
-#         # your code to record metrics goes here
-#         pass
-#
-#     @rank_zero_only
-#     def save(self):
-#         # Optional. Any code necessary to save logger data goes here
-#         pass
-#
-#     @rank_zero_only
-#     def finalize(self, status):
-#         # Optional. Any code that needs to be run after training
-#         # finishes goes here
-#         pass

@@ -1,7 +1,12 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.cuda.amp
 import lpips
+from omegaconf import OmegaConf
+
+from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_masks_3d
+from utils.load_options import load_options_from_experiment_id
 
 
 def compute_discriminator_loss(prop_real, prop_fake):
@@ -104,6 +109,99 @@ class LPIPSLoss3D(torch.nn.Module):
         return loss
 
 
+class FSCLoss3D(torch.nn.Module):
+    def __init__(self, size_hr, delta=1, device="cuda"):
+        super(FSCLoss3D, self).__init__()
+        self.device = device
+        self.size_hr = size_hr
+        self.shells, self.freq = get_shell_masks_3d(size=(size_hr, size_hr, size_hr), delta=delta, device=device)
+
+    def forward(self, img_ref, img_pred):
+
+        fsc = fourier_shell_correlation(img_ref, img_pred, self.shells, self.freq)
+        return fsc
+
+
+class FSCLoss3DF(torch.nn.Module):
+    def __init__(self, delta=1, device="cuda"):
+        super(FSCLoss3DF, self).__init__()
+        self.device = device
+        self.delta = delta
+
+    def forward(self, img_ref, img_pred):
+        shells, freq = get_shell_masks_3d(size=img_ref.shape[2:], delta=self.delta, device=self.device)
+        fsc = fourier_shell_correlation(img_ref, img_pred, shells, freq)
+        return fsc
+
+class DegradationLoss(nn.Module):
+    def __init__(self, model_id, eval_mode=True, verbose=True, feat_dist_func='L1', compare_input=True, device='cuda', **kwargs):
+
+        super(DegradationLoss, self).__init__()
+
+        if feat_dist_func == "L2":
+            self.feat_dist_func = nn.MSELoss()
+        elif feat_dist_func == "L1":
+            self.feat_dist_func = nn.L1Loss()
+        elif feat_dist_func == "FSC":
+            #self.feat_dist_func = FSCLoss3D(size_hr=kwargs.get('size_hr'), delta=1, device=device)
+            self.feat_dist_func = FSCLoss3DF(delta=1, device=device)  # more flexible
+
+        self.output_dist_func = nn.L1Loss()  # L1 loss for final output distance
+
+        self.compare_input = compare_input
+
+        opt_path = load_options_from_experiment_id(model_id, root_dir="", file_type="yaml")
+        opt = OmegaConf.load(opt_path)
+
+        from models.select_model import define_Model
+        self.net = define_Model(opt, mode='test')
+        self.net.load(model_id, mode='test')  # load model
+        self.model = self.net.get_bare_model(self.net.netG)
+
+        self.L = len(self.model.output_names)  # number of layers to compare
+
+        if (eval_mode):
+            self.eval()
+            self.model.eval()
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        if (verbose):
+            print(f'Setting up degradation loss with features distance function: {feat_dist_func}')
+            print(f'Using Degradation architecture {self.net.__class__.__name__} with ID: {model_id}')
+
+    def normalize_tensor(self, in_feat, eps=1e-10):
+        norm_factor = torch.sqrt(torch.sum(in_feat ** 2, dim=1, keepdim=True))
+        return in_feat / (norm_factor + eps)
+
+    def forward(self, in0, in1, normalize=False):
+        if normalize:  # turn on this flag if input is [0,1] so it can be adjusted to [-1, +1]
+            in0 = 2 * in0 - 1
+            in1 = 2 * in1 - 1
+
+        outs0, outs1 = self.model(in0, ret_features=True), self.model(in1, ret_features=True)
+        feats0, feats1, dists = {}, {}, {}
+
+        # Compute distance of intermediate features + final output
+        for kk in range(self.L - 1):
+            # feats0[kk], feats1[kk] = self.normalize_tensor(outs0[kk]), self.normalize_tensor(outs1[kk])
+            # feats0[kk], feats1[kk] = outs0[kk], outs1[kk]
+            # dists[kk] = self.feat_dist_func(feats0[kk], feats1[kk])
+            dists[kk] = self.feat_dist_func(outs0[kk], outs1[kk])
+
+        # Compute distance of final output
+        dists[self.L - 1] = self.output_dist_func(outs0[self.L - 1], outs1[self.L - 1])
+
+        if self.compare_input:
+            # Compute distance of input images (optional)
+            dists[self.L] = self.feat_dist_func(in0, in1)
+
+        loss = 0
+        for l in range(len(dists)):
+            loss += dists[l]
+
+        return loss
 
 
 

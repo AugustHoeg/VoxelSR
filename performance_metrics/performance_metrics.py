@@ -196,13 +196,13 @@ class NRMSE_2D(nn.Module):
 
 
 class NRMSE_3D(nn.Module):
-    def __init__(self, border=1, normalization='euclidean'):
+    def __init__(self, border=1, normalization='euclidean', eps=1e-10):
         super().__init__()
 
         self.border = border
         self.normalization = normalization
         self.metric_func = RMSEMetric(reduction='mean', get_not_nans=False)
-
+        self.eps = eps
 
     def forward(self, img_true, img_false):
 
@@ -215,7 +215,10 @@ class NRMSE_3D(nn.Module):
         else:
             raise ValueError("Unsupported norm_type")
 
-        result = torch.mean(self.metric_func(img_true, img_false)/denom)  # mean over patches in batch
+        if denom < self.eps:  # avoid division by zero
+            return 0.0
+
+        result = torch.mean(self.metric_func(img_true, img_false) / denom)  # mean over patches in batch
 
         return result.item()
 

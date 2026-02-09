@@ -19,7 +19,9 @@ import numpy as np
 import numpy.fft as fft
 import matplotlib.pyplot as plt
 
-
+import torch
+from PIL import Image
+from scipy import ndimage
 
 
 def __spin_average__(x):
@@ -239,14 +241,131 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     plt.yticks(fontsize=12)
 
     # save as pdf
-    plt.savefig(f'figures/{filename_prefix}.pdf', dpi=600, bbox_inches='tight')
+    plt.show()
+    #plt.savefig(f'figures/{filename_prefix}.pdf', dpi=600, bbox_inches='tight')
     plt.close()
+
+
+def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq):
+    """
+    volume1, volume2: (B, C, D, H, W)
+    shell_masks:      (R, 1, 1, D, H, W)
+    spatial_freq:     (R, 1)
+    From paper: Image quality measurements and denoising using Fourier Ring Correlations
+    Github: https://github.com/frcCVPR/frc-loss/blob/master/models.py#L106
+    """
+
+    volume1 = volume1.to(torch.complex64)
+    volume2 = volume2.to(torch.complex64)
+    shell_masks = shell_masks.to(torch.complex64)
+
+    # 3D FFT + shift
+    fft_vol1 = torch.fft.fftshift(
+        torch.fft.fftn(volume1, dim=(-3, -2, -1)),
+        dim=(-3, -2, -1)
+    )
+    fft_vol2 = torch.fft.fftshift(
+        torch.fft.fftn(volume2, dim=(-3, -2, -1)),
+        dim=(-3, -2, -1)
+    )
+
+    # Apply shell masks
+    t1 = fft_vol1.unsqueeze(0) * shell_masks
+    t2 = fft_vol2.unsqueeze(0) * shell_masks
+    # (R, B, C, D, H, W)
+
+    # FSC numerator
+    c1 = torch.real(
+        torch.sum(t1 * torch.conj(t2), dim=(2, 3, 4, 5))
+    )
+
+    # FSC denominator
+    c2 = torch.sum(torch.abs(t1) ** 2, dim=(2, 3, 4, 5))
+    c3 = torch.sum(torch.abs(t2) ** 2, dim=(2, 3, 4, 5))
+
+    fsc = c1 / torch.sqrt(c2 * c3 + 1e-12)
+    fsc = torch.nan_to_num(fsc, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Integrate over spatial frequency (trapezoidal rule)
+    t = spatial_freq.squeeze(-1)   # (R,)
+    y = fsc                        # (R, B)
+
+    integral = torch.sum(
+        (t[1:] - t[:-1]).unsqueeze(-1) * (y[:-1] + y[1:]) / 2.0,
+        dim=0
+    ).squeeze()
+
+    return integral
+
+
+def shell_mask(r, cx, cy, cz, sx, sy, sz, delta=1):
+    dist2 = (
+        (sx[np.newaxis, np.newaxis, :] - cx) ** 2 +
+        (sy[np.newaxis, :, np.newaxis] - cy) ** 2 +
+        (sz[:, np.newaxis, np.newaxis] - cz) ** 2
+    )
+
+    outer = dist2 <= (r + delta) ** 2
+    inner = dist2 > r ** 2
+    return outer & inner
+
+
+def get_shell_masks_3d(
+    size=(128, 128, 128),
+    delta=1,
+    device="cpu"
+):
+    D, H, W = size
+    cz, cy, cx = D // 2, H // 2, W // 2
+
+    freq_nyq = min(D, H, W) // 2
+    radii = np.arange(freq_nyq)
+
+    sz = np.arange(D)
+    sy = np.arange(H)
+    sx = np.arange(W)
+
+    shells = np.stack([
+        shell_mask(r, cx, cy, cz, sx, sy, sz, delta)
+        for r in radii
+    ], axis=0)
+
+    # (R, 1, 1, D, H, W)
+    shells = torch.from_numpy(shells).float()
+    shells = shells.unsqueeze(1).unsqueeze(1).to(device)
+
+    spatial_freq = radii.astype(np.float32) / freq_nyq
+    spatial_freq = spatial_freq / spatial_freq.max()
+    spatial_freq = torch.from_numpy(spatial_freq).unsqueeze(1).to(device)
+
+    return shells, spatial_freq
+
 
 
 
 if __name__ == "__main__":
-    from PIL import Image
-    from scipy import ndimage
+
+    # Test FSC from frcCVPR
+    vol1 = torch.randn(1, 1, 128, 128, 128).cuda()
+    vol2 = torch.from_numpy(ndimage.gaussian_filter(vol1.cpu().numpy(), sigma=1.0)).cuda()  # Example image 2
+
+    plt.figure()
+    plt.subplot(1, 2, 1)
+    plt.imshow(vol1[0, 0, 32, :, :].cpu(), cmap='gray')
+    plt.title("Volume 1 Slice")
+    plt.axis('off')
+    plt.subplot(1, 2, 2)
+    plt.imshow(vol2[0, 0, 32, :, :].cpu(), cmap='gray')
+    plt.title("Volume 2 Slice")
+    plt.axis('off')
+    plt.show()
+
+    shells, freq = get_shell_masks_3d(size=(128, 128, 128), delta=1)
+    fsc = fourier_shell_correlation(vol1, vol2, shells.cuda(), freq.cuda())
+    print("FSC mean:", fsc)
+
+
+    # Test FRC from Martin Bech
     example_path = "C:/Users/aulho/OneDrive - Danmarks Tekniske Universitet/Billeder/august.jpg"
 
     img1 = Image.open(example_path).convert('L')  # Convert to grayscale

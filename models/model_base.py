@@ -1,4 +1,5 @@
 import os
+import platform
 import torch
 import torch.nn as nn
 from utils.utils_bnorm import merge_bn, tidy_sequential
@@ -102,6 +103,30 @@ class ModelBase():
     def info_params(self):
         pass
 
+    def compile_network(self, network, mode="default"):
+
+        if not hasattr(torch, "compile"):
+            # Older PyTorch
+            return network
+
+        system = platform.system()
+
+        try:
+            if system == "Windows":
+                # Avoid Triton / Inductor on Windows
+                print("Using torch.compile with backend='aot_eager' (Windows safe mode)")
+                return torch.compile(network, backend="aot_eager", mode=mode)
+
+            else:
+                print("Using torch.compile with backend='inductor'")
+                return torch.compile(network, backend="inductor", mode=mode)
+
+        except Exception as e:
+            print(f"torch.compile failed: {e}")
+            print("Falling back to eager mode.")
+            return network
+
+
     def get_bare_model(self, network):
         """Get bare model, especially under wrapping with
         DistributedDataParallel or DataParallel.
@@ -112,12 +137,14 @@ class ModelBase():
 
 
     def model_to_device(self, network):
-        """Model to device. It also warps models with DistributedDataParallel
-        or DataParallel.
+        """Model to device. It also warps models with DistributedDataParallel or DataParallel.
         Args:
             network (nn.Module)
         """
         network = network.to(self.device)
+
+        network = self.compile_network(network)
+
         if self.opt['dist']:
             find_unused_parameters = self.opt['find_unused_parameters']
             network = DistributedDataParallel(network, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
@@ -189,7 +216,7 @@ class ModelBase():
 
         state_dict_new = network.state_dict()
 
-        print("Checking for model parameter mismatch...")
+        # print("Checking for model parameter mismatch...")
         model_param_mismatch = False
         for k, v in state_dict_old.items():
             if k not in state_dict_new or state_dict_new[k].shape != v.shape:

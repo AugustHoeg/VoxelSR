@@ -28,6 +28,14 @@ def define_G(opt, mode='train'):
     if model_architecture == "DUMMY":
         netG = DummyNetwork()
 
+    if model_architecture == "DegradeNet":  # Degradation model
+        from models.DegradeNet import DegradeNet as net
+        netG = net(down_factor=opt['down_factor'],
+                   in_channels=opt_net['in_channels'],
+                   out_channels=opt_net['out_channels'],
+                   num_feats=opt_net['num_feats'],
+                   use_checkpoint=opt_net['use_checkpoint'])
+
     # ----------------------------------------
     # RCAN from paper https://arxiv.org/abs/1807.02758
     # ----------------------------------------
@@ -390,4 +398,6 @@ def init_weights(net, init_type='xavier_uniform', init_bn_type='uniform', gain=1
         fn = functools.partial(init_fn, init_type=init_type, init_bn_type=init_bn_type, gain=gain)
         net.apply(fn)
     else:
-        print('Pass this initialization! Initialization was done during network definition!')
+        # print('Pass this initialization! Initialization was done during network definition!')
+        pass
+

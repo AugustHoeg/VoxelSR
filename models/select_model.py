@@ -22,10 +22,15 @@ def define_Model(opt, mode):
     elif model == "implicit":
         from models.model_implicit import ModelImplicit as M
 
+    elif model == "degradation":
+        from models.model_degradation import ModelDegradation as M
+
     else:
         raise NotImplementedError('Model [{:s}] is not defined.'.format(model))
 
     m = M(opt, mode)
 
-    print('Training model [{:s}] is created.'.format(m.__class__.__name__))
+    if mode == 'train':
+        print('Training model [{:s}] is created.'.format(m.__class__.__name__))
+
     return m

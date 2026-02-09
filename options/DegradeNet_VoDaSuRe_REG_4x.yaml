@@ -1,23 +1,23 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: mDCSRN              # Default model config
+  - model_opt: DegradeNet              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
-task: superresolution
+task: degradation
 input_type: 3D # Input type, 2D or 3D
-up_factor: 4  # upscaling factor
+down_factor: 4  # downscaling factor
 
 # Profile
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_degradation_${down_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -36,37 +36,34 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 500
-  validation_iterations: 25
-  checkpoint_test: 25
-  checkpoint_save: 500
-  checkpoint_print: 25
-  checkpoint_save_visuals: 25
+  iterations: 50000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 10
-
-  G_loss_weights:
-    L1: 1.0
-    Degradation: 0.01
+  G_optimizer_clipgrad: 2
+  G_warmup_steps: 0  # new
 
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 16
+  patch_size: 128
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 8
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 

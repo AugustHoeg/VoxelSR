@@ -38,3 +38,4 @@ h5py
 basicsr
 einops
 lpips
+triton

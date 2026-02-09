@@ -96,7 +96,7 @@ def parse_arguments():
 
 
 def load_options_from_experiment_id(experiment_id, root_dir, file_type="json"):
-    opt_files = glob.glob(os.path.join(root_dir + "/logs/" + "/*/" "/wandb/" + "*" + experiment_id + "/files/saved_models/*G.h5"))
+    opt_files = glob.glob(os.path.join(root_dir, "logs/", "*/", "wandb/", "*" + experiment_id, "files/saved_models/*G.h5"))
     opt_files.sort(key=os.path.getmtime, reverse=True)
     opt_file = opt_files[0].rsplit('files', 1)[0]
     try:
@@ -108,7 +108,8 @@ def load_options_from_experiment_id(experiment_id, root_dir, file_type="json"):
 
 def set_seed(opt):
     seed = opt['train_opt']['manual_seed'] + opt['rank']
-    print(f"Random seed: {seed} for rank {opt['rank']}")
+    if opt['train_mode'] == "train":
+        print(f"Random seed: {seed} for rank {opt['rank']}")
     set_random_seed(seed)
 
 
@@ -117,11 +118,15 @@ def init_options(opt, opt_path):
     # Set options path
     opt['opt_path'] = opt_path
 
-    # Calculate high-resolution patch size
-    if opt['model_opt']['model_architecture'] == 'MTVNet':
-        opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['context_sizes'][-1] * opt['up_factor'])
-    else:
-        opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['up_factor']
+    if opt['task'] == 'superresolution':
+        # Calculate high-resolution patch size
+        if opt['model_opt']['model_architecture'] == 'MTVNet':
+            opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['context_sizes'][-1] * opt['up_factor'])
+        else:
+            opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['up_factor']
+    elif opt['task'] == 'degradation':
+        # Calculate high-resolution patch size
+        opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['down_factor']
 
     # ----------------------------------------
     # distributed settings
