@@ -49,11 +49,8 @@ def compute_mask(x_dims, window_size, shift_size):
     https://github.com/microsoft/Swin-Transformer
 
     :param x_dims:
-    :param ct_dims:
     :param window_size:
-    :param ct_size:
     :param shift_size:
-    :param ct_shift:
     :param device:
     :return:
     '''
@@ -242,7 +239,7 @@ class WindowAttention3D(nn.Module):
         if mask is not None:
              x = F.scaled_dot_product_attention(q, k, v, attn_mask=mask.unsqueeze(1) + relative_position_bias, dropout_p=0.0, is_causal=False)
         else:
-            x = F.scaled_dot_product_attention(q, k, v, attn_mask=relative_position_bias, dropout_p=0.0, is_causal=False)
+             x = F.scaled_dot_product_attention(q, k, v, attn_mask=relative_position_bias, dropout_p=0.0, is_causal=False)
 
         return x
 
@@ -345,10 +342,18 @@ class WindowAttention3D_FAST(nn.Module):
         relative_position_bias = self.relative_position_bias_table[self.relative_position_index.view(-1)].view(N, N, -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
 
+        relative_position_bias = relative_position_bias.unsqueeze(0)  # (1, num_heads, N, N)
+
         if mask is not None:
-             x = F.scaled_dot_product_attention(q, k, v, attn_mask=mask.unsqueeze(1) + relative_position_bias, dropout_p=0.0, is_causal=False)
+            nW = mask.shape[0]
+            B = B_ // nW
+            mask = mask.unsqueeze(1)  # (nW, 1, N, N)
+            mask = mask.repeat(B, 1, 1, 1)  # (B_, 1, N, N)
+            attn_mask = mask + relative_position_bias
         else:
-             x = F.scaled_dot_product_attention(q, k, v, attn_mask=relative_position_bias, dropout_p=0.0, is_causal=False)
+            attn_mask = relative_position_bias
+
+        x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0, is_causal=False)
 
         x = x.transpose(1, 2).reshape(B_, N, C)
 

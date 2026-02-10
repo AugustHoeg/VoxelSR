@@ -467,13 +467,14 @@ def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
+    batch_size = 2
     patch_size_hr = 128
     down_factor = 4
 
     # Create a random input: batch size 1, 3 channels, 224x224 image
-    x_hr = torch.randn(1, 1, patch_size_hr, patch_size_hr, patch_size_hr).to(device)
+    x_hr = torch.randn(batch_size, 1, patch_size_hr, patch_size_hr, patch_size_hr).to(device)
 
-    x_lr = torch.randn((1, 1, patch_size_hr // down_factor,
+    x_lr = torch.randn((batch_size, 1, patch_size_hr // down_factor,
                         patch_size_hr // down_factor,
                         patch_size_hr // down_factor)).cuda()
 
