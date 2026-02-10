@@ -215,10 +215,10 @@ class NRMSE_3D(nn.Module):
         else:
             raise ValueError("Unsupported norm_type")
 
-        if denom < self.eps:  # avoid division by zero
-            return 0.0
+        # if denom < self.eps:  # avoid division by zero
+        #     return 0.0
 
-        result = torch.mean(self.metric_func(img_true, img_false) / denom)  # mean over patches in batch
+        result = torch.mean(self.metric_func(img_true, img_false) / (denom + self.eps))  # mean over patches in batch
 
         return result.item()
 
