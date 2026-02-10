@@ -42,7 +42,7 @@ train_opt:
   checkpoint_save: 20000
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
-  num_accum_steps_G: 2  # Accumulate gradients over 2 iterations + reduce batch size to 2
+  num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 2
@@ -63,14 +63,14 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 4
+    dataloader_batch_size: 4
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 2
+    dataloader_batch_size: 2
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 
