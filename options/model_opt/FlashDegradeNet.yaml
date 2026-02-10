@@ -1,0 +1,24 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: degradation
+model_architecture: FlashDegradeNet
+netG:
+  net_type: FlashDegradeNet
+  description: "FlashDegradeNet"
+  in_channels: 1
+  num_blks: 6
+  blk_layers: 3
+  shallow_feat: 32
+  embed_dim: 64
+  num_heads: 4
+  mlp_ratio: 4
+  attn_window_size: 8
+  patch_size: 2
+  skip_dims: [16, 16, 32, 32, 64, 64]
+  drop_path_rate: 0.0
+  use_checkpoint: true
+  upsample_method: "nearest"
+  requires_grad: true
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.2

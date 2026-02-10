@@ -182,6 +182,8 @@ class PatchEmbed3D(nn.Module):
         else:
             x = x.flatten(2).transpose(1, 2)
         return x
+
+
 class Group(nn.Module):
 
     def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None):
@@ -203,7 +205,7 @@ class Group(nn.Module):
                     STLayerV2(level=0,
                             embed_dims=[channel_dim],
                             context_sizes=[input_size],
-                            patch_sizes=[1],
+                            patch_sizes=[patch_size],
                             sizes_p=[(input_size//patch_size, input_size//patch_size, input_size//patch_size)],
                             num_heads=self.num_heads,
                             window_sizes=[self.window_size],
@@ -230,8 +232,8 @@ class Group(nn.Module):
             if layer_idx % 2 == 1:
                 mlp_ratio = max(1, mlp_ratio // 2)
 
-        Dp, Hp, Wp = [input_size // patch_size] * 3  # hardcoded for now
-        self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
+        # Dp, Hp, Wp = [input_size // patch_size] * 3  # hardcoded for now
+        # self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
 
     def forward(self, x):
 
@@ -241,7 +243,7 @@ class Group(nn.Module):
         ###### Dense-connected block structure ######
         for i in range(len(self.layers) - 1):
 
-            x = x.permute(0, 2, 3, 4, 1)
+            x = x.permute(0, 2, 3, 4, 1)  # B, C, D, H, W -> B, D, H, W, C
 
             # Main layer
             x = self.layers[i](x)
@@ -266,14 +268,57 @@ class Group(nn.Module):
 class TransitionLayer(nn.Module):
     def __init__(self, in_dim, out_dim, stride=2):
         super().__init__()
+        #self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         self.conv = nn.Conv3d(in_dim, out_dim, kernel_size=3, stride=stride, padding=1)
-        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):
-        return self.act(self.conv(x))
+        return self.conv(x)
 
 
-class DegradeNetV2(nn.Module):
+class PatchMerging3D(nn.Module):
+    """
+    Patch merging layer based on: "Liu et al.,
+    Swin Transformer: Hierarchical Vision Transformer using Shifted Windows
+    <https://arxiv.org/abs/2103.14030>"
+    https://github.com/microsoft/Swin-Transformer
+    """
+
+    def __init__(self, dim, norm_layer=nn.LayerNorm) -> None:
+        """
+        Args:
+            dim: number of feature channels.
+            norm_layer: normalization layer.
+        """
+
+        super().__init__()
+        self.dim = dim
+        self.reduction = nn.Linear(8 * dim, 2 * dim, bias=False)
+        self.norm = norm_layer(8 * dim)
+
+    def forward(self, x):
+        x = x.permute(0, 2, 3, 4, 1)  # B, C, D, H, W -> B, D, H, W, C
+
+        b, d, h, w, c = x.shape
+        pad_input = (h % 2 == 1) or (w % 2 == 1) or (d % 2 == 1)
+        if pad_input:
+            x = F.pad(x, (0, 0, 0, w % 2, 0, h % 2, 0, d % 2))
+        x0 = x[:, 0::2, 0::2, 0::2, :]
+        x1 = x[:, 1::2, 0::2, 0::2, :]
+        x2 = x[:, 0::2, 1::2, 0::2, :]
+        x3 = x[:, 0::2, 0::2, 1::2, :]
+        x4 = x[:, 1::2, 1::2, 0::2, :]
+        x5 = x[:, 1::2, 0::2, 1::2, :]
+        x6 = x[:, 0::2, 1::2, 1::2, :]
+        x7 = x[:, 1::2, 1::2, 1::2, :]
+        x = torch.cat([x0, x1, x2, x3, x4, x5, x6, x7], -1)
+        x = self.norm(x)
+        x = self.reduction(x)
+
+        x = x.permute(0, 4, 1, 2, 3).contiguous()  # B, D, H, W, C -> B, C, D, H, W
+        return x
+
+
+class FlashDegradeNet(nn.Module):
     def __init__(self,
                  input_size,
                  down_factor,
@@ -281,7 +326,7 @@ class DegradeNetV2(nn.Module):
                  blk_layers,
                  in_chans,
                  shallow_feat,
-                 embed_dims,
+                 embed_dim,
                  num_heads,
                  mlp_ratio,
                  attn_window_size,
@@ -291,7 +336,7 @@ class DegradeNetV2(nn.Module):
                  use_checkpoint=False,
                  upsample_method="nearest",
                  requires_grad=True):
-        super(DegradeNetV2, self).__init__()
+        super(FlashDegradeNet, self).__init__()
 
         self.use_checkpoint = use_checkpoint
 
@@ -301,7 +346,7 @@ class DegradeNetV2(nn.Module):
         # Patch embedding blocks (proj only)
         self.patch_embedding = PatchEmbed3D(
             in_channels=shallow_feat,
-            dim=self.embed_dims[0],
+            dim=embed_dim,
             patch_size=patch_size,
             method="proj",
             out_format="same"
@@ -312,15 +357,15 @@ class DegradeNetV2(nn.Module):
 
         self.LX_blocks = nn.ModuleList()
         cur = 0
-        blocks = nn.ModuleList()
         dp_rates = [x for x in np.linspace(0, drop_path_rate, num_blks * blk_layers)]
         for i in range(num_blks):
-            dp = dp_rates[cur: cur + self.blk_layers]
+            blocks = nn.Sequential()
+            dp = dp_rates[cur: cur + blk_layers]
             blocks.append(
-                Group(input_size=input_size // patch_size,  # reduction by patch embedding
-                        patch_size=patch_size,  # keep patch size constant across blocks
-                        dim=embed_dims[i],  # TODO add increasing dim across blocks
-                        skip_dim=skip_dims[i],  # TODO add increasing dim across blocks
+                Group(input_size=input_size,
+                        patch_size=patch_size,
+                        dim=embed_dim,
+                        skip_dim=skip_dims[i],
                         depth=blk_layers,
                         window_size=attn_window_size,
                         num_heads=num_heads,
@@ -328,25 +373,46 @@ class DegradeNetV2(nn.Module):
                         dp_rates=dp
                 )
             )
-            if down_factor >= 2 and i < num_blks - 1:
-                input_size = input_size // 2  # downsample by 2 at each block
-            cur += self.blk_layers
-        self.LX_blocks.append(blocks)
+            if i == 0 and down_factor >= 2:
+                input_size = input_size // 2  # downsample by 2
+                blocks.append(PatchMerging3D(embed_dim, norm_layer=nn.LayerNorm))
+                #blocks.append(TransitionLayer(embed_dim, 2 * embed_dim, stride=2))
+                embed_dim = 2 * embed_dim  # double feature channels
+            elif i == 1 and down_factor >= 4:
+                input_size = input_size // 2  # downsample by 2
+                blocks.append(PatchMerging3D(embed_dim, norm_layer=nn.LayerNorm))
+                #blocks.append(TransitionLayer(embed_dim, 2 * embed_dim, stride=2))
+                embed_dim = 2 * embed_dim   # double feature channels
+            elif i < num_blks - 1:
+                blocks.append(TransitionLayer(embed_dim, embed_dim, stride=1))
+
+            cur += blk_layers
+
+            self.LX_blocks.append(blocks)
 
         self.Final_blk = nn.Sequential(
             nn.Identity()
         )
-        if patch_size > 1:
+        if patch_size >= 2:
             self.Final_blk.append(
-                SRBlock3D(embed_dims[-1],
-                          embed_dims[-1],
+                SRBlock3D(embed_dim,
+                          embed_dim,
                           k_size=6, pad=2,
                           upsample_method=upsample_method,
                           upscale_factor=patch_size,
                           use_checkpoint=False)
             )
+        if patch_size >= 4:
+            self.Final_blk.append(
+                SRBlock3D(embed_dim,
+                        embed_dim,
+                        k_size=6, pad=2,
+                        upsample_method=upsample_method,
+                        upscale_factor=patch_size,
+                        use_checkpoint=False)
+            )
 
-        self.conv_sfe = nn.Conv3d(in_channels=self.embed_dims[-1],
+        self.conv_sfe = nn.Conv3d(in_channels=embed_dim,
                                     out_channels=shallow_feat,
                                     kernel_size=3, stride=1, padding=1, bias=True)
 
@@ -369,15 +435,21 @@ class DegradeNetV2(nn.Module):
         """
 
         # SFE
-        x = self.sfe_blk(x)  # (B, shallow_feats[level], D, H, W)
+        if self.use_checkpoint:
+            x = checkpoint.checkpoint(self.sfe_blk, x)  # (B, shallow_feats[level], D, H, W)
+        else:
+            x = self.sfe_blk(x)  # (B, shallow_feats[level], D, H, W)
 
         # Patch embedding
-        emb = self.patch_embedding(x)
+        if self.use_checkpoint:
+            emb = checkpoint.checkpoint(self.patch_embedding, x)
+        else:
+            emb = self.patch_embedding(x)
 
         # Pass through blocks
         for i, blk in enumerate(self.LX_blocks):
             if self.use_checkpoint:
-                emb = checkpoint.checkpoint(blk)
+                emb = checkpoint.checkpoint(blk, emb)
             else:
                 emb = blk(emb)
 
@@ -397,16 +469,6 @@ def test():
 
     patch_size_hr = 128
     down_factor = 4
-    print("Test DegradationModel")
-    net = DegradeNet(down_factor=down_factor,
-                           in_channels=1,
-                           out_channels=1,
-                           num_feats=64,
-                           use_checkpoint=True).to(device)
-
-    print("Number of parameters, G", numel(net, only_trainable=True))
-
-    net.train()  # inference mode
 
     # Create a random input: batch size 1, 3 channels, 224x224 image
     x_hr = torch.randn(1, 1, patch_size_hr, patch_size_hr, patch_size_hr).to(device)
@@ -416,6 +478,54 @@ def test():
                         patch_size_hr // down_factor)).cuda()
 
     loss_func = nn.MSELoss()
+
+    if False:
+        print("Test DegradationModel")
+        net = DegradeNet(down_factor=down_factor,
+                               in_channels=1,
+                               out_channels=1,
+                               num_feats=32,
+                               use_checkpoint=True).to(device)
+
+        print("Number of parameters, G", numel(net, only_trainable=True))
+
+        net.train()  # inference mode
+
+        # Forward pass
+        start = time.time()
+        out = net(x_hr)
+        stop = time.time()
+        print("Time elapsed:", stop - start)
+
+        loss = loss_func(out, x_lr)
+        loss.backward()
+
+        print("Output shape:", out.shape)
+
+        max_memory_reserved = torch.cuda.max_memory_reserved()
+        print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10 ** 9, total_gpu_mem))
+
+    # Test FlashDegradeNet
+    net = FlashDegradeNet(
+        input_size=patch_size_hr,
+        down_factor=down_factor,
+        num_blks=6,
+        blk_layers=3,
+        in_chans=1,
+        shallow_feat=32,
+        embed_dim=64,
+        num_heads=4,
+        mlp_ratio=4,
+        attn_window_size=8,
+        patch_size=2,
+        skip_dims=[16, 16, 32, 32, 64, 64],
+        drop_path_rate=0.0,
+        use_checkpoint=True,
+        upsample_method="nearest",
+        requires_grad=True,
+    ).to(device)
+
+    print("Number of parameters, G", numel(net, only_trainable=True))
 
     # Forward pass
     start = time.time()
@@ -431,7 +541,10 @@ def test():
     max_memory_reserved = torch.cuda.max_memory_reserved()
     print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10 ** 9, total_gpu_mem))
 
+
     print("Done")
+
+
 
 
 if __name__ == "__main__":

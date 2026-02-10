@@ -28,13 +28,32 @@ def define_G(opt, mode='train'):
     if model_architecture == "DUMMY":
         netG = DummyNetwork()
 
-    if model_architecture == "DegradeNet":  # Degradation model
+    if model_architecture == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],
                    in_channels=opt_net['in_channels'],
                    out_channels=opt_net['out_channels'],
                    num_feats=opt_net['num_feats'],
                    use_checkpoint=opt_net['use_checkpoint'])
+
+    elif model_architecture == "FlashDegradeNet":  # FlashDegradeNet
+        from models.DegradeNet import FlashDegradeNet as net
+        netG = net(input_size=opt['dataset_opt']['patch_size_hr'],
+                   down_factor=opt['down_factor'],
+                   num_blks=opt_net['num_blks'],
+                   blk_layers=opt_net['blk_layers'],
+                   in_chans=opt_net['in_channels'],
+                   shallow_feat=opt_net['shallow_feat'],
+                   embed_dim=opt_net['embed_dim'],
+                   num_heads=opt_net['num_heads'],
+                   mlp_ratio=opt_net['mlp_ratio'],
+                   attn_window_size=opt_net['attn_window_size'],
+                   patch_size=opt_net['patch_size'],
+                   skip_dims=opt_net['skip_dims'],
+                   drop_path_rate=0.1 if mode == 'train' else 0.0,
+                   use_checkpoint=opt_net['use_checkpoint'],
+                   upsample_method=opt_net['upsample_method'],
+                   requires_grad=True)
 
     # ----------------------------------------
     # RCAN from paper https://arxiv.org/abs/1807.02758

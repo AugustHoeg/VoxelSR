@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: DegradeNet              # Default model config
+  - model_opt: FlashDegradeNet              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -13,7 +13,7 @@ down_factor: 4  # downscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_degradation_${down_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
@@ -36,33 +36,41 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 1000
-  validation_iterations: 50
-  checkpoint_test: 50
-  checkpoint_save: 250
-  checkpoint_print: 50
-  checkpoint_save_visuals: 50
+  iterations: 50000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
-  G_optimizer_lr: 1e-4 # 1e-4
+  G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 2
+  G_warmup_steps: 2000  # new
+  G_scheduler_milestones:
+    - 25000 # 10000
+    - 35000 # 7500
+    - 42500 # 5000
+    - 47500 # 2500
+  G_loss_weights:
+    L1: 1.0
 
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 16  # input size is patch_size * down_factor for degradation
+  patch_size: 32
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 4
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 2
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
