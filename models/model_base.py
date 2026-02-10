@@ -143,7 +143,7 @@ class ModelBase():
         """
         network = network.to(self.device)
 
-        network = self.compile_network(network)
+        # network = self.compile_network(network)
 
         if self.opt['dist']:
             find_unused_parameters = self.opt['find_unused_parameters']
