@@ -36,24 +36,25 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
+  iterations: 100000
   validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 20000
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
-  num_accum_steps_G: 1
+  num_accum_steps_G: 2
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 2
+  G_optimizer_clipgrad: 3
   G_warmup_steps: 2000  # new
   G_scheduler_milestones:
-    - 25000 # 10000
-    - 35000 # 7500
-    - 42500 # 5000
-    - 47500 # 2500
+    - 50000
+    - 70000
+    - 85000
+    - 95000
   G_loss_weights:
     L1: 1.0
+    FSC: 0.2
 
 # Overwrite default dataset parameters
 dataset_opt:
