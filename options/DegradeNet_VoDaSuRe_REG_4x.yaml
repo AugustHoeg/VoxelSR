@@ -36,7 +36,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
+  iterations: 100000
   validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 20000
@@ -48,12 +48,13 @@ train_opt:
   G_optimizer_clipgrad: 2
   G_warmup_steps: 0  # new
   G_scheduler_milestones:
-    - 25000 # 10000
-    - 35000 # 7500
-    - 42500 # 5000
-    - 47500 # 2500
+    - 50000
+    - 70000
+    - 85000
+    - 95000
   G_loss_weights:
     L1: 1.0
+    FSC: 0
 
 # Overwrite default dataset parameters
 dataset_opt:

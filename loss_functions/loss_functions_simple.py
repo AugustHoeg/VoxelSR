@@ -110,28 +110,32 @@ class LPIPSLoss3D(torch.nn.Module):
 
 
 class FSCLoss3D(torch.nn.Module):
-    def __init__(self, size_hr, delta=1, device="cuda"):
+    def __init__(self, size, delta=1, drop_DC=True, device="cuda"):
         super(FSCLoss3D, self).__init__()
         self.device = device
-        self.size_hr = size_hr
-        self.shells, self.freq = get_shell_masks_3d(size=(size_hr, size_hr, size_hr), delta=delta, device=device)
+        self.size = size
+        self.drop_DC = drop_DC
+        self.shells, self.freq = get_shell_masks_3d(size=(size, size, size), delta=delta, device=device)
 
     def forward(self, img_ref, img_pred):
 
-        fsc = fourier_shell_correlation(img_ref, img_pred, self.shells, self.freq)
-        return fsc
+        fsc = fourier_shell_correlation(img_ref, img_pred, self.shells, self.freq, self.drop_DC)
+        loss = 1 - (fsc ** 2).mean()  # squaring FSC -> phase agnostic
+        return loss
 
 
 class FSCLoss3DF(torch.nn.Module):
-    def __init__(self, delta=1, device="cuda"):
+    def __init__(self, delta=1, drop_DC=True, device="cuda"):
         super(FSCLoss3DF, self).__init__()
         self.device = device
         self.delta = delta
+        self.drop_DC = drop_DC
 
     def forward(self, img_ref, img_pred):
         shells, freq = get_shell_masks_3d(size=img_ref.shape[2:], delta=self.delta, device=self.device)
-        fsc = fourier_shell_correlation(img_ref, img_pred, shells, freq)
-        return fsc
+        fsc = fourier_shell_correlation(img_ref, img_pred, shells, freq, self.drop_DC)
+        loss = 1 - (fsc ** 2).mean()  # squaring FSC -> phase agnostic
+        return loss
 
 class DegradationLoss(nn.Module):
     def __init__(self, model_id, eval_mode=True, verbose=True, feat_dist_func='L1', compare_input=True, device='cuda', **kwargs):

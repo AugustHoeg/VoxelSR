@@ -246,7 +246,7 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     plt.close()
 
 
-def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq):
+def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq, drop_DC=True, remove_negative=False):
     """
     volume1, volume2: (B, C, D, H, W)
     shell_masks:      (R, 1, 1, D, H, W)
@@ -254,6 +254,10 @@ def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq):
     From paper: Image quality measurements and denoising using Fourier Ring Correlations
     Github: https://github.com/frcCVPR/frc-loss/blob/master/models.py#L106
     """
+
+    # Subtract mean (optional, but can improve stability)
+    volume1 = volume1 - volume1.mean(dim=(-3, -2, -1), keepdim=True)
+    volume2 = volume2 - volume2.mean(dim=(-3, -2, -1), keepdim=True)
 
     volume1 = volume1.to(torch.complex64)
     volume2 = volume2.to(torch.complex64)
@@ -285,6 +289,15 @@ def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq):
 
     fsc = c1 / torch.sqrt(c2 * c3 + 1e-12)
     fsc = torch.nan_to_num(fsc, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Remove negative values corresponding to anti-correlation to ensure fsc is in the range [0, 1]
+    if remove_negative:
+        fsc = torch.clamp(fsc, min=0.0)
+
+    # Drop first shell (DC component)
+    if drop_DC:
+        fsc = fsc[1:]
+        spatial_freq = spatial_freq[1:]
 
     # Integrate over spatial frequency (trapezoidal rule)
     t = spatial_freq.squeeze(-1)   # (R,)

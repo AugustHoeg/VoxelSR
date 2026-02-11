@@ -47,6 +47,10 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 2
 
+  G_loss_weights:
+    L1: 1.0
+    FSC: 0.2
+
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
@@ -55,14 +59,14 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 3
+    num_load_workers: 3
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 3
+    num_load_workers: 3
     persist_workers: true
     pin_memory: false
 

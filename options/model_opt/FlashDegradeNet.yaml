@@ -8,15 +8,15 @@ netG:
   num_blks: 6
   blk_layers: 3
   shallow_feat: 32
-  embed_dim: 64
+  embed_dim: 96
   num_heads: 4
   mlp_ratio: 4
   attn_window_size: 8
   patch_size: 2
-  skip_dims: [16, 16, 32, 32, 64, 64]
+  skip_dims: [32, 32, 32, 32, 32, 32]
   drop_path_rate: 0.0
   use_checkpoint: true
-  upsample_method: "nearest"
+  upsample_method: "pixelshuffle3D"
   requires_grad: true
 
   init_type: default

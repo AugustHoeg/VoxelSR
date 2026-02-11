@@ -436,15 +436,15 @@ class FlashDegradeNet(nn.Module):
 
         # SFE
         if self.use_checkpoint:
-            x = checkpoint.checkpoint(self.sfe_blk, x)  # (B, shallow_feats[level], D, H, W)
+            emb = checkpoint.checkpoint(self.sfe_blk, x)  # (B, shallow_feats[level], D, H, W)
         else:
-            x = self.sfe_blk(x)  # (B, shallow_feats[level], D, H, W)
+            emb = self.sfe_blk(x)  # (B, shallow_feats[level], D, H, W)
 
         # Patch embedding
         if self.use_checkpoint:
-            emb = checkpoint.checkpoint(self.patch_embedding, x)
+            emb = checkpoint.checkpoint(self.patch_embedding, emb)
         else:
-            emb = self.patch_embedding(x)
+            emb = self.patch_embedding(emb)
 
         # Pass through blocks
         for i, blk in enumerate(self.LX_blocks):
@@ -467,7 +467,7 @@ def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
-    batch_size = 2
+    batch_size = 1
     patch_size_hr = 128
     down_factor = 4
 
@@ -514,15 +514,15 @@ def test():
         blk_layers=3,
         in_chans=1,
         shallow_feat=32,
-        embed_dim=64,
+        embed_dim=96,
         num_heads=4,
         mlp_ratio=4,
         attn_window_size=8,
         patch_size=2,
-        skip_dims=[16, 16, 32, 32, 64, 64],
+        skip_dims=[32, 32, 32, 32, 32, 32],
         drop_path_rate=0.0,
         use_checkpoint=True,
-        upsample_method="nearest",
+        upsample_method="pixelshuffle3D",
         requires_grad=True,
     ).to(device)
 

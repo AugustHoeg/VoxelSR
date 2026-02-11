@@ -215,11 +215,13 @@ class NRMSE_3D(nn.Module):
         else:
             raise ValueError("Unsupported norm_type")
 
-        # if denom < self.eps:  # avoid division by zero
-        #     return 0.0
+        # result = torch.mean(self.metric_func(img_true, img_false) / (denom + self.eps))  # mean over patches in batch
 
-        result = torch.mean(self.metric_func(img_true, img_false) / (denom + self.eps))  # mean over patches in batch
+        idx = denom >= self.eps  # Only compute NRMSE for non-zero patches
+        if torch.sum(idx) == 0:
+            return 0.0
 
+        result = torch.mean(self.metric_func(img_true[idx], img_false[idx]) / denom[idx])
         return result.item()
 
 def performance_metrics(real_hi_res, fake_hi_res):
