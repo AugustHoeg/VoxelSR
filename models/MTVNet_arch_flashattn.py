@@ -330,9 +330,10 @@ class CrossScaleMerge(nn.Module):
             raise NotImplementedError("adaLN not implemented yet.")
 
         elif self.csm_method == "crossattn":
-            self.mlp_match = Mlp(in_features=prev_dim,
-                                 hidden_features=prev_dim * 1,
-                                 out_features=dim)
+            # self.mlp_match = Mlp(in_features=prev_dim,
+            #                      hidden_features=prev_dim,
+            #                      out_features=dim)
+            self.match_layer = nn.Linear(prev_dim, dim)
 
             self.cross_attn = WindowCrossAttention3D_FAST(dim,
                                                           window_size=to_3tuple(self.window_size),
@@ -353,7 +354,7 @@ class CrossScaleMerge(nn.Module):
 
         elif self.csm_method == "crossattn":
             # MLP to match channel dimensions
-            prev_x_windows = self.mlp_match(prev_x)
+            prev_x_windows = self.match_layer(prev_x)
             # Repartition previous-level patches using current-level window size
             prev_x_windows = window_partition3D(prev_x_windows, window_size=self.window_size)
             # Window cross-attention
@@ -369,12 +370,14 @@ class CrossScaleMerge(nn.Module):
 
 class STGroup(nn.Module):
 
-    def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None, prev_dim=None, prev_patch_size=2):
+    def __init__(self, input_size, patch_size, dim, skip_dim, depth, window_size=8, num_heads=4, mlp_ratio=4, dp_rates=None, prev_dim=None, prev_patch_size=2, enable_csm=False):
         super().__init__()
 
         self.layers = nn.ModuleList()
         self.compress_layers = nn.ModuleList()
         self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        self.enable_csm = enable_csm
+        self.csm_layers = nn.ModuleList()
 
         for layer_idx in range(depth):
             channel_dim = dim + skip_dim * layer_idx
@@ -415,17 +418,16 @@ class STGroup(nn.Module):
             if layer_idx % 2 == 1:
                 mlp_ratio = max(1, mlp_ratio // 2)
 
-        Dp, Hp, Wp = [input_size // patch_size] * 3  # hardcoded for now
-        self.mask_matrix = compute_mask((Dp, Hp, Wp), self.window_size, self.shift_size).cuda()  # hardcoded for now
-
-        if prev_dim is not None:
-            self.csm = CrossScaleMerge(dim=dim,
-                                       prev_dim=prev_dim,
-                                       window_size=self.window_size,
-                                       num_heads=self.num_heads,
-                                       query_token_size=patch_size,
-                                       key_token_size=prev_patch_size,
-                                       csm_method="crossattn")
+            if enable_csm:
+                self.csm_layers.append(
+                    CrossScaleMerge(dim=channel_dim,
+                                    prev_dim=prev_dim,
+                                    window_size=self.window_size,
+                                    num_heads=self.num_heads,
+                                    query_token_size=patch_size,
+                                    key_token_size=prev_patch_size,
+                                    csm_method="crossattn")
+                )
 
 
     def forward(self, x, prev_x=None):
@@ -439,9 +441,8 @@ class STGroup(nn.Module):
             x = x.permute(0, 2, 3, 4, 1)
 
             # Merge of previous level patch features
-            if prev_x is not None and i == 0:
-                prev_x = prev_x.permute(0, 2, 3, 4, 1)  # B, D, H, W, C
-                x = self.csm(x, prev_x)
+            if self.enable_csm and prev_x is not None:
+                x = self.csm_layers[i](x, prev_x.permute(0, 2, 3, 4, 1))
 
             # Main layer
             x = self.layers[i](x)
@@ -561,7 +562,7 @@ class MTVNet_flashattn(nn.Module):
             blocks = nn.ModuleList()
             dp_rates = [x for x in np.linspace(0, drop_path_rate, self.num_blks[level] * self.blk_layers[level])]
             dp = dp_rates[cur: cur + self.blk_layers[level]]
-            for _ in range(self.num_blks[level]):
+            for i in range(self.num_blks[level]):
                 blocks.append(
                     STGroup(input_size=context_sizes[level],
                           patch_size=patch_sizes[level],
@@ -573,7 +574,9 @@ class MTVNet_flashattn(nn.Module):
                           mlp_ratio=self.mlp_ratio,
                           dp_rates=dp,
                           prev_dim=self.embed_dims[level-1] if level > 0 else None,
-                          prev_patch_size=patch_sizes[level-1] if level > 0 else None)
+                          prev_patch_size=patch_sizes[level-1] if level > 0 else None,
+                          enable_csm=level > 0 and i == 0  # first block of each level (except level 0) enables cross-scale merge
+                    )
                 )
             self.LX_blocks.append(blocks)
 
@@ -706,21 +709,21 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     batch_size = 1
-    img_size = 32
+    img_size = 64
     print("image size: ", img_size)
     x = torch.randn((batch_size, 1, img_size, img_size, img_size)).to(device)
     B, C, H, W, D = x.shape
 
     # small config for quick run
-    context_sizes = [img_size]
+    context_sizes = [img_size, 48, 32]
     num_levels = len(context_sizes)
-    shallow_feats = [128]
+    shallow_feats = [32, 64, 128]
     pre_up_feats = [64, 64]
-    num_blks = [3]
-    blk_layers = [6]
-    patch_sizes = [2]
-    skip_dims = [60]
-    embed_dims = [180]
+    num_blks = [1, 2, 3]
+    blk_layers = [6, 6, 6]
+    patch_sizes = [4, 3, 2]
+    skip_dims = [60, 60, 60]
+    embed_dims = [180, 180, 180]
     num_heads = 6
     mlp_ratio = 4
     attn_window_sizes = [8, 8, 8]
@@ -755,9 +758,6 @@ if __name__ == "__main__":
     x_hr = torch.randn((batch_size, 1, up_factor * context_sizes[-1],
                               up_factor * context_sizes[-1],
                               up_factor * context_sizes[-1])).to(device)
-
-    # Compile
-    net = torch.compile(net)
 
     start = time.time()
     with torch.cuda.amp.autocast(dtype=torch.bfloat16):
