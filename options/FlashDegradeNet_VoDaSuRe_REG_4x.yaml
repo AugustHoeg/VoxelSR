@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_degradation_${down_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_FSC_0p2
+run_name: ${model_opt.model_architecture}_000_FSC_0p2_alpha_2p0
 note: Note
 
 # GPU configuration
@@ -45,7 +45,7 @@ train_opt:
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 4
+  G_optimizer_clipgrad: 10
   G_warmup_steps: 2000  # new
   G_scheduler_milestones:
     - 50000

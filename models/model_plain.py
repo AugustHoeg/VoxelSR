@@ -293,7 +293,12 @@ class ModelPlain(ModelBase):
                 print("Using LPIPS loss along axes:", LPIPS_axes)
                 self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes)
             elif key == "FSC" and value > 0:
-                self.loss_fn_dict["FSC"] = FSCLoss3D(size_hr=self.opt['dataset_opt']['patch_size_hr'], delta=1, device=self.device)
+                self.loss_fn_dict["FSC"] = FSCLoss3D(
+                    size=self.opt['dataset_opt']['patch_size_hr'],
+                    delta=1,
+                    alpha=2.0,
+                    device=self.device
+                )
             elif key == "CSC" and value > 0:
                 from loss_functions.loss_functions_simple import CSCLoss
                 self.loss_fn_dict["CSC"] = CSCLoss(

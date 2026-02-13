@@ -246,7 +246,7 @@ def plot_frc(corr, smoothed, thl, intersect, p_eff, p_unit='µm', thl_label='1-b
     plt.close()
 
 
-def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq, drop_DC=True, remove_negative=False):
+def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq, drop_DC=True, remove_negative=False, alpha=None):
     """
     volume1, volume2: (B, C, D, H, W)
     shell_masks:      (R, 1, 1, D, H, W)
@@ -303,8 +303,19 @@ def fourier_shell_correlation(volume1, volume2, shell_masks, spatial_freq, drop_
     t = spatial_freq.squeeze(-1)   # (R,)
     y = fsc                        # (R, B)
 
+    if alpha is None:
+        # disable weighting, equivalent to simple trapezoidal integration
+        weight = torch.ones(len(t) - 1, device=t.device)
+    else:
+        weight = torch.arange(1, len(t), device=t.device) ** alpha
+        weight = weight / weight.max() + 1  # Starts from 1, and ramps to 2 at the highest frequency by the power of alpha
+
+        # f_mid = 0.5 * (t[:-1] + t[1:])
+        # weight = f_mid ** alpha
+        # weight = weight / weight.max() + 1.0
+
     integral = torch.sum(
-        (t[1:] - t[:-1]).unsqueeze(-1) * (y[:-1] + y[1:]) / 2.0,
+        (t[1:] - t[:-1]).unsqueeze(-1) * weight.unsqueeze(-1) * (y[:-1] + y[1:]) / 2.0,
         dim=0
     ).squeeze()
 

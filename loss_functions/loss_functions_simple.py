@@ -110,30 +110,32 @@ class LPIPSLoss3D(torch.nn.Module):
 
 
 class FSCLoss3D(torch.nn.Module):
-    def __init__(self, size, delta=1, drop_DC=True, device="cuda"):
+    def __init__(self, size, delta=1, alpha=None, drop_DC=True, device="cuda"):
         super(FSCLoss3D, self).__init__()
         self.device = device
         self.size = size
         self.drop_DC = drop_DC
+        self.alpha = alpha
         self.shells, self.freq = get_shell_masks_3d(size=(size, size, size), delta=delta, device=device)
 
     def forward(self, img_ref, img_pred):
 
-        fsc = fourier_shell_correlation(img_ref, img_pred, self.shells, self.freq, self.drop_DC)
+        fsc = fourier_shell_correlation(img_ref, img_pred, self.shells, self.freq, self.drop_DC, self.alpha)
         loss = 1 - (fsc ** 2).mean()  # squaring FSC -> phase agnostic
         return loss
 
 
 class FSCLoss3DF(torch.nn.Module):
-    def __init__(self, delta=1, drop_DC=True, device="cuda"):
+    def __init__(self, delta=1, alpha=None, drop_DC=True, device="cuda"):
         super(FSCLoss3DF, self).__init__()
         self.device = device
         self.delta = delta
+        self.alpha = alpha
         self.drop_DC = drop_DC
 
     def forward(self, img_ref, img_pred):
         shells, freq = get_shell_masks_3d(size=img_ref.shape[2:], delta=self.delta, device=self.device)
-        fsc = fourier_shell_correlation(img_ref, img_pred, shells, freq, self.drop_DC)
+        fsc = fourier_shell_correlation(img_ref, img_pred, shells, freq, self.drop_DC, self.alpha)
         loss = 1 - (fsc ** 2).mean()  # squaring FSC -> phase agnostic
         return loss
 
@@ -160,7 +162,9 @@ class CSCLoss(nn.Module):
             self.feat_dist_func = nn.L1Loss()
         elif feat_dist_func == "FSC":
             #self.feat_dist_func = FSCLoss3D(size_hr=kwargs.get('size_hr'), delta=1, device=device)
-            self.feat_dist_func = FSCLoss3DF(delta=1, device=device)  # more flexible
+            self.feat_dist_func = FSCLoss3DF(delta=1,
+                                             alpha=2.0,
+                                             device=device)  # more flexible
 
         self.output_dist_func = nn.L1Loss()  # L1 loss for final output distance
 
