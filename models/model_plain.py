@@ -294,9 +294,9 @@ class ModelPlain(ModelBase):
                 self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes)
             elif key == "FSC" and value > 0:
                 self.loss_fn_dict["FSC"] = FSCLoss3D(size_hr=self.opt['dataset_opt']['patch_size_hr'], delta=1, device=self.device)
-            elif key == "Degradation" and value > 0:
-                from loss_functions.loss_functions_simple import DegradationLoss
-                self.loss_fn_dict["Degradation"] = DegradationLoss(
+            elif key == "CSC" and value > 0:
+                from loss_functions.loss_functions_simple import CSCLoss
+                self.loss_fn_dict["CSC"] = CSCLoss(
                     model_id="DegradeNet_VoDaSuRe_OME_ID000000",
                     eval_mode=True,
                     verbose=True,

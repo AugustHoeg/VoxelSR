@@ -137,10 +137,22 @@ class FSCLoss3DF(torch.nn.Module):
         loss = 1 - (fsc ** 2).mean()  # squaring FSC -> phase agnostic
         return loss
 
-class DegradationLoss(nn.Module):
+class CSCLoss(nn.Module):
+
     def __init__(self, model_id, eval_mode=True, verbose=True, feat_dist_func='L1', compare_input=True, device='cuda', **kwargs):
 
-        super(DegradationLoss, self).__init__()
+        """
+        Cross-Scale Consistency Loss (CSCLoss)
+        :param model_id: ID of the pre-trained model to use for feature extraction (should be a model trained on the same data/task)
+        :param eval_mode: Whether to set the model to eval mode (recommended for feature extraction)
+        :param verbose: Whether to print verbose information about the setup
+        :param feat_dist_func: Distance function to use for comparing intermediate features (options: 'L1', 'L2', 'FSC')
+        :param compare_input: Whether to also compare the input images (in addition to intermediate features and final output)
+        :param device: Device to run the loss computation on (e.g., 'cuda' or 'cpu')
+        :param kwargs: Additional keyword arguments for specific feature distance functions (e.g., size_hr for FSC loss)
+        """
+
+        super(CSCLoss, self).__init__()
 
         if feat_dist_func == "L2":
             self.feat_dist_func = nn.MSELoss()
@@ -172,7 +184,7 @@ class DegradationLoss(nn.Module):
             param.requires_grad = False
 
         if (verbose):
-            print(f'Setting up degradation loss with features distance function: {feat_dist_func}')
+            print(f'Setting up CSC loss with features distance function: {feat_dist_func}')
             print(f'Using Degradation architecture {self.net.__class__.__name__} with ID: {model_id}')
 
     def normalize_tensor(self, in_feat, eps=1e-10):

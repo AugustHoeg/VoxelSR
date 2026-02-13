@@ -49,7 +49,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    Degradation: 0.01
+    CSC: 0.01
 
 # Overwrite default dataset parameters
 dataset_opt:

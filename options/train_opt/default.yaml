@@ -16,7 +16,7 @@ G_loss_weights:
   BCE: 0
   LPIPS: 0
   FSC: 0
-  Degradation: 0
+  CSC: 0
 
 E_decay: 0
 G_optimizer_type: adam

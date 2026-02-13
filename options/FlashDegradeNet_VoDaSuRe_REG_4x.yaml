@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_degradation_${down_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000
+run_name: ${model_opt.model_architecture}_000_FSC_0p2
 note: Note
 
 # GPU configuration
@@ -54,7 +54,7 @@ train_opt:
     - 95000
   G_loss_weights:
     L1: 1.0
-    FSC: 0
+    FSC: 0.2
 
 # Overwrite default dataset parameters
 dataset_opt:
