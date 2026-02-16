@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_REG_CSC_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_CSC_0p1
+run_name: ${model_opt.model_architecture}_000_CSC_0p05
 note: Note
 
 # GPU configuration
@@ -50,7 +50,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    CSC: 0.1
+    CSC: 0.05 # tried: 0.1
 
 # Overwrite default dataset parameters
 dataset_opt:
