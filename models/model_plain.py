@@ -311,7 +311,7 @@ class ModelPlain(ModelBase):
                     model_id="FlashDegradeNet_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID011013",
                     eval_mode=True,
                     verbose=True,
-                    feat_dist_func='FSC',
+                    feat_dist_func='L1',  # options: 'L1', 'L2', 'FSC'
                     compare_input=False,
                     device=self.device,
                     size=self.opt['dataset_opt']['patch_size_hr']
