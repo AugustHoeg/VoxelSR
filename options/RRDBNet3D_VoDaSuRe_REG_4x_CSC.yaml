@@ -36,7 +36,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
+  iterations: 50000
   validation_iterations: 500
   checkpoint_test: 2500
   checkpoint_save: 20000
@@ -50,7 +50,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    CSC: 0.05 # tried: 0.1
+    CSC: 0.06 # tried: 0.1
 
 # Overwrite default dataset parameters
 dataset_opt:
