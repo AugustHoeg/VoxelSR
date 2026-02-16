@@ -291,24 +291,30 @@ class ModelPlain(ModelBase):
             elif key == "LPIPS" and value > 0:
                 LPIPS_axes = [0, 1, 2]  # Choose which axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis, or any combination thereof
                 print("Using LPIPS loss along axes:", LPIPS_axes)
-                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes)
+                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
+                    net_type='alex',
+                    version='0.1',
+                    device=self.device,
+                    axes=LPIPS_axes
+                )
             elif key == "FSC" and value > 0:
                 self.loss_fn_dict["FSC"] = FSCLoss3D(
                     size=self.opt['dataset_opt']['patch_size_hr'],
                     delta=1,
                     alpha=2.0,
+                    drop_DC=False,
                     device=self.device
                 )
             elif key == "CSC" and value > 0:
                 from loss_functions.loss_functions_simple import CSCLoss
                 self.loss_fn_dict["CSC"] = CSCLoss(
-                    model_id="DegradeNet_VoDaSuRe_OME_ID000000",
+                    model_id="FlashDegradeNet_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID011013",
                     eval_mode=True,
                     verbose=True,
                     feat_dist_func='FSC',
                     compare_input=False,
                     device=self.device,
-                    size_hr=self.opt['dataset_opt']['patch_size_hr']
+                    size=self.opt['dataset_opt']['patch_size_hr']
                 )
 
 

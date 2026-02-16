@@ -292,13 +292,18 @@ class ModelDegradation(ModelBase):
             elif key == "LPIPS" and value > 0:
                 LPIPS_axes = [0, 1, 2]  # only along slice axis
                 print("Using LPIPS loss along axes:", LPIPS_axes)
-                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device,
-                                                         axes=LPIPS_axes)
+                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
+                    net_type='alex',
+                    version='0.1',
+                    device=self.device,
+                    axes=LPIPS_axes
+                )
             elif key == "FSC" and value > 0:
                 self.loss_fn_dict["FSC"] = FSCLoss3D(
                     size=self.opt['dataset_opt']['patch_size'],
                     delta=1,
                     alpha=2.0,
+                    drop_DC=False,
                     device=self.device)
 
         # self.loss_fn_dict = {
