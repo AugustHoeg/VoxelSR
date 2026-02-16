@@ -428,11 +428,13 @@ class FlashDegradeNet(nn.Module):
             for param in self.parameters():
                 param.requires_grad = False
 
-    def forward(self, x):
+    def forward(self, x, ret_features=False):
         """
         x: (B, C, H, W, D)
         returns: upsampled output (B, C, up_H, up_W, up_D)
         """
+
+        outs = []
 
         # SFE
         if self.use_checkpoint:
@@ -453,6 +455,9 @@ class FlashDegradeNet(nn.Module):
             else:
                 emb = blk(emb)
 
+            if ret_features:
+                outs.append(emb)  # append features after each block
+
         if self.use_checkpoint:
             final_feats = checkpoint.checkpoint(self.Final_blk, emb)
         else:
@@ -460,7 +465,13 @@ class FlashDegradeNet(nn.Module):
 
         # output
         out = self.conv_last(self.lrelu(self.conv_sfe(final_feats)))
-        return out
+
+        if ret_features:
+            outs.append(out)  # append the final output
+            outputs = namedtuple("Outputs", self.output_names)
+            return outputs(*outs)
+        else:
+            return out
 
 
 def test():
@@ -530,7 +541,7 @@ def test():
 
     # Forward pass
     start = time.time()
-    out = net(x_hr)
+    out = net(x_hr, ret_features=False)
     stop = time.time()
     print("Time elapsed:", stop - start)
 
