@@ -422,7 +422,7 @@ class FlashDegradeNet(nn.Module):
             nn.Conv3d(in_channels=shallow_feat, out_channels=in_chans, kernel_size=3, stride=1, padding=1, bias=True)
         )
 
-        self.output_names = ['blk%d' % i for i in range(len(self.LX_blocks))] + ['output']
+        self.output_names = ['embedding'] + ['blk%d' % i for i in range(len(self.LX_blocks))] + ['output']
 
         if not requires_grad:
             for param in self.parameters():

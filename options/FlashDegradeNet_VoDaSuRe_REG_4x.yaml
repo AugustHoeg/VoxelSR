@@ -17,7 +17,7 @@ wandb_mode: online
 wandb_entity: aulho
 wandb_project: ${dataset_opt.name}_degradation_${down_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_FSC_0p2_alpha_2p0
+run_name: ${model_opt.model_architecture}_000_FSC_0p1_alpha_2p0
 note: Note
 
 # GPU configuration
@@ -39,7 +39,7 @@ train_opt:
   iterations: 100000
   validation_iterations: 500
   checkpoint_test: 2500
-  checkpoint_save: 20000
+  checkpoint_save: 10000
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
   num_accum_steps_G: 4 # 1
