@@ -448,6 +448,8 @@ class FlashDegradeNet(nn.Module):
         else:
             emb = self.patch_embedding(emb)
 
+        outs.append(emb)  # append features after patch embedding
+
         # Pass through blocks
         for i, blk in enumerate(self.LX_blocks):
             if self.use_checkpoint:
@@ -521,8 +523,8 @@ def test():
     net = FlashDegradeNet(
         input_size=patch_size_hr,
         down_factor=down_factor,
-        num_blks=6,
-        blk_layers=3,
+        num_blks=3,
+        blk_layers=6,
         in_chans=1,
         shallow_feat=32,
         embed_dim=96,

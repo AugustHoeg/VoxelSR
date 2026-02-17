@@ -42,7 +42,7 @@ train_opt:
   checkpoint_save: 20000
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
-  num_accum_steps_G: 1
+  num_accum_steps_G: 4 # 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
@@ -54,7 +54,7 @@ train_opt:
     - 95000
   G_loss_weights:
     L1: 1.0
-    FSC: 0.2
+    FSC: 0.1 # 0.2
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -64,14 +64,14 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 8
+    dataloader_batch_size: 2 # 4
+    num_load_workers: 8 # 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 4
+    dataloader_batch_size: 1 # 2
+    num_load_workers: 4 # 4
     persist_workers: true
     pin_memory: false
 

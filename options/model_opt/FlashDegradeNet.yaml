@@ -5,8 +5,8 @@ netG:
   net_type: FlashDegradeNet
   description: "FlashDegradeNet"
   in_channels: 1
-  num_blks: 6
-  blk_layers: 3
+  num_blks: 3 # 6
+  blk_layers: 6 # 3
   shallow_feat: 32
   embed_dim: 96
   num_heads: 4
