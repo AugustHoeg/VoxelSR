@@ -308,10 +308,10 @@ class ModelPlain(ModelBase):
             elif key == "CSC" and value > 0:
                 from loss_functions.loss_functions_simple import CSCLoss
                 self.loss_fn_dict["CSC"] = CSCLoss(
-                    model_id="FlashDegradeNet_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID011013",
+                    model_id="FlashDegradeNet_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID011020",
                     eval_mode=True,
                     verbose=True,
-                    feat_dist_func='L1',  # options: 'L1', 'L2', 'FSC'
+                    feat_dist_func='FSC',  # options: 'L1', 'L2', 'FSC'
                     compare_input=False,
                     device=self.device,
                     size=self.opt['dataset_opt']['patch_size_hr']
