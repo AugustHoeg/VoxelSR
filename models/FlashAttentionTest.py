@@ -353,6 +353,7 @@ class WindowAttention3D_FAST(nn.Module):
         else:
             attn_mask = relative_position_bias
 
+        # with sdpa_kernel(SDPBackend.FLASH_ATTENTION):
         x = F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=0.0, is_causal=False)
 
         x = x.transpose(1, 2).reshape(B_, N, C)
@@ -1064,8 +1065,8 @@ class STLayerV2(nn.Module):
 if __name__ == "__main__":
 
     print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
-    print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
-    print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
+    #print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
+    #print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
 
     device = torch.cuda.get_device_name()
     print("GPU:", device)

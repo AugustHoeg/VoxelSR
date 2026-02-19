@@ -108,8 +108,7 @@ def load_options_from_experiment_id(experiment_id, root_dir, file_type="json"):
 
 def set_seed(opt):
     seed = opt['train_opt']['manual_seed'] + opt['rank']
-    if opt['train_mode'] == "train":
-        print(f"Random seed: {seed} for rank {opt['rank']}")
+    print(f"Random seed: {seed} for rank {opt['rank']}")
     set_random_seed(seed)
 
 

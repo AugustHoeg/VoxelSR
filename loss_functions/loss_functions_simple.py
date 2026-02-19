@@ -171,10 +171,11 @@ class CSCLoss(nn.Module):
         self.compare_input = compare_input
 
         opt_path = load_options_from_experiment_id(model_id, root_dir="", file_type="yaml")
-        opt = OmegaConf.load(opt_path)
+        opt_csc = OmegaConf.load(opt_path)
+        opt_csc['dist'] = False  # ensure distributed is False for loss computation
 
         from models.select_model import define_Model
-        self.net = define_Model(opt, mode='test')
+        self.net = define_Model(opt_csc, mode='test')
         self.net.load(model_id, mode='test')  # load model
         self.model = self.net.get_bare_model(self.net.netG)
 

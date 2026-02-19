@@ -6,6 +6,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 import torch
+from torch.utils.data.distributed import DistributedSampler
 from monai.data import SmartCacheDataset, DataLoader
 
 import config
@@ -266,21 +267,49 @@ def main(opt: DictConfig):
     dataloader_params_train = opt['dataset_opt']['train_dataloader_params']
     dataloader_params_test = opt['dataset_opt']['test_dataloader_params']
 
-    train_loader = DataLoader(train_dataset,
-                              batch_size=dataloader_params_train['dataloader_batch_size'],
-                              shuffle=dataloader_params_train['dataloader_shuffle'],
-                              num_workers=dataloader_params_train['num_load_workers'],
-                              persistent_workers=dataloader_params_train['persist_workers'],
-                              pin_memory=dataloader_params_train['pin_memory'],
-                              drop_last=True)
+    if opt['dist']:
+        train_sampler = DistributedSampler(train_dataset,
+                                           shuffle=dataloader_params_train['dataloader_shuffle'],
+                                           seed=opt['train_opt']['manual_seed'])
 
-    test_loader = DataLoader(test_dataset,
-                             batch_size=dataloader_params_test['dataloader_batch_size'],
-                             shuffle=dataloader_params_test['dataloader_shuffle'],
-                             num_workers=dataloader_params_test['num_load_workers'],
-                             persistent_workers=dataloader_params_test['persist_workers'],
-                             pin_memory=dataloader_params_test['pin_memory'],
-                             drop_last=True)
+        test_sampler = DistributedSampler(test_dataset,
+                                          shuffle=dataloader_params_test['dataloader_shuffle'],
+                                          seed=opt['train_opt']['manual_seed'])
+
+        train_loader = DataLoader(train_dataset,
+                                  batch_size=dataloader_params_train['dataloader_batch_size'],
+                                  shuffle=dataloader_params_train['dataloader_shuffle'],
+                                  num_workers=dataloader_params_train['num_load_workers'],
+                                  persistent_workers=dataloader_params_train['persist_workers'],
+                                  pin_memory=dataloader_params_train['pin_memory'],
+                                  drop_last=True,
+                                  sampler=train_sampler if opt['dist'] else None)
+
+        test_loader = DataLoader(test_dataset,
+                                 batch_size=dataloader_params_test['dataloader_batch_size'],
+                                 shuffle=dataloader_params_test['dataloader_shuffle'],
+                                 num_workers=dataloader_params_test['num_load_workers'],
+                                 persistent_workers=dataloader_params_test['persist_workers'],
+                                 pin_memory=dataloader_params_test['pin_memory'],
+                                 drop_last=True,
+                                 sampler=test_sampler if opt['dist'] else None)
+
+    else:
+        train_loader = DataLoader(train_dataset,
+                                  batch_size=dataloader_params_train['dataloader_batch_size'],
+                                  shuffle=dataloader_params_train['dataloader_shuffle'],
+                                  num_workers=dataloader_params_train['num_load_workers'],
+                                  persistent_workers=dataloader_params_train['persist_workers'],
+                                  pin_memory=dataloader_params_train['pin_memory'],
+                                  drop_last=True)
+
+        test_loader = DataLoader(test_dataset,
+                                 batch_size=dataloader_params_test['dataloader_batch_size'],
+                                 shuffle=dataloader_params_test['dataloader_shuffle'],
+                                 num_workers=dataloader_params_test['num_load_workers'],
+                                 persistent_workers=dataloader_params_test['persist_workers'],
+                                 pin_memory=dataloader_params_test['pin_memory'],
+                                 drop_last=True)
 
     # Train model
     if opt['dataset_opt']['dataset_type'] == "MonaiSmartCacheDataset":

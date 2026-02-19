@@ -25,6 +25,8 @@ def define_G(opt, mode='train'):
     opt_net = opt['model_opt']['netG']
     model_architecture = opt['model_opt']['model_architecture']
 
+    print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
+
     if model_architecture == "DUMMY":
         netG = DummyNetwork()
 
