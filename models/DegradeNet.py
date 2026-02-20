@@ -476,6 +476,222 @@ class FlashDegradeNet(nn.Module):
             return out
 
 
+
+class FlashDegradeAE(nn.Module):
+    def __init__(self,
+                 input_size,
+                 down_factor,
+                 num_blks,
+                 blk_layers,
+                 in_chans,
+                 shallow_feat,
+                 embed_dim,
+                 num_heads,
+                 mlp_ratio,
+                 attn_window_size,
+                 patch_size,
+                 skip_dims,
+                 drop_path_rate=0.0,
+                 use_checkpoint=False,
+                 upsample_method="nearest",
+                 requires_grad=True):
+        super(FlashDegradeAE, self).__init__()
+
+        self.use_checkpoint = use_checkpoint
+
+        # Shallow feature extraction blocks (simple convs)
+        self.sfe_blk = nn.Conv3d(in_chans, shallow_feat, kernel_size=3, stride=1, padding=1, bias=True)
+
+        # Patch embedding blocks (proj only)
+        self.patch_embedding = PatchEmbed3D(
+            in_channels=shallow_feat,
+            dim=embed_dim,
+            patch_size=patch_size,
+            method="proj",
+            out_format="same"
+        )
+        #
+        # # dropout (kept for API)
+        # self.pos_drop = nn.Dropout(p=0.0)
+
+        self.LX_blocks_down = nn.ModuleList()
+        self.LX_blocks_up = nn.ModuleList()
+
+        cur = 0
+        dp_rates = [x for x in np.linspace(0, drop_path_rate, 2 * num_blks * blk_layers)]
+
+        for i in range(num_blks):
+            blocks_down = nn.Sequential()
+            blocks_up = nn.Sequential()
+            dp = dp_rates[cur: cur + blk_layers]
+            blocks_down.append(
+                Group(input_size=input_size,
+                        patch_size=patch_size,
+                        dim=embed_dim,
+                        skip_dim=skip_dims[i],
+                        depth=blk_layers,
+                        window_size=attn_window_size,
+                        num_heads=num_heads,
+                        mlp_ratio=mlp_ratio,
+                        dp_rates=dp
+                )
+            )
+
+            blocks_up.append(
+                Group(input_size=input_size,
+                      patch_size=patch_size,
+                      dim=embed_dim,
+                      skip_dim=skip_dims[i],
+                      depth=blk_layers,
+                      window_size=attn_window_size,
+                      num_heads=num_heads,
+                      mlp_ratio=mlp_ratio,
+                      dp_rates=dp
+                      )
+            )
+            from monai.networks.nets.swin_unetr import window_reverse
+            if i == 0 and down_factor >= 2:
+                input_size = input_size // 2  # downsample by 2
+                blocks_down.append(PatchMerging3D(embed_dim, norm_layer=nn.LayerNorm))
+                blocks_up.append(
+                    SRBlock3D(embed_dim,
+                              embed_dim,
+                              k_size=6, pad=2,
+                              upsample_method='Pixelshuffle3D',
+                              upscale_factor=patch_size,
+                              use_checkpoint=False)
+                )
+                embed_dim = 2 * embed_dim  # double feature channels
+            elif i == 1 and down_factor >= 4:
+                input_size = input_size // 2  # downsample by 2
+                blocks_down.append(PatchMerging3D(embed_dim, norm_layer=nn.LayerNorm))
+                blocks_up.append(
+                    SRBlock3D(embed_dim,
+                              embed_dim,
+                              k_size=6, pad=2,
+                              upsample_method='Pixelshuffle3D',
+                              upscale_factor=patch_size,
+                              use_checkpoint=False)
+                )
+                embed_dim = 2 * embed_dim   # double feature channels
+            elif i < num_blks - 1:
+                pass
+                # blocks_down.append(TransitionLayer(embed_dim, embed_dim, stride=1))
+
+            cur += blk_layers
+
+            self.LX_blocks_down.append(blocks_down)
+            self.LX_blocks_up.append(blocks_up)
+
+
+        self.LR_blk = nn.Sequential(
+            nn.Identity()
+        )
+        if patch_size >= 2:
+            self.LR_blk.append(
+                SRBlock3D(embed_dim,
+                          embed_dim,
+                          k_size=6, pad=2,
+                          upsample_method=upsample_method,
+                          upscale_factor=patch_size,
+                          use_checkpoint=False)
+            )
+        if patch_size >= 4:
+            self.LR_blk.append(
+                SRBlock3D(embed_dim,
+                        embed_dim,
+                        k_size=6, pad=2,
+                        upsample_method=upsample_method,
+                        upscale_factor=patch_size,
+                        use_checkpoint=False)
+            )
+
+        self.conv_sfe_lr = nn.Conv3d(in_channels=embed_dim,
+                                    out_channels=shallow_feat,
+                                    kernel_size=3, stride=1, padding=1, bias=True)
+
+        self.conv_sfe_hr = nn.Conv3d(in_channels=embed_dim,
+                                    out_channels=shallow_feat,
+                                    kernel_size=3, stride=1, padding=1, bias=True)
+
+        self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+        self.conv_last_lr = nn.Sequential(
+            nn.Conv3d(in_channels=shallow_feat, out_channels=in_chans, kernel_size=3, stride=1, padding=1, bias=True)
+        )
+
+        self.conv_last_hr = nn.Sequential(
+            nn.Conv3d(in_channels=shallow_feat, out_channels=in_chans, kernel_size=3, stride=1, padding=1, bias=True)
+        )
+
+        self.output_names = ['embedding'] + ['blk%d' % i for i in range(len(self.LX_blocks))] + ['output']
+
+        if not requires_grad:
+            for param in self.parameters():
+                param.requires_grad = False
+
+    def forward(self, x, ret_features=False):
+        """
+        x: (B, C, H, W, D)
+        returns: upsampled output (B, C, up_H, up_W, up_D)
+        """
+
+        outs = []
+
+        # SFE
+        if self.use_checkpoint:
+            emb = checkpoint.checkpoint(self.sfe_blk, x)  # (B, shallow_feats[level], D, H, W)
+        else:
+            emb = self.sfe_blk(x)  # (B, shallow_feats[level], D, H, W)
+
+        # Patch embedding
+        if self.use_checkpoint:
+            emb = checkpoint.checkpoint(self.patch_embedding, emb)
+        else:
+            emb = self.patch_embedding(emb)
+
+        outs.append(emb)  # append features after patch embedding
+
+        # Encoder blocks
+        for i, blk in enumerate(self.LX_blocks_down):
+            if self.use_checkpoint:
+                emb = checkpoint.checkpoint(blk, emb)
+            else:
+                emb = blk(emb)
+
+            # Only append features for encoder blocks, not decoder blocks
+            if ret_features:
+                outs.append(emb)  # append features after each block
+
+        # Predict LR output from the bottleneck features
+        if self.use_checkpoint:
+            lr_feats = checkpoint.checkpoint(self.LR_blk, emb)
+        else:
+            lr_feats = self.LR_blk(emb)
+
+        lr_out = self.conv_last_lr(self.lrelu(self.conv_sfe_lr(lr_feats)))
+
+        if ret_features:  # append LR output as well if ret_features is True
+            outs.append(lr_out)  # append features after each block
+
+        # Decoder blocks
+        for i, blk in enumerate(self.LX_blocks_up):
+            if self.use_checkpoint:
+                emb = checkpoint.checkpoint(blk, emb)
+            else:
+                emb = blk(emb)
+
+        # output
+        hr_out = self.conv_last(self.lrelu(self.conv_sfe(emb)))
+
+        if ret_features:
+            outs.append(out)  # append the final output
+            outputs = namedtuple("Outputs", self.output_names)
+            return outputs(*outs)
+        else:
+            return out
+
+
 def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0

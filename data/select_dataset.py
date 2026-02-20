@@ -344,7 +344,9 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
     else:
         raise NotImplementedError('Dataset type %s is not found.' % dataset_type)
 
-    print('Dataset %s of type %s is created.' % (dataset_name, dataset_type))
+    if opt['rank'] == 0:
+        print('Dataset %s of type %s is created.' % (dataset_name, dataset_type))
+
     if return_filepaths:
         return train_dataset, test_dataset, baseline_dataset, data_path, train_files, test_files
     else:

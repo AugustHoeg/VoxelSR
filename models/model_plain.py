@@ -10,12 +10,15 @@ import torch.nn as nn
 import wandb
 from torch.optim import Adam, AdamW
 from torch.optim import lr_scheduler
+import torch.distributed as dist
 
 import config
 from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D, FSCLoss3D
 from models.model_base import ModelBase
 from models.select_network import define_G
 from utils import utils_3D_image
+
+from utils.utils_dist import get_rank, reduce_sum, reduce_max
 
 from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
@@ -474,17 +477,17 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def feed_data(self, data, need_H=True, add_key=None):
         if add_key is not None:
-            self.L = data['L'][add_key].as_tensor().to(self.device)
+            self.L = data['L'][add_key].as_tensor().to(self.device, non_blocking=True)
             if need_H:
-                self.H = data['H'][add_key].as_tensor().to(self.device)
+                self.H = data['H'][add_key].as_tensor().to(self.device, non_blocking=True)
         elif self.opt['dataset_opt']['dataset_type'] == 'MasterThesisDataset':
-            self.L = data[1].as_tensor().to(self.device)
+            self.L = data[1].as_tensor().to(self.device, non_blocking=True)
             if need_H:
-                self.H = data[0].as_tensor().to(self.device)
+                self.H = data[0].as_tensor().to(self.device, non_blocking=True)
         else:
-            self.L = data['L'].as_tensor().to(self.device)
+            self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
             if need_H:
-                self.H = data['H'].as_tensor().to(self.device)
+                self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
     # ----------------------------------------
     # feed L to netG and get E
@@ -628,24 +631,64 @@ class ModelPlain(ModelBase):
             if (self.patience_counter >= self.patience) and current_step > 75000:
                 self.early_stop = True
 
-    def record_test_log(self, current_step, idx_test):
-        # ------------------------------------
-        # record log
-        # ------------------------------------
+        early_stop_tensor = torch.tensor(int(self.early_stop), device=self.device)
+        early_stop_tensor = reduce_max(early_stop_tensor)  # Sync early stop decision across GPUs
+        self.early_stop = early_stop_tensor.item() == 1  # If any GPU has early_stop, set early_stop for all
 
+
+    # def record_test_log(self, current_step, idx_test):
+    #     # ------------------------------------
+    #     # record log
+    #     # ------------------------------------
+    #
+    #     for key, value in self.metric_val_dict.items():
+    #         # Get metric name for logging
+    #         metric_name = "Average " + key
+    #         # Record metric value using wandb
+    #         self.run.log({metric_name: self.metric_val_dict[key] / idx_test})
+    #         print(metric_name, self.metric_val_dict[key] / idx_test)
+    #         # Reset performance metric
+    #         self.metric_val_dict[key] = 0.0
+    #
+    #     self.run.log({"G_valid_loss": self.G_valid_loss.item() / idx_test})
+    #
+    #     # Reset validation losses
+    #     self.G_valid_loss = 0.0
+
+
+    def record_test_log(self, idx_test):
+
+        idx_tensor = torch.tensor(idx_test, device=self.device)
+        global_idx_tensor = reduce_sum(idx_tensor)
+
+        # ------------------------------------
+        # Reduce validation metrics across GPUs
+        # ------------------------------------
         for key, value in self.metric_val_dict.items():
-            # Get metric name for logging
-            metric_name = "Average " + key
-            # Record metric value using wandb
-            self.run.log({metric_name: self.metric_val_dict[key] / idx_test})
-            print(metric_name, self.metric_val_dict[key] / idx_test)
-            # Reset performance metric
+            metric_tensor = torch.tensor(float(value), device=self.device)
+            global_average = reduce_sum(metric_tensor) / global_idx_tensor
+
+            if get_rank() == 0:  # Only rank 0 logs
+                metric_name = "Average " + key
+                self.run.log({metric_name: global_average.item()})
+                print(metric_name, global_average.item())
+
+            # Reset local metric accumulator
             self.metric_val_dict[key] = 0.0
 
-        self.run.log({"G_valid_loss": self.G_valid_loss.item() / idx_test})
+        # ------------------------------------
+        # Reduce validation loss across GPUs
+        # ------------------------------------
+        loss_tensor = torch.tensor(float(self.G_valid_loss), device=self.device)
+        global_valid_loss = reduce_sum(loss_tensor) / global_idx_tensor
 
-        # Reset validation losses
+        if get_rank() == 0:  # Only rank 0 logs
+            self.run.log({"G_valid_loss": global_valid_loss.item()})
+            print("G_valid_loss", global_valid_loss.item())
+
+        # Reset validation loss
         self.G_valid_loss = 0.0
+
 
     # ----------------------------------------
     # test and inference

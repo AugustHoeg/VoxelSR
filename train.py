@@ -6,6 +6,7 @@ from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
 import torch
+import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 from monai.data import SmartCacheDataset, DataLoader
 
@@ -73,9 +74,6 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
 
     while current_step < iterations:
 
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
-
         for batch_idx, train_batch in enumerate(train_loader):
 
             current_step += 1
@@ -126,50 +124,46 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
             # -------------------------------
             # 8) testing / validation
             # -------------------------------
-            if current_step % checkpoint_test == 0 and opt['rank'] == 0:
-                # Set model(s) to evaluation model
-                model.set_eval_mode()
+            if current_step % checkpoint_test == 0:
 
+                model.set_eval_mode()  # Set model(s) to evaluation model
                 torch.cuda.empty_cache()
+
                 idx_test = 0
                 with torch.inference_mode():
                     while idx_test < validation_iterations:
                         for batch_idx, test_batch in enumerate(test_loader):
                             idx_test += 1
 
-                            if idx_test % 100 == 0 and opt['rank'] == 0:
+                            if idx_test % checkpoint_print == 0 and opt['rank'] == 0:
                                 print("Validation iteration %d / %d" % (idx_test, validation_iterations))
-
-                            # -------------------------------
-                            # 9) load batches of HR and LR images onto GPU and feed to model
-                            # -------------------------------
 
                             model.feed_data(test_batch)
 
-                            # -------------------------------
-                            # 10) Test model using inference mode
-                            # -------------------------------
                             if model.mixed_precision is not None:
                                 model.validation_amp()
                             else:
                                 model.validation()
-                    # -------------------------------
-                    # 12) Record early stopping
-                    # -------------------------------
-                    model.early_stopping(current_step, idx_test)
 
-                    # -------------------------------
-                    # 11) calculate and record validation log
-                    # -------------------------------
-                    model.record_test_log(current_step, idx_test)
+                # Synchronize all GPUs before metric reduction
+                if dist.is_initialized():
+                    dist.barrier()
+
+                # -------------------------------
+                # 11) Record early stopping
+                # -------------------------------
+                model.early_stopping(current_step, idx_test)
+
+                # -------------------------------
+                # 12) calculate, record and reset validation log
+                # -------------------------------
+                model.record_test_log(idx_test)
 
                 # -------------------------------
                 # 13) Save visual comparison
                 # -------------------------------
-                print("Saving comparison: test image")
-
-                visuals = model.current_visuals()
-                model.log_comparison_image(visuals, current_step)
+                if opt['rank'] == 0:
+                    model.log_comparison_image(model.current_visuals(), current_step)
 
                 # Update test_loader with new samples if SmartCacheDataset
                 if type(test_loader.dataset) == SmartCacheDataset:
@@ -230,25 +224,29 @@ def main(opt: DictConfig):
     opt_path = os.path.join(config.ROOT_DIR, 'options', f'{HydraConfig.get().job.config_name}.yaml')
     init_options(opt, opt_path)
 
-    print(f"RUNNING TRAIN MODE: {opt['train_mode'].upper()}")
-
-    print("Cuda is available", torch.cuda.is_available())
-    print("Cuda device count", torch.cuda.device_count())
-    print("Cuda current device", torch.cuda.current_device())
-    print("Cuda device name", torch.cuda.get_device_name(0))
+    if opt['rank'] == 0:
+        print(f"RUNNING TRAIN MODE: {opt['train_mode'].upper()}")
+        print("Cuda is available", torch.cuda.is_available())
+        print("Cuda device count", torch.cuda.device_count())
+        print("Cuda current device", torch.cuda.current_device())
+        print("Cuda device name", torch.cuda.get_device_name(0))
+        print("Total GPU memory: %0.3f Gb" % opt['total_gpu_mem'])
 
     # Define universal SR model using the KAIR define_Model framework
     from models.select_model import define_Model
     model = define_Model(opt, mode='train')
 
     # Define wandb run
-    model.define_wandb_run()
+    if opt['rank'] == 0:
+        model.define_wandb_run()
+        save_yaml(opt, wandb_path=model.run.dir)  # Save copy of options file in wandb directory
+
+    # Synchronize all processes after wandb initialization
+    if opt['dist']:
+        dist.barrier()
 
     # Run initialization of model for training
     model.init_train()
-
-    # Save copy of options file in wandb directory
-    save_yaml(opt, wandb_path=model.run.dir)
 
     # Define number of iterations and validation iterations
     iterations = opt['train_opt']['iterations'] * opt['train_opt']['num_accum_steps_G']
@@ -267,49 +265,22 @@ def main(opt: DictConfig):
     dataloader_params_train = opt['dataset_opt']['train_dataloader_params']
     dataloader_params_test = opt['dataset_opt']['test_dataloader_params']
 
-    if opt['dist']:
-        train_sampler = DistributedSampler(train_dataset,
-                                           shuffle=dataloader_params_train['dataloader_shuffle'],
-                                           seed=opt['train_opt']['manual_seed'])
+    # Currently, full dataset is parsed to GPUs - TODO implement distributed sampler
+    train_loader = DataLoader(train_dataset,
+                              batch_size=dataloader_params_train['dataloader_batch_size'],
+                              shuffle=dataloader_params_train['dataloader_shuffle'],
+                              num_workers=dataloader_params_train['num_load_workers'],
+                              persistent_workers=dataloader_params_train['persist_workers'],
+                              pin_memory=dataloader_params_train['pin_memory'],
+                              drop_last=True)
 
-        test_sampler = DistributedSampler(test_dataset,
-                                          shuffle=dataloader_params_test['dataloader_shuffle'],
-                                          seed=opt['train_opt']['manual_seed'])
-
-        train_loader = DataLoader(train_dataset,
-                                  batch_size=dataloader_params_train['dataloader_batch_size'],
-                                  shuffle=dataloader_params_train['dataloader_shuffle'],
-                                  num_workers=dataloader_params_train['num_load_workers'],
-                                  persistent_workers=dataloader_params_train['persist_workers'],
-                                  pin_memory=dataloader_params_train['pin_memory'],
-                                  drop_last=True,
-                                  sampler=train_sampler if opt['dist'] else None)
-
-        test_loader = DataLoader(test_dataset,
-                                 batch_size=dataloader_params_test['dataloader_batch_size'],
-                                 shuffle=dataloader_params_test['dataloader_shuffle'],
-                                 num_workers=dataloader_params_test['num_load_workers'],
-                                 persistent_workers=dataloader_params_test['persist_workers'],
-                                 pin_memory=dataloader_params_test['pin_memory'],
-                                 drop_last=True,
-                                 sampler=test_sampler if opt['dist'] else None)
-
-    else:
-        train_loader = DataLoader(train_dataset,
-                                  batch_size=dataloader_params_train['dataloader_batch_size'],
-                                  shuffle=dataloader_params_train['dataloader_shuffle'],
-                                  num_workers=dataloader_params_train['num_load_workers'],
-                                  persistent_workers=dataloader_params_train['persist_workers'],
-                                  pin_memory=dataloader_params_train['pin_memory'],
-                                  drop_last=True)
-
-        test_loader = DataLoader(test_dataset,
-                                 batch_size=dataloader_params_test['dataloader_batch_size'],
-                                 shuffle=dataloader_params_test['dataloader_shuffle'],
-                                 num_workers=dataloader_params_test['num_load_workers'],
-                                 persistent_workers=dataloader_params_test['persist_workers'],
-                                 pin_memory=dataloader_params_test['pin_memory'],
-                                 drop_last=True)
+    test_loader = DataLoader(test_dataset,
+                             batch_size=dataloader_params_test['dataloader_batch_size'],
+                             shuffle=dataloader_params_test['dataloader_shuffle'],
+                             num_workers=dataloader_params_test['num_load_workers'],
+                             persistent_workers=dataloader_params_test['persist_workers'],
+                             pin_memory=dataloader_params_test['pin_memory'],
+                             drop_last=True)
 
     # Train model
     if opt['dataset_opt']['dataset_type'] == "MonaiSmartCacheDataset":

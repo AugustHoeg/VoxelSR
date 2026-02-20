@@ -117,6 +117,7 @@ def master_only(func):
 # operation across ranks
 # ----------------------------------
 def reduce_sum(tensor):
+
     if not dist.is_available():
         return tensor
 
@@ -125,6 +126,19 @@ def reduce_sum(tensor):
 
     tensor = tensor.clone()
     dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+
+    return tensor
+
+def reduce_max(tensor):
+
+    if not dist.is_available():
+        return tensor
+
+    if not dist.is_initialized():
+        return tensor
+
+    tensor = tensor.clone()
+    dist.all_reduce(tensor, op=dist.ReduceOp.MAX)
 
     return tensor
 

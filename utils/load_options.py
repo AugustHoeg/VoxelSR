@@ -19,7 +19,6 @@ def set_random_seed(seed):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    print("Monai set_deterministic enabled")
     monai.utils.misc.set_determinism(seed)
     np.random.RandomState(seed)
 
@@ -137,7 +136,7 @@ def init_options(opt, opt_path):
     # ----------------------------------------
     # GPU devices
     # ----------------------------------------
-    if opt['gpu_ids'] is not None:
+    if opt['gpu_ids'] is not None and opt['rank'] == 0:
         gpu_list = ','.join(str(x) for x in opt['gpu_ids'])
         os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
         print('export CUDA_VISIBLE_DEVICES=' + gpu_list)
@@ -146,6 +145,8 @@ def init_options(opt, opt_path):
         # Flag to run the script as on Home PC or HPC.
         run_type = "HOME PC" if total_gpu_mem < 10 else "HPC"
         print(f"run type: {run_type}.")
+
+        print('Number of GPUs is: ' + str(opt['num_gpu']))
 
         opt['total_gpu_mem'] = total_gpu_mem
         opt['run_type'] = run_type
@@ -165,7 +166,6 @@ def init_options(opt, opt_path):
         opt['dist'] = False
     if opt['gpu_ids'] is not None:
         opt['num_gpu'] = len(opt['gpu_ids'])
-        print('number of GPUs is: ' + str(opt['num_gpu']))
     else:
         opt['num_gpu'] = 0
 
