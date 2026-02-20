@@ -5,6 +5,8 @@ import torch.cuda.amp
 import lpips
 from omegaconf import OmegaConf
 
+import matplotlib.pyplot as plt
+
 from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_masks_3d
 from utils.load_options import load_options_from_experiment_id
 
@@ -191,6 +193,36 @@ class CSCLoss(nn.Module):
         if (verbose):
             print(f'Setting up CSC loss with features distance function: {feat_dist_func}')
             print(f'Using Degradation architecture {self.net.__class__.__name__} with ID: {model_id}')
+
+    def plot_features(self, in0, in1, outs0, outs1):
+
+        for c in torch.arange(0, outs0[0].shape[1], 10).tolist():
+            plt.figure(figsize=(8, 4))
+            plt.subplot(2, 4, 1)
+            plt.imshow(in0[0, 0, 96, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 2)
+            plt.imshow(outs0[0][0, c, 48, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 3)
+            plt.imshow(outs0[1][0, c, 28, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 4)
+            plt.imshow(outs0[2][0, c, 14, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 5)
+            plt.imshow(in1[0, 0, 96, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 6)
+            plt.imshow(outs1[0][0, c, 48, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 7)
+            plt.imshow(outs1[1][0, c, 28, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.subplot(2, 4, 8)
+            plt.imshow(outs1[2][0, c, 14, :, :].detach().float().cpu())
+            plt.axis('off')
+            plt.show()
 
     def normalize_tensor(self, in_feat, eps=1e-10):
         norm_factor = torch.sqrt(torch.sum(in_feat ** 2, dim=1, keepdim=True))

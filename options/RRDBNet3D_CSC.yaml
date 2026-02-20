@@ -1,13 +1,13 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: FlashDegradeNet              # Default model config
+  - model_opt: RRDBNet3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
-task: degradation
+task: superresolution
 input_type: 3D # Input type, 2D or 3D
-down_factor: 4  # downscaling factor
+up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
@@ -15,13 +15,13 @@ run_profile: false
 # WandB parameters
 wandb_mode: offline
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_degradation_${down_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_REG_CSC_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000
+run_name: ${model_opt.model_architecture}_000_CSC_L1_0p1
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -31,7 +31,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: RRDBNet3D_VoDaSuRe_REG_2x_VoDaSuRe_OME_ID005700  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
@@ -49,23 +49,23 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    FSC: 0.2
+    CSC: 0.1 # tried: 0.1
 
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 32  # input size is patch_size * down_factor for degradation
+  patch_size: 32
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
+    dataloader_batch_size: 1 # 8
     num_load_workers: 1
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
+    dataloader_batch_size: 1 # 4
     num_load_workers: 1
     persist_workers: true
     pin_memory: false

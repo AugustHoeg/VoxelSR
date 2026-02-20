@@ -247,7 +247,7 @@ class Group(nn.Module):
 
             # Main layer
             x = self.layers[i](x)
-            x = x.permute(0, 4, 1, 2, 3).contiguous()  # B, C, D, H, W
+            x = x.permute(0, 4, 1, 2, 3).contiguous()  # B, C, D, H, W)
             x = self.act(self.compress_layers[i](x))
 
             # Concatenate
@@ -523,8 +523,8 @@ def test():
     net = FlashDegradeNet(
         input_size=patch_size_hr,
         down_factor=down_factor,
-        num_blks=3,
-        blk_layers=6,
+        num_blks=6,
+        blk_layers=3,
         in_chans=1,
         shallow_feat=32,
         embed_dim=96,
