@@ -49,7 +49,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    LPIPS: 0.02
+    CSC: 0.1
 
 # Overwrite default dataset parameters
 dataset_opt:

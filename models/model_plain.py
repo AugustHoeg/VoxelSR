@@ -24,7 +24,7 @@ from performance_metrics.performance_metrics import compute_performance_metrics,
 
 class ModelPlain(ModelBase):
     """Train with pixel-VGG-GAN loss"""
-    def __init__(self, opt, mode='train'):
+    def __init__(self, opt, mode='train', data_parallel=True):
         super(ModelPlain, self).__init__(opt)
         # ------------------------------------
         # define network
@@ -32,7 +32,7 @@ class ModelPlain(ModelBase):
         self.last_iteration = 0  # last iteration
         self.opt_train = self.opt['train_opt']    # training option
         self.netG = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG)
+        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
         if self.opt_train['E_decay'] > 0:
             self.netE = define_G(opt).to(self.device).eval()
 
@@ -121,7 +121,8 @@ class ModelPlain(ModelBase):
             except:
                 print("An exception occurred: No G file found, skipping loading of model...")
             else:
-                print('Loading pretrained model for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_file).split(os.sep)[-4:])))
+                if self.opt['rank'] == 0:
+                    print('Loading pretrained model for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_file).split(os.sep)[-4:])))
                 self.load_network(G_file, self.netG, strict=self.opt_train['G_param_strict'])
                 self.last_iteration = int(os.path.basename(G_file).split('_')[0])
 
@@ -156,7 +157,8 @@ class ModelPlain(ModelBase):
             except:
                 print("An exception occurred: No G optimizer found, skipping loading of optimizer...")
             else:
-                print('Loading optimizer states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
+                if self.opt['rank'] == 0:
+                    print('Loading optimizer states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
                 self.load_optimizer(G_opt_file, self.G_optimizer)
 
     # ----------------------------------------
@@ -183,7 +185,8 @@ class ModelPlain(ModelBase):
             except:
                 print("An exception occurred: No G schedulers found, skipping loading of schedulers...")
             else:
-                print('Loading scheduler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_scheduler_file).split(os.sep)[-4:])))
+                if self.opt['rank'] == 0:
+                    print('Loading scheduler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_scheduler_file).split(os.sep)[-4:])))
                 self.load_scheduler(G_scheduler_file, self.schedulers[0])
 
 
@@ -208,7 +211,8 @@ class ModelPlain(ModelBase):
             except:
                 print("An exception occurred: No G gradscaler found, skipping loading of gradscalers...")
             else:
-                print('Loading gradscaler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_gradscaler_file).split(os.sep)[-4:])))
+                if self.opt['rank'] == 0:
+                    print('Loading gradscaler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_gradscaler_file).split(os.sep)[-4:])))
                 self.load_scheduler(G_gradscaler_file, self.gen_scaler)
 
 

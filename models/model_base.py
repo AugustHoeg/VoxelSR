@@ -136,23 +136,27 @@ class ModelBase():
         return network
 
 
-    def model_to_device(self, network):
+    def model_to_device(self, network, data_parallel=True, compile=False):
         """Model to device. It also warps models with DistributedDataParallel or DataParallel.
         Args:
             network (nn.Module)
         """
         network = network.to(self.device)
 
-        # network = self.compile_network(network)
+        if compile:
+            network = self.compile_network(network)
 
-        if self.opt['dist']:
-            find_unused_parameters = self.opt['find_unused_parameters']
-            network = DistributedDataParallel(network, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
-        else:
-            network = DataParallel(network)
+        if data_parallel:
+            if self.opt['dist']:
+                find_unused_parameters = self.opt['find_unused_parameters']
+                network = DistributedDataParallel(network, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
+            else:
+                network = DataParallel(network)
+
         # If gpu_ids is none, force model to run on CPU
         if self.opt['gpu_ids'] is None:
             network = network.module.to(self.device)
+
         return network
 
     # ----------------------------------------

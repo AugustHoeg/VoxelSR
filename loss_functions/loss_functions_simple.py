@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_masks_3d
 from utils.load_options import load_options_from_experiment_id
-
+from models.select_model import define_Model
 
 def compute_discriminator_loss(prop_real, prop_fake):
     dis_loss_fake = F.binary_cross_entropy_with_logits(prop_fake, torch.zeros_like(prop_fake))
@@ -176,8 +176,7 @@ class CSCLoss(nn.Module):
         opt_csc = OmegaConf.load(opt_path)
         opt_csc['dist'] = False  # ensure distributed is False for loss computation
 
-        from models.select_model import define_Model
-        self.net = define_Model(opt_csc, mode='test')
+        self.net = define_Model(opt_csc, mode='test', data_parallel=False)
         self.net.load(model_id, mode='test')  # load model
         self.model = self.net.get_bare_model(self.net.netG)
 
