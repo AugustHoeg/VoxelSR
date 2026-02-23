@@ -508,11 +508,8 @@ class ModelPlain(ModelBase):
         # ------------------------------------
         # optimize G
         # ------------------------------------
-
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            # Forward G
-            self.netG_forward()
-            #with torch.cuda.amp.autocast(dtype=torch.float64):
+            self.netG_forward()  # Forward G
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
@@ -520,10 +517,24 @@ class ModelPlain(ModelBase):
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
 
-        #self.G_optimizer.zero_grad()  # set parameter gradients to zero
-        self.gen_scaler.scale(self.gen_loss).backward()  # backward-pass to compute gradients
-
+        # -------------------------------------------------
+        # update logic for gradient accumulation
+        # -------------------------------------------------
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
+
+        # -------------------------------------------------
+        # DDP optimization: skip gradient sync during accumulation
+        # -------------------------------------------------
+        if not self.update:
+            with self.netG.no_sync():  # avoid expensive all-reduce
+                self.gen_scaler.scale(self.gen_loss).backward()
+        else:
+            # sync gradients
+            self.gen_scaler.scale(self.gen_loss).backward()
+
+        # ------------------------------------
+        # Optimizer step
+        # ------------------------------------
         if self.update:  # Gradient acculumation
             # ------------------------------------
             # clip_grad on G
@@ -533,9 +544,11 @@ class ModelPlain(ModelBase):
                 # Unscales the gradients of optimizer's assigned params in-place if AMP is enabled
                 self.gen_scaler.unscale_(self.G_optimizer)
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
-                # if self.opt['rank'] == 0:
-                #     print("G gradient norm:", grad_norm.item())
+                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.netG.parameters(),
+                    max_norm=G_clipgrad_max,
+                    norm_type=2
+                )
 
             self.gen_scaler.step(self.G_optimizer)  # update weights
             self.gen_scaler.update()
@@ -553,19 +566,29 @@ class ModelPlain(ModelBase):
         # ------------------------------------
         # optimize G
         # ------------------------------------
-
-        # Forward G
         self.netG_forward()
-        self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
+        self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
 
-        self.gen_loss.backward()  # backward-pass to compute gradients
-
+        # -------------------------------------------------
+        # update logic for gradient accumulation
+        # -------------------------------------------------
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
+
+        # -------------------------------------------------
+        # DDP optimization: skip gradient sync during accumulation
+        # -------------------------------------------------
+        if not self.update:
+            with self.netG.no_sync():  # avoid expensive all-reduce
+                self.gen_loss.backward()
+        else:
+            # sync gradients
+            self.gen_loss.backward()
+
         if self.update:  # Gradient acculumation
             # ------------------------------------
             # clip_grad on G
@@ -585,9 +608,6 @@ class ModelPlain(ModelBase):
 
         else:  # Update gradient accumulation count
             self.G_accum_count += 1
-        # # ------------------------------------
-        # # TODO Regularizer as in SuperFormer
-        # # ------------------------------------
 
 
     def record_train_log(self, current_step):

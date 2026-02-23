@@ -146,8 +146,6 @@ def init_options(opt, opt_path):
         run_type = "HOME PC" if total_gpu_mem < 10 else "HPC"
         print(f"run type: {run_type}.")
 
-        print('Number of GPUs is: ' + str(opt['num_gpu']))
-
         opt['total_gpu_mem'] = total_gpu_mem
         opt['run_type'] = run_type
 
