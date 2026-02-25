@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
+up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
@@ -21,7 +21,7 @@ run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
 dist: true
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -33,7 +33,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: ESRGAN3D_VoDaSuRe_REG_2x_LPIPS_VoDaSuRe_OME_ID005850  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters

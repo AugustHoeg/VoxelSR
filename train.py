@@ -205,8 +205,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
 
         # Close WandB run
         model.run.finish()
-
-    print("Training finished")
+        print("Training finished")
 
     return 0
 
@@ -303,9 +302,10 @@ def main(opt: DictConfig):
         out_dict = train_model(model, opt, iterations, validation_iterations, train_loader, test_loader, print_status=True)
 
     time_end = time.time()
-    print("Time taken to train: ", time_end - time_start)
 
-    print("Done")
+    if opt['rank'] == 0:
+        print("Time taken to train: ", time_end - time_start)
+        print("Done")
 
 
 if __name__ == "__main__":

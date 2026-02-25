@@ -69,7 +69,7 @@ class LPIPSLoss3D(torch.nn.Module):
     def __init__(self, net_type='alex', version='0.1', device="cuda", axes=(0, 1, 2)):
         super(LPIPSLoss3D, self).__init__()
         self.device = device
-        self.loss_fn = lpips.LPIPS(net=net_type, version=version)
+        self.loss_fn = lpips.LPIPS(net=net_type, version=version, verbose=False)
         self.loss_fn.to(self.device)
         self.axes = axes
 
