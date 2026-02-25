@@ -1,0 +1,30 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: gan
+model_architecture: mDCSRN_GAN
+netG:
+  net_type: mDCSRN
+  description: "Multi-Level Densely Connected Network from paper: MRI Super-Resolution with GAN and 3D Multi-Level DenseNet: Smaller, Faster, and Better"
+  in_channels: 1
+  k_factor: 12
+  k_size: 3
+  num_dense_blocks: 8
+  num_dense_units: 4
+  upsample_method: pixelshuffle3D  # "deconv_nn_resize" "pixelshuffle3D" "Monaipixelshuffle" "nearest"
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.2
+
+netD:
+  net_type: mDCSRN_GAN
+  description: "Discriminator for mDCSRN_GAN"
+  in_channels: 1
+  n_conv_vec: [64, 64, 128, 128, 256, 256, 512, 512]
+  n_dense: 256
+  k_size: 3
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.2

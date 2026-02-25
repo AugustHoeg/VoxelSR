@@ -13,19 +13,19 @@ from torch.optim import lr_scheduler
 from torch.nn.parallel import DistributedDataParallel
 
 import config
-from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D, FSCLoss3D
+from loss_functions.loss_functions_simple import compute_generator_loss, compute_discriminator_loss, LPIPSLoss3D, FSCLoss3D
 from models.model_base import ModelBase
-from models.select_network import define_G
+from models.select_network import define_G, define_D
 from utils import utils_3D_image
 
 from utils.utils_dist import get_rank, reduce_sum, reduce_max
 
 from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
-class ModelPlain(ModelBase):
+class ModelGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
     def __init__(self, opt, mode='train', data_parallel=True):
-        super(ModelPlain, self).__init__(opt)
+        super(ModelGAN, self).__init__(opt)
         # ------------------------------------
         # define network
         # ------------------------------------
@@ -33,11 +33,15 @@ class ModelPlain(ModelBase):
         self.opt_train = self.opt['train_opt']    # training option
         self.netG = define_G(opt, mode=mode)
         self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
-        if self.opt_train['E_decay'] > 0:
-            self.netE = define_G(opt).to(self.device).eval()
+        if mode == 'train':
+            self.netD = define_D(opt, mode=mode)
+            self.netD = self.model_to_device(self.netD, data_parallel=data_parallel, compile=False)
+            if self.opt_train['E_decay'] > 0:
+                self.netE = define_G(opt).to(self.device).eval()
 
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
+            print("Number of trainable parameters, D", utils_3D_image.numel(self.netD, only_trainable=True))
 
         self.update = False  # Flag for gradient accumulation
 
@@ -58,15 +62,18 @@ class ModelPlain(ModelBase):
     """
     def set_eval_mode(self):
         self.netG.eval()
+        self.netD.eval()
 
     def set_train_mode(self):
         self.netG.train()
+        self.netD.train()
 
     def init_test(self, experiment_id):
         # Loads model based on the ID specified.
         # If there exists several logs using the same ID, will load latest one.
         self.load(experiment_id, mode='test')  # load model
         self.netG.eval()  # set eval mode
+        self.netD.eval()  # set eval mode
         self.define_metrics()  # define metrics
         self.define_mixed_precision()  # enable automatic mixed precision
         self.define_visual_eval()
@@ -78,6 +85,7 @@ class ModelPlain(ModelBase):
     def init_train(self):
         self.load()                             # load model
         self.netG.train()                       # set training mode,for BN
+        self.netD.train()                       # set training mode,for BN
 
         self.define_loss()                      # define loss
         self.define_metrics()                   # define metrics
@@ -114,16 +122,21 @@ class ModelPlain(ModelBase):
             assert experiment_id is not None, f"Experiment ID must be specified for loading in test mode."
 
         if pretrained_experiment_id_G is not None:
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_models/*G.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
+            opt_files_G = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_models/*G.h5"))
+            opt_files_G.sort(key=os.path.getmtime, reverse=True)
+            opt_files_D = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_models/*D.h5"))
+            opt_files_D.sort(key=os.path.getmtime, reverse=True)
             try:
-                G_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
+                G_file = opt_files_G[0]  # Get latest modified directory with the specified experiment_id
+                D_file = opt_files_D[0]  # Get latest modified directory with the specified experiment_id
             except:
-                print("An exception occurred: No G file found, skipping loading of model...")
+                print("An exception occurred: No G or D file found, skipping loading of model...")
             else:
                 if self.opt['rank'] == 0:
                     print('Loading pretrained model for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_file).split(os.sep)[-4:])))
+                    print('Loading pretrained model for D [{:s}] ...'.format(os.sep.join(os.path.normpath(D_file).split(os.sep)[-4:])))
                 self.load_network(G_file, self.netG, strict=self.opt_train['G_param_strict'])
+                self.load_network(D_file, self.netD, strict=self.opt_train['D_param_strict'])
                 self.last_iteration = int(os.path.basename(G_file).split('_')[0])
 
     # ----------------------------------------
@@ -150,16 +163,21 @@ class ModelPlain(ModelBase):
 
         if pretrained_experiment_id_G is not None and self.opt['train_opt']['G_optimizer_reuse']:
 
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_optimizers/*optimizerG.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
+            opt_files_G = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_optimizers/*optimizerG.h5"))
+            opt_files_G.sort(key=os.path.getmtime, reverse=True)
+            opt_files_D = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_optimizers/*optimizerD.h5"))
+            opt_files_D.sort(key=os.path.getmtime, reverse=True)
             try:
-                G_opt_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
+                G_opt_file = opt_files_G[0]  # Get latest modified directory with the specified experiment_id
+                D_opt_file = opt_files_D[0]  # Get latest modified directory with the specified experiment_id
             except:
-                print("An exception occurred: No G optimizer found, skipping loading of optimizer...")
+                print("An exception occurred: No G or D optimizer found, skipping loading of optimizer...")
             else:
                 if self.opt['rank'] == 0:
                     print('Loading optimizer states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
+                    print('Loading optimizer states for D [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
                 self.load_optimizer(G_opt_file, self.G_optimizer)
+                self.load_optimizer(D_opt_file, self.D_optimizer)
 
     # ----------------------------------------
     # load schedulerG and schedulerD
@@ -178,16 +196,21 @@ class ModelPlain(ModelBase):
             assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
 
         if pretrained_experiment_id_G is not None:
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_schedulers/*schedulerG.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
+            opt_files_G = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_schedulers/*schedulerG.h5"))
+            opt_files_G.sort(key=os.path.getmtime, reverse=True)
+            opt_files_D = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_schedulers/*schedulerD.h5"))
+            opt_files_D.sort(key=os.path.getmtime, reverse=True)
             try:
-                G_scheduler_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
+                G_scheduler_file = opt_files_G[0]  # Get latest modified directory with the specified experiment_id
+                D_scheduler_file = opt_files_D[0]  # Get latest modified directory with the specified experiment_id
             except:
-                print("An exception occurred: No G schedulers found, skipping loading of schedulers...")
+                print("An exception occurred: No G or D schedulers found, skipping loading of schedulers...")
             else:
                 if self.opt['rank'] == 0:
                     print('Loading scheduler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_scheduler_file).split(os.sep)[-4:])))
+                    print('Loading scheduler states for D [{:s}] ...'.format(os.sep.join(os.path.normpath(D_scheduler_file).split(os.sep)[-4:])))
                 self.load_scheduler(G_scheduler_file, self.schedulers[0])
+                self.load_scheduler(D_scheduler_file, self.schedulers[1])
 
     def load_gradscalers(self, experiment_id=None):
 
@@ -203,16 +226,21 @@ class ModelPlain(ModelBase):
             assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
 
         if pretrained_experiment_id_G is not None:
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_gradscalers/*gradscalerG.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
+            opt_files_G = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_gradscalers/*gradscalerG.h5"))
+            opt_files_G.sort(key=os.path.getmtime, reverse=True)
+            opt_files_D = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_gradscalers/*gradscalerD.h5"))
+            opt_files_D.sort(key=os.path.getmtime, reverse=True)
             try:
-                G_gradscaler_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
+                G_gradscaler_file = opt_files_G[0]  # Get latest modified directory with the specified experiment_id
+                D_gradscaler_file = opt_files_D[0]  # Get latest modified directory with the specified experiment_id
             except:
-                print("An exception occurred: No G gradscaler found, skipping loading of gradscalers...")
+                print("An exception occurred: No G or D gradscaler found, skipping loading of gradscalers...")
             else:
                 if self.opt['rank'] == 0:
                     print('Loading gradscaler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_gradscaler_file).split(os.sep)[-4:])))
+                    print('Loading gradscaler states for D [{:s}] ...'.format(os.sep.join(os.path.normpath(D_gradscaler_file).split(os.sep)[-4:])))
                 self.load_scheduler(G_gradscaler_file, self.gen_scaler)
+                self.load_scheduler(D_gradscaler_file, self.dis_scaler)
 
 
     # ----------------------------------------
@@ -222,16 +250,20 @@ class ModelPlain(ModelBase):
         # WandB save directory
         model_save_dir = os.path.join(self.run.dir, "saved_models")
         self.save_network(model_save_dir, self.netG, 'G', iter_label)
+        self.save_network(model_save_dir, self.netD, 'D', iter_label)
 
         opt_save_dir = os.path.join(self.run.dir, "saved_optimizers")
         self.save_optimizer(opt_save_dir, self.G_optimizer, 'optimizerG', iter_label)
+        self.save_optimizer(opt_save_dir, self.D_optimizer, 'optimizerD', iter_label)
 
         scheduler_save_dir = os.path.join(self.run.dir, "saved_schedulers")
         self.save_scheduler(scheduler_save_dir, self.schedulers[0], 'schedulerG', iter_label)
+        self.save_scheduler(scheduler_save_dir, self.schedulers[1], 'schedulerD', iter_label)
 
         if self.mixed_precision is not None:
             gradscaler_save_dir = os.path.join(self.run.dir, "saved_gradscalers")
             self.save_gradscaler(gradscaler_save_dir, self.gen_scaler, 'gradscalerG', iter_label)
+            self.save_gradscaler(gradscaler_save_dir, self.dis_scaler, 'gradscalerD', iter_label)
 
         if self.opt_train['E_decay'] > 0:
             self.save_network(model_save_dir, self.netE, 'E', iter_label)
@@ -276,6 +308,12 @@ class ModelPlain(ModelBase):
             "Generator", type=self.opt['model_opt']['netG']['net_type'],
             description=self.opt['model_opt']['netG']['description'],
             metadata=OmegaConf.to_container(self.opt['model_opt']['netG'], resolve=True)
+        )
+
+        self.model_artifact_D = wandb.Artifact(
+            "Discriminator", type=self.opt['model_opt']['netD']['net_type'],
+            description=self.opt['model_opt']['netD']['description'],
+            metadata=OmegaConf.to_container(self.opt['model_opt']['netD'], resolve=True)
         )
 
     # ----------------------------------------
@@ -330,6 +368,11 @@ class ModelPlain(ModelBase):
         self.G_train_grad_norm = 0.0
         self.G_valid_grad_norm = 0.0
 
+        self.D_train_loss = 0.0
+        self.D_valid_loss = 0.0
+        self.D_train_grad_norm = 0.0
+        self.D_valid_grad_norm = 0.0
+
 
     # ----------------------------------------
     # define metrics
@@ -357,6 +400,8 @@ class ModelPlain(ModelBase):
     def define_optimizer(self):
 
         # Testing gradient accumulation
+        self.D_accum_count = 0
+        self.num_accum_steps_D = self.opt_train['num_accum_steps_D']
         self.G_accum_count = 0
         self.num_accum_steps_G = self.opt_train['num_accum_steps_G']
 
@@ -374,11 +419,19 @@ class ModelPlain(ModelBase):
         else:
             raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['G_optimizer_type']))
 
+        if self.opt_train['D_optimizer_type'] == 'adam':
+            self.D_optimizer = Adam(self.netD.parameters(), lr=self.opt_train['D_optimizer_lr'], weight_decay=self.opt_train['D_optimizer_wd'], betas=(0.9, 0.999))
+        elif self.opt_train['D_optimizer_type'] == 'adamw':
+            self.D_optimizer = AdamW(self.netD.parameters(), lr=self.opt_train['D_optimizer_lr'], weight_decay=self.opt_train['D_optimizer_wd'], betas=(0.9, 0.999))
+        else:
+            raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['D_optimizer_type']))
+
     # ----------------------------------------
     # define gradient scaler for G and D
     # ----------------------------------------
     def define_gradscaler(self):
         self.gen_scaler = torch.amp.GradScaler("cuda")
+        self.dis_scaler = torch.amp.GradScaler("cuda")
 
     # ----------------------------------------
     # Set working precision for use with PyTorch AMP
@@ -437,6 +490,34 @@ class ModelPlain(ModelBase):
 
         self.schedulers.append(scheduler)
 
+        # D scheduler
+        multistep_scheduler = lr_scheduler.MultiStepLR(
+            self.D_optimizer,
+            milestones=self.opt_train['D_scheduler_milestones'],
+            gamma=self.opt_train['D_scheduler_gamma']
+        )
+
+        if self.opt_train.get('D_warmup_steps', 0) > 0:
+            # Linear warmup scheduler
+            warmup_scheduler = lr_scheduler.LinearLR(
+                self.D_optimizer,
+                start_factor=1e-8,  # or 0.0 if you want to start from 0
+                end_factor=1.0,
+                total_iters=self.opt_train['D_warmup_steps']
+            )
+
+            # Combine them with SequentialLR
+            scheduler = lr_scheduler.SequentialLR(
+                self.D_optimizer,
+                schedulers=[warmup_scheduler, multistep_scheduler],
+                milestones=[self.opt_train['D_warmup_steps']]  # when to switch
+            )
+        else:
+            # Fallback to MultiStepLR only
+            scheduler = multistep_scheduler
+
+        self.schedulers.append(scheduler)
+
     def define_visual_eval(self):
 
         if self.opt['input_type'] == '2D':
@@ -486,17 +567,97 @@ class ModelPlain(ModelBase):
         else:  # Standard precision
             self.E = self.netG(self.L)
 
+    def netD_forward(self, input):
+        if self.mixed_precision is not None:
+            # Evaluate using AMP
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                return self.netD(input)
+        else:  # Standard precision
+            self.E = self.netD(input)
+
     # ----------------------------------------
     # update parameters and get loss
     # ----------------------------------------
     def optimize_parameters_amp(self, current_step, update=False):
 
         # ------------------------------------
+        # optimize D
+        # ------------------------------------
+
+        # Enable gradients for D
+        self.netD.requires_grad_(True)
+        self.netG_forward()  # Forward G to get E for D loss calculation
+        self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
+        self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
+
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.dis_loss = compute_discriminator_loss(self.prop_real, self.prop_fake)
+            self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
+
+        self.D_train_loss = self.dis_loss  # Add discriminator training loss to total loss
+        if self.opt['rank'] == 0:
+            print("D train loss:", self.D_train_loss.item())
+
+        # -------------------------------------------------
+        # update logic for D gradient accumulation
+        # -------------------------------------------------
+        self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
+
+        # -------------------------------------------------
+        # DDP optimization for D
+        # -------------------------------------------------
+        if not self.D_update:
+            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+                with self.netD.no_sync():  # avoid expensive all-reduce
+                    self.dis_scaler.scale(self.dis_loss).backward()
+            else:
+                self.dis_scaler.scale(self.dis_loss).backward()
+        else:
+            # sync gradients
+            self.dis_scaler.scale(self.dis_loss).backward()
+
+        # ------------------------------------
+        # Optimizer step D
+        # ------------------------------------
+        if self.D_update:  # Gradient acculumation
+            # ------------------------------------
+            # clip_grad on D
+            # ------------------------------------
+            D_clipgrad_max = self.opt_train['D_optimizer_clipgrad']
+            if D_clipgrad_max > 0:
+                self.dis_scaler.unscale_(self.D_optimizer)
+                self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.netD.parameters(),
+                    max_norm=D_clipgrad_max,
+                    norm_type=2
+                )
+
+            self.dis_scaler.step(self.D_optimizer)  # update weights
+            self.dis_scaler.update()
+            self.D_optimizer.zero_grad()  # set parameter gradients to zero
+
+            # Reset gradient accumulation count
+            self.D_accum_count = 0
+
+        else:  # Update gradient accumulation count
+            self.D_accum_count += 1
+
+
+        # ------------------------------------
         # optimize G
         # ------------------------------------
+
+        # Disable gradients for D when optimizing G
+        self.netD.requires_grad_(False)
+        self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake again, as the value was discarded by backward
+
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.netG_forward()  # Forward G
-            self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
+            self.gen_loss = compute_generator_loss(
+                self.H, self.E, self.loss_fn_dict, self.loss_val_dict,
+                prop_real=None,  # Left as None here, as prop_real is not needed for vanilla GAN
+                prop_fake=self.prop_fake,
+                device=self.device
+            )
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -504,15 +665,15 @@ class ModelPlain(ModelBase):
             print("G train loss:", self.G_train_loss.item())
 
         # -------------------------------------------------
-        # update logic for gradient accumulation
+        # update logic for G gradient accumulation
         # -------------------------------------------------
-        self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
+        self.G_update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
 
         # -------------------------------------------------
         # DDP optimization: skip gradient sync during accumulation
         # -------------------------------------------------
-        if not self.update:
-            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+        if not self.G_update:
+            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
                 with self.netG.no_sync():  # avoid expensive all-reduce
                     self.gen_scaler.scale(self.gen_loss).backward()
             else:
@@ -524,7 +685,7 @@ class ModelPlain(ModelBase):
         # ------------------------------------
         # Optimizer step
         # ------------------------------------
-        if self.update:  # Gradient acculumation
+        if self.G_update:  # Gradient acculumation
             # ------------------------------------
             # clip_grad on G
             # ------------------------------------
@@ -553,10 +714,79 @@ class ModelPlain(ModelBase):
     def optimize_parameters(self, current_step, update=False):
 
         # ------------------------------------
+        # optimize D
+        # ------------------------------------
+
+        # Enable gradients for D
+        self.netD.requires_grad_(True)
+
+        self.netG_forward()  # Forward G to get E for D loss calculation
+        self.prop_real = self.netD_forward(self.H)
+        self.prop_fake = self.netD_forward(self.E.detach())
+        self.dis_loss = compute_discriminator_loss(self.prop_real, self.prop_fake)
+        self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
+
+        self.D_train_loss = self.dis_loss  # Add discriminator training loss to total loss
+        if self.opt['rank'] == 0:
+            print("D train loss:", self.D_train_loss.item())
+
+        # -------------------------------------------------
+        # update logic for D gradient accumulation
+        # -------------------------------------------------
+        self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
+
+        # -------------------------------------------------
+        # DDP optimization for D
+        # -------------------------------------------------
+        if not self.D_update:
+            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+                with self.netD.no_sync():  # avoid expensive all-reduce
+                    self.dis_loss.backward()
+            else:
+                self.dis_loss.backward()
+        else:
+            # sync gradients
+            self.dis_loss.backward()
+
+        # ------------------------------------
+        # Optimizer step D
+        # ------------------------------------
+        if self.D_update:  # Gradient acculumation
+            # ------------------------------------
+            # clip_grad on D
+            # ------------------------------------
+            D_clipgrad_max = self.opt_train['D_optimizer_clipgrad']
+            if D_clipgrad_max > 0:
+                self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.netD.parameters(),
+                    max_norm=D_clipgrad_max,
+                    norm_type=2
+                )
+
+            self.D_optimizer.step()  # update weights
+            self.D_optimizer.zero_grad()  # set parameter gradients to zero
+
+            # Reset gradient accumulation count
+            self.D_accum_count = 0
+
+        else:  # Update gradient accumulation count
+            self.D_accum_count += 1
+
+
+        # ------------------------------------
         # optimize G
         # ------------------------------------
-        self.netG_forward()
-        self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
+
+        # Disable gradients for D when optimizing G
+        self.netD.requires_grad_(False)
+
+        self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake again, as the value was discarded by backward
+        self.gen_loss = compute_generator_loss(
+            self.H, self.E, self.loss_fn_dict, self.loss_val_dict,
+            prop_real=None,  # Left as None here, as prop_real is not needed for vanilla GAN
+            prop_fake=self.prop_fake,
+            device=self.device
+        )
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -564,33 +794,37 @@ class ModelPlain(ModelBase):
             print("G train loss:", self.G_train_loss.item())
 
         # -------------------------------------------------
-        # update logic for gradient accumulation
+        # update logic for G gradient accumulation
         # -------------------------------------------------
-        self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
+        self.G_update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
 
         # -------------------------------------------------
         # DDP optimization: skip gradient sync during accumulation
         # -------------------------------------------------
-        if not self.update:
-            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+        if not self.G_update:
+            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
                 with self.netG.no_sync():  # avoid expensive all-reduce
-                    self.gen_loss.backward()
+                    self.gen_scaler.scale(self.gen_loss).backward()
             else:
-                self.gen_loss.backward()
+                self.gen_scaler.scale(self.gen_loss).backward()
         else:
             # sync gradients
-            self.gen_loss.backward()
+            self.gen_scaler.scale(self.gen_loss).backward()
 
-        if self.update:  # Gradient acculumation
+        # ------------------------------------
+        # Optimizer step
+        # ------------------------------------
+        if self.G_update:  # Gradient acculumation
             # ------------------------------------
             # clip_grad on G
             # ------------------------------------
             G_clipgrad_max = self.opt_train['G_optimizer_clipgrad']
             if G_clipgrad_max > 0:
-                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
-                # if self.opt['rank'] == 0:
-                #     print("G gradient norm:", grad_norm.item())
+                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.netG.parameters(),
+                    max_norm=G_clipgrad_max,
+                    norm_type=2
+                )
 
             self.G_optimizer.step()  # update weights
             self.G_optimizer.zero_grad()  # set parameter gradients to zero
@@ -608,14 +842,21 @@ class ModelPlain(ModelBase):
         # ------------------------------------
 
         # Record training losses using wandb
-        loss = self.G_train_loss.item() * self.num_accum_steps_G
-        self.run.log({"step": current_step, "G_train_loss": loss})
+        G_loss = self.G_train_loss.item() * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_loss": G_loss})
 
-        grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
-        self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
+        D_loss = self.D_train_loss.item() * self.num_accum_steps_D
+        self.run.log({"step": current_step, "D_train_loss": D_loss})
+
+        G_grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_grad_norm": G_grad_norm})
+
+        D_grad_norm = self.D_train_grad_norm.item() * self.num_accum_steps_D
+        self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
+
 
     def record_avg_train_log(self, current_step, idx_train):
         # ------------------------------------
@@ -623,17 +864,22 @@ class ModelPlain(ModelBase):
         # ------------------------------------
 
         # Record training losses using wandb
-        avg_loss = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
-        self.run.log({"step": current_step, "G_train_loss": avg_loss})
+        avg_loss_G = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_loss": avg_loss_G})
+
+        avg_loss_D = (self.D_train_loss.item() / idx_train) * self.num_accum_steps_D
+        self.run.log({"step": current_step, "D_train_loss": avg_loss_D})
 
         # Reset training losses
         self.G_train_loss = 0.0
+        self.D_train_loss = 0.0
 
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
 
+
     def early_stopping(self, current_step, idx_train):
-        validation_loss = self.G_valid_loss / idx_train  # calculate average validation loss
+        validation_loss = self.G_valid_loss / idx_train  # calculate average validation loss on G
 
         if validation_loss.item() < self.min_validation_loss:
             self.min_validation_loss = validation_loss
@@ -671,15 +917,21 @@ class ModelPlain(ModelBase):
         # ------------------------------------
         # Reduce validation loss across GPUs
         # ------------------------------------
-        loss_tensor = torch.tensor(float(self.G_valid_loss), device=self.device)
-        global_valid_loss = reduce_sum(loss_tensor) / global_idx_tensor
+        G_loss_tensor = torch.tensor(float(self.G_valid_loss), device=self.device)
+        G_global_valid_loss = reduce_sum(G_loss_tensor) / global_idx_tensor
+
+        D_loss_tensor = torch.tensor(float(self.D_valid_loss), device=self.device)
+        D_global_valid_loss = reduce_sum(D_loss_tensor) / global_idx_tensor
 
         if get_rank() == 0:  # Only rank 0 logs
-            self.run.log({"G_valid_loss": global_valid_loss.item()})
-            print("G_valid_loss", global_valid_loss.item())
+            self.run.log({"G_valid_loss": G_global_valid_loss.item()})
+            self.run.log({"D_valid_loss": D_global_valid_loss.item()})
+            print("G_valid_loss", G_global_valid_loss.item())
+            print("D_valid_loss", D_global_valid_loss.item())
 
         # Reset validation loss
         self.G_valid_loss = 0.0
+        self.D_valid_loss = 0.0
 
 
     # ----------------------------------------
@@ -697,11 +949,23 @@ class ModelPlain(ModelBase):
         # Forward G
         self.netG_forward()
 
+        # Forward D
+        self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
+        self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake for D
+
         # Compute loss for G
-        self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
+        self.gen_loss = compute_generator_loss(
+            self.H, self.E, self.loss_fn_dict, self.loss_val_dict,
+            prop_real=None,  # Left as None here, as prop_real is not needed for vanilla GAN
+            prop_fake=self.prop_fake,
+            device=self.device
+        )
+        # Compute loss for D
+        self.dis_loss = compute_discriminator_loss(self.prop_real, self.prop_fake)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
+        self.D_valid_loss += self.dis_loss
 
         # Compute performance metrics
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
@@ -713,12 +977,25 @@ class ModelPlain(ModelBase):
         # Forward G
         self.netG_forward()
 
+        # Forward D
+        self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
+        self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake for D
+
+        # Compute loss for G
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            # Compute loss for G
-            self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
+            self.gen_loss = compute_generator_loss(
+                self.H, self.E, self.loss_fn_dict, self.loss_val_dict,
+                prop_real=None,  # Left as None here, as prop_real is not needed for vanilla GAN
+                prop_fake=self.prop_fake,
+                device=self.device
+            )
+        # Compute loss for D
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.dis_loss = compute_discriminator_loss(self.prop_real, self.prop_fake)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
+        self.D_valid_loss += self.dis_loss
 
         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
@@ -796,113 +1073,3 @@ class ModelPlain(ModelBase):
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
-
-
-# import lightning as L
-#
-# class ModelPlainLit(L.LightningModule):
-#     def __init__(self, opt, model: ModelPlain):
-#         super().__init__()
-#         self.opt = opt
-#         self.model = model
-#
-#     def training_step(self, train_batch, batch_idx):
-#
-#         if self.opt['model_architecture'] == "MTVNet" and not self.opt['dataset_opt']['enable_femur_padding']:
-#             train_batch['H'] = crop_context(train_batch['H'], L=self.model.opt['netG']['num_levels'], level_ratio=self.model.opt['netG']['level_ratio'])
-#
-#         self.model.feed_data(train_batch, need_H=True)
-#
-#         self.model.netG_forward()
-#
-#         loss = compute_generator_loss(self.model.H, self.model.E, self.model.loss_fn_dict, self.model.loss_val_dict, None, self.model.device)
-#
-#         # Log training loss here
-#         self.log("G_train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-#
-#         return loss
-#
-#
-#     def validation_step(self, test_batch, batch_idx):
-#
-#         if self.opt['model_architecture'] == "MTVNet" and not self.opt['dataset_opt']['enable_femur_padding']:
-#             test_batch['H'] = crop_context(test_batch['H'], L=self.model.opt['netG']['num_levels'], level_ratio=self.model.opt['netG']['level_ratio'])
-#
-#         self.model.feed_data(test_batch, need_H=True)
-#
-#         self.model.netG_forward()
-#
-#         loss = compute_generator_loss(self.model.H, self.model.E, self.model.loss_fn_dict, self.model.loss_val_dict, None, self.model.device)
-#
-#         # Log validation loss here
-#         self.log("G_valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-#
-#         # Compute performance metrics
-#         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-#         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-#
-#         return loss
-#
-#
-#     def configure_optimizers(self):
-#         """defines model optimizer and scheduler"""
-#         return {
-#             "optimizer": self.model.G_optimizer,
-#             "lr_scheduler": {
-#                 "scheduler": self.model.schedulers,
-#                 "interval": "step",  # Step after every global_step
-#             },
-#         }
-#
-# from lightning.pytorch.callbacks import Callback
-# from utils.utils_3D_image import crop_context, crop_center
-#
-# class CustomCallback(Callback):
-#     def on_train_start(self, trainer, pl_module):
-#         print("Training started!")
-#
-#     def on_validation_end(self, trainer, pl_module):
-#
-#         if pl_module.opt['model_architecture'] == "MTVNet":
-#             pl_module.model.L = crop_center(pl_module.model.L, center_size=pl_module.model.opt['netG']['context_sizes'][-1])
-#
-#         visuals = pl_module.model.current_visuals()
-#         pl_module.model.log_comparison_image(visuals, trainer.global_step)
-#
-#         print("Validation completed!")
-#
-#
-# from lightning.pytorch.loggers.logger import Logger, rank_zero_experiment
-# from lightning.pytorch.utilities import rank_zero_only
-# class MyLogger(Logger):
-#     @property
-#     def name(self):
-#         return "MyLogger"
-#
-#     @property
-#     def version(self):
-#         # Return the experiment version, int or str.
-#         return "0.1"
-#
-#     @rank_zero_only
-#     def log_hyperparams(self, params):
-#         # params is an argparse.Namespace
-#         # your code to record hyperparameters goes here
-#         pass
-#
-#     @rank_zero_only
-#     def log_metrics(self, metrics, step):
-#         # metrics is a dictionary of metric names and values
-#         # your code to record metrics goes here
-#         pass
-#
-#     @rank_zero_only
-#     def save(self):
-#         # Optional. Any code necessary to save logger data goes here
-#         pass
-#
-#     @rank_zero_only
-#     def finalize(self, status):
-#         # Optional. Any code that needs to be run after training
-#         # finishes goes here
-#         pass

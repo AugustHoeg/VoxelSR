@@ -12,14 +12,14 @@ class Dataset_VoDaSuRe_OME():
     def __init__(self, opt):
 
         self.synthetic = opt['dataset_opt']['synthetic']
-        print(f"Using synthetically downsampled LR images: {self.synthetic}")
+        if opt['rank'] == 0:
+            print(f"Using synthetically downsampled LR images: {self.synthetic}")
+            print(f"Using datasets: {opt['dataset_opt']['datasets']} on {opt['run_type']}")
 
         self.opt = opt
         self.patch_size_hr = opt['dataset_opt']['patch_size_hr']
         self.patch_size_lr = opt['dataset_opt']['patch_size']
         self.degradation_type = opt['dataset_opt']['degradation_type']
-
-        print(f"Using datasets: {opt['dataset_opt']['datasets']} on {opt['run_type']}")
 
         if opt['run_type'] == "HOME PC":
             self.data_path = "../Vedrana_master_project/3D_datasets/datasets/"
@@ -251,10 +251,11 @@ class Dataset_VoDaSuRe_OME():
                                                                        sampling_weight=sampling_weights[dataset],
                                                                        store_type=store_type[dataset])
 
-            print(f"Number of training paths in {dataset}: {len(train_paths[dataset])}")
-            print(f"Number of test paths in {dataset}: {len(test_paths[dataset])}")
-            print(f"Sampling weight for {dataset} is {sampling_weights[dataset]}")
-            print(f"Store type for {dataset} is {store_type[dataset]}")
+            if opt['rank'] == 0:
+                print(f"Number of training paths in {dataset}: {len(train_paths[dataset])}")
+                print(f"Number of test paths in {dataset}: {len(test_paths[dataset])}")
+                print(f"Sampling weight for {dataset} is {sampling_weights[dataset]}")
+                print(f"Store type for {dataset} is {store_type[dataset]}")
 
     def create_dataset_dict(self, paths, group_pairs, sampling_weight=1.0, store_type="LocalStore"):
 

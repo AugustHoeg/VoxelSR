@@ -316,17 +316,18 @@ class SRBlock(nn.Module):
         return out
 
 class LRconvBlock3D(nn.Module):
-    def __init__(self, input_size, in_c, n, k_size, stride):
+    def __init__(self, in_c, n, k_size, stride):
         super().__init__()
 
         self.conv0 = nn.Conv3d(in_c, n, kernel_size=k_size, stride=stride, padding=1)
         #self.norm0 = nn.LayerNorm([DCSRN_config.BATCH_SIZE, n, 16, 16, 16])
-        self.norm0 = nn.LayerNorm(input_size)
+        self.norm0 = nn.LayerNorm(n)
         self.act0 = nn.LeakyReLU(0.2, inplace=True)
 
     def forward(self, x):
         x = self.conv0(x)
-        out = self.act0(self.norm0(x))
+        x = self.norm0(x.permute(0, 2, 3, 4, 1))
+        out = self.act0(x.permute(0, 4, 1, 2, 3).contiguous())
 
         return out
 
@@ -401,7 +402,7 @@ class Discriminator(nn.Module):
         return out
 
 class DiscriminatorV2(nn.Module):
-    def __init__(self, patch_size=64, up_factor=1, in_c=1, n_conv_vec=[64,64,128,128,256,256,512,512], n_dense=[1024, 1], k_size=3, use_checkpoint=True):
+    def __init__(self, patch_size=64, up_factor=1, in_c=1, n_conv_vec=[64,64,128,128,256,256,512,512], n_dense=1024, k_size=3, use_checkpoint=True):
         super().__init__()
 
         self.use_checkpoint = use_checkpoint
@@ -409,16 +410,16 @@ class DiscriminatorV2(nn.Module):
         self.conv0 = nn.Conv3d(in_c, n_conv_vec[0], kernel_size=k_size, padding=1, stride=1)
         self.act0 = nn.LeakyReLU(0.2, inplace=True)
 
-        dim = [int(np.ceil(patch_size*up_factor / 2 ** i)) for i in range(1, 5)]
+        #dim = [int(np.ceil(patch_size*up_factor / 2 ** i)) for i in range(1, len(n_conv_vec) // 2)]
         #dim = [int(torch.ceil(input_size/2**i)) for i in range(1,5)]
+        dim = patch_size * up_factor
 
         self.blocks = nn.ModuleList()
-        dim_idx = 0
         for idx in range(len(n_conv_vec) - 1):
             stride = 2 - (idx % 2)
+            dim = dim // stride  # Update the spatial dimensions after each block
             self.blocks.append(
                 LRconvBlock3D(
-                    dim[dim_idx],
                     n_conv_vec[idx],
                     n_conv_vec[idx+1],
                     k_size=3,
@@ -427,21 +428,12 @@ class DiscriminatorV2(nn.Module):
                     #bias=True,
                 )
             )
-            dim_idx = dim_idx + (stride % 2)  # Set input features to output of previous block
-
-        #self.LRconv0 = LRconvBlock3D(dim[0], n_conv_vec[0], n_conv_vec[1], k_size, stride=1)
-        #self.LRconv1 = LRconvBlock3D(dim[1], n_conv_vec[1], n_conv_vec[2], k_size, stride=2)
-        #self.LRconv2 = LRconvBlock3D(dim[1], n_conv_vec[2], n_conv_vec[3], k_size, stride=1)
-        #self.LRconv3 = LRconvBlock3D(dim[2], n_conv_vec[3], n_conv_vec[4], k_size, stride=2)
-        #self.LRconv4 = LRconvBlock3D(dim[2], n_conv_vec[4], n_conv_vec[5], k_size, stride=1)
-        #self.LRconv5 = LRconvBlock3D(dim[3], n_conv_vec[5], n_conv_vec[6], k_size, stride=2)
-        #self.LRconv6 = LRconvBlock3D(dim[3], n_conv_vec[6], n_conv_vec[7], k_size, stride=1)
 
         self.flatten = nn.Flatten()
-        ll_size = int(n_conv_vec[-1] * dim[-1]**3)
-        self.dense0 = nn.Linear(ll_size, n_dense[0])
+        ll_size = int(n_conv_vec[-1] * dim**3)
+        self.dense0 = nn.Linear(ll_size, n_dense)
         self.act1 = nn.LeakyReLU(0.2, inplace=True)  # Should perhaps be nn.LeakyReLU(0.2, inplace=True)
-        self.dense1 = nn.Linear(n_dense[0], n_dense[1])
+        self.dense1 = nn.Linear(n_dense, in_c)
 
         self.act_sigmoid = nn.Sigmoid()
 

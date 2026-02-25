@@ -23,15 +23,12 @@ class DummyNetwork(nn.Module):
 # --------------------------------------------
 def define_G(opt, mode='train'):
     opt_net = opt['model_opt']['netG']
-    model_architecture = opt['model_opt']['model_architecture']
+    model_arch = opt_net['net_type']
 
-    if opt['rank'] == 0:
-        print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
-
-    if model_architecture == "DUMMY":
+    if model_arch == "DUMMY":
         netG = DummyNetwork()
 
-    if model_architecture == "DegradeNet":  # DegradeNet
+    if model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],
                    in_channels=opt_net['in_channels'],
@@ -39,7 +36,7 @@ def define_G(opt, mode='train'):
                    num_feats=opt_net['num_feats'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
-    elif model_architecture == "FlashDegradeNet":  # FlashDegradeNet
+    elif model_arch == "FlashDegradeNet":  # FlashDegradeNet
         from models.DegradeNet import FlashDegradeNet as net
         netG = net(input_size=opt['dataset_opt']['patch_size_hr'],
                    down_factor=opt['down_factor'],
@@ -61,7 +58,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # RCAN from paper https://arxiv.org/abs/1807.02758
     # ----------------------------------------
-    elif model_architecture == ("RCAN" or "RCAN2d"):  # RCAN
+    elif model_arch == "RCAN" or model_arch == "RCAN2d":  # RCAN
         from models.rcan_arch import RCAN as net
         netG = net(upscale=opt['up_factor'],
                    num_in_ch=opt_net['in_channels'],
@@ -76,7 +73,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # SwinIR from paper https://arxiv.org/pdf/2108.10257
     # ----------------------------------------
-    elif model_architecture == ("SwinIR" or "SwinIR2d"):  # SwinIR
+    elif model_arch == "SwinIR" or model_arch == "SwinIR2d":  # SwinIR
         from models.network_swinir import SwinIR as net
         netG = net(upscale=opt['up_factor'],
                    in_chans=opt_net['in_channels'],
@@ -95,7 +92,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # HAT (XPixelGroup) from paper https://arxiv.org/abs/2205.04437
     # ----------------------------------------
-    elif model_architecture == ("HAT" or "HAT2d"):  # HAT
+    elif model_arch == "HAT" or model_arch == "HAT2d":  # HAT
         from models.hat_arch import HAT as net
         netG = net(upscale=opt['up_factor'],
                    in_chans=opt_net['in_channels'],
@@ -118,7 +115,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # DRCT (Dense-Residual-Connected Transformer) from paper: https://arxiv.org/abs/2404.00722
     # ----------------------------------------
-    elif model_architecture == ("DRCT" or "DRCT2d"):  # DRCT
+    elif model_arch == "DRCT" or model_arch == "DRCT2d":  # DRCT
         from models.DRCT_arch import DRCT as net
         netG = net(upscale=opt['up_factor'],
                    in_chans=opt_net['in_channels'],
@@ -142,7 +139,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # mDCSRN Generator
     # ----------------------------------------
-    elif model_architecture == ("mDCSRN" or "mDCSRN-GAN"):  # mDCSRN
+    elif model_arch == "mDCSRN" or model_arch == "mDCSRN_GAN":  # mDCSRN
         from models.mDCSRN_GAN import MultiLevelDenseNet as net
         netG = net(up_factor=opt['up_factor'],
                    in_c=opt_net['in_channels'],
@@ -156,7 +153,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # RRDBNet3D / ESRGAN3D Generator
     # ----------------------------------------
-    elif model_architecture == ("RRDBNet3D" or "ESRGAN3D"):
+    elif model_arch == "RRDBNet3D" or model_arch == "ESRGAN3D":
         from models.RRDBNet3D_official import RRDBNet as net
         netG = net(up_factor=opt['up_factor'],
                    in_nc=opt_net['in_channels'],
@@ -168,7 +165,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # EDDSR
     # ----------------------------------------
-    elif model_architecture == ("EDDSR"):
+    elif model_arch == "EDDSR":
         from models.EDDSR import EDDSR_xs as net
         netG = net(up_factor=opt['up_factor'])
 
@@ -176,14 +173,14 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # MFER
     # ----------------------------------------
-    elif model_architecture == ("MFER"):
+    elif model_arch == "MFER":
         from models.MFER_official import MFER_xs as net
         netG = net(up_factor=opt['up_factor'])
 
     # ----------------------------------------
     # 3D Med SwinIR - SuperFormer
     # ----------------------------------------
-    elif model_architecture == 'SuperFormer':
+    elif model_arch == 'SuperFormer':
         from models.SuperFormer import SuperFormer as net
 
         netG = net(img_size=opt['dataset_opt']['patch_size'],
@@ -212,7 +209,7 @@ def define_G(opt, mode='train'):
     # MTVNet
     # ----------------------------------------
 
-    elif model_architecture == 'MTVNet':
+    elif model_arch == 'MTVNet':
 
         H = opt['dataset_opt']['patch_size']
         W = opt['dataset_opt']['patch_size']
@@ -302,7 +299,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # ArSSR
     # ----------------------------------------
-    elif model_architecture == ("ArSSR"):
+    elif model_arch == "ArSSR":
         from models.ArSSR import ArSSR as net
         netG = net(encoder_name=opt_net["encoder_name"],
                   feature_dim=opt_net["feature_dim"],
@@ -312,7 +309,7 @@ def define_G(opt, mode='train'):
     # ----------------------------------------
     # ConvNextSR
     # ----------------------------------------
-    elif model_architecture == ("ConvNeXtSR"):
+    elif model_arch == "ConvNeXtSR":
         from models.ConvNeXtSR import ConvNeXtSR as net
         netG = net(up_factor=opt['up_factor'],
                    in_chans=opt_net['in_channels'],
@@ -325,7 +322,7 @@ def define_G(opt, mode='train'):
                    use_checkpoint=opt_net['use_checkpoint'])
 
     else:
-        raise NotImplementedError('netG [{:s}] is not found.'.format(model_architecture))
+        raise NotImplementedError('netG [{:s}] is not found.'.format(model_arch))
 
     # ----------------------------------------
     # initialize weights
@@ -337,6 +334,48 @@ def define_G(opt, mode='train'):
                      gain=opt_net['init_gain'])
 
     return netG
+
+
+# --------------------------------------------
+# Discriminator, netD, D
+# --------------------------------------------
+def define_D(opt, mode='train'):
+    opt_net = opt['model_opt']['netD']
+    model_arch = opt_net['net_type']
+
+    if model_arch == "mDCSRN_GAN":  # DegradeNet
+        from models.mDCSRN_GAN import DiscriminatorV2 as net
+        netD = net(patch_size=opt['dataset_opt']['patch_size'],
+                   up_factor=opt['up_factor'],
+                   in_c=opt_net['in_channels'],
+                   n_conv_vec=opt_net['n_conv_vec'],
+                   n_dense=opt_net['n_dense'],
+                   k_size=opt_net['k_size'],
+                   use_checkpoint=opt_net['use_checkpoint'])
+
+    elif model_arch == "ESRGAN3D":  # ESRGAN3D Discriminator
+        from models.mDCSRN_GAN import DiscriminatorV2 as net  # Currently same discriminator as mDCSRN_GAN
+        netD = net(patch_size=opt['dataset_opt']['patch_size'],
+                   up_factor=opt['up_factor'],
+                   in_c=opt_net['in_channels'],
+                   n_conv_vec=opt_net['n_conv_vec'],
+                   n_dense=opt_net['n_dense'],
+                   k_size=opt_net['k_size'],
+                   use_checkpoint=opt_net['use_checkpoint'])
+    else:
+        raise NotImplementedError('netG [{:s}] is not found.'.format(model_arch))
+
+    # ----------------------------------------
+    # initialize weights
+    # ----------------------------------------
+    if opt['train_mode'] == 'scratch':
+        init_weights(netD,
+                     init_type=opt_net['init_type'],
+                     init_bn_type=opt_net['init_bn_type'],
+                     gain=opt_net['init_gain'])
+
+
+    return netD
 
 
 """

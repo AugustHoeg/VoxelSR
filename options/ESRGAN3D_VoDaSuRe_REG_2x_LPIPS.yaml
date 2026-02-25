@@ -1,31 +1,29 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: RRDBNet3D              # Default model config
+  - model_opt: ESRGAN3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 4  # upscaling factor
+up_factor: 2  # upscaling factor
 
 # Profile
 run_profile: false
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_REG_CSC_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_REG_LPIPS_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_CSC_L1_0p1
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
-train_mode: "finetune"   # "scratch", "finetune" or "resume"
-gpu_ids: [0]
-dist: false
-find_unused_parameters: false  # set to true if using DDP and your model has unused parameters (e.g., due to conditional computation)
-use_static_graph: true  # improves performance in DDP but only for non-dynamic models
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
+gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
+dist: true
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
@@ -33,26 +31,33 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: RRDBNet3D_VoDaSuRe_REG_2x_VoDaSuRe_OME_ID005700  # "mDCSRN_ID000000"
+  pretrained_experiment_id: null  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
-  validation_iterations: 500
-  checkpoint_test: 2500
-  checkpoint_save: 20000
-  checkpoint_print: 2500
-  checkpoint_save_visuals: 2500
-  num_accum_steps_G: 2 # 1
+  iterations: 12500 # 100000 / 8 GPUs
+  validation_iterations: 125  # 500 / 8 GPUs
+  checkpoint_test: 500
+  checkpoint_save: 2500
+  checkpoint_print: 500
+  checkpoint_save_visuals: 500
+
+  num_accum_steps_G: 2
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 2
-  G_warmup_steps: 0  # new
+  G_optimizer_clipgrad: 10
+
+  num_accum_steps_D: 2
+  D_optimizer_lr: 1e-4
+  D_optimizer_wd: 0
+  D_optimizer_clipgrad: 10
 
   G_loss_weights:
     L1: 1.0
-    CSC: 0.1 # tried: 0.1
+    LPIPS: 0.01
+    ADV: 0.001
+
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -62,16 +67,16 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 4 # 8
+    dataloader_batch_size: 8
     num_load_workers: 16
     persist_workers: true
-    pin_memory: true
+    pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2 # 4
+    dataloader_batch_size: 4
     num_load_workers: 4
     persist_workers: true
-    pin_memory: true
+    pin_memory: false
 
 # Hydra configuration
 hydra:

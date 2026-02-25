@@ -6,9 +6,9 @@ validation_iterations: 250
 epochs: 0
 
 mixed_precision: 'BF16'
-num_accum_steps_G: 1
 early_stop_patience: 100
 
+# Loss weights
 G_loss_weights:
   MSE: 0
   L1: 1.0
@@ -17,21 +17,44 @@ G_loss_weights:
   LPIPS: 0
   FSC: 0
   CSC: 0
+  ADV: 0.001
 
-E_decay: 0
+# G optimizer parameters
+num_accum_steps_G: 1
 G_optimizer_type: adam
-G_optimizer_lr: 2e-4
+G_optimizer_lr: 1e-4
 G_optimizer_wd: 0
 G_optimizer_clipgrad: 15
 G_optimizer_reuse: true
 G_scheduler_type: MultiStepLR
-G_warmup_steps: 0  # new
+G_warmup_steps: 0
 G_scheduler_milestones:
-  - 800000  # never reduce LR
+  - 50000
+  - 70000
+  - 85000
+  - 95000
 G_scheduler_gamma: 0.5
 G_regularizer_orthstep: null
 G_regularizer_clipstep: null
 G_param_strict: false
+
+# D optimizer parameters
+num_accum_steps_D: 1
+D_optimizer_type: adam
+D_optimizer_lr: 1e-4
+D_optimizer_wd: 0
+D_optimizer_clipgrad: 15
+D_optimizer_reuse: true
+D_scheduler_type: MultiStepLR
+D_warmup_steps: 0
+D_scheduler_milestones:
+  - 800000  # Never reduce LR
+D_scheduler_gamma: 0.5
+D_regularizer_orthstep: null
+D_regularizer_clipstep: null
+D_param_strict: false
+
+E_decay: 0
 E_param_strict: false
 
 manual_seed: 8400 # 8338

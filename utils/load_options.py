@@ -136,15 +136,16 @@ def init_options(opt, opt_path):
     # ----------------------------------------
     # GPU devices
     # ----------------------------------------
-    if opt['gpu_ids'] is not None and opt['rank'] == 0:
+    if opt['gpu_ids'] is not None:
         gpu_list = ','.join(str(x) for x in opt['gpu_ids'])
         os.environ['CUDA_VISIBLE_DEVICES'] = gpu_list
-        print('export CUDA_VISIBLE_DEVICES=' + gpu_list)
-
         total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
-        # Flag to run the script as on Home PC or HPC.
-        run_type = "HOME PC" if total_gpu_mem < 10 else "HPC"
-        print(f"run type: {run_type}.")
+
+        run_type = "HOME PC" if total_gpu_mem < 10 else "HPC"  # Flag to run the script as on Home PC or HPC.
+
+        if opt['rank'] == 0:
+            print(f"run type: {run_type}.")
+            print('export CUDA_VISIBLE_DEVICES=' + gpu_list)
 
         opt['total_gpu_mem'] = total_gpu_mem
         opt['run_type'] = run_type

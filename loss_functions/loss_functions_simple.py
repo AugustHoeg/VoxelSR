@@ -39,7 +39,7 @@ def compute_critic_loss(critic_real, critic_fake, scaled_gradient_penalty):
     loss_critic = -(torch.mean(critic_real.reshape(-1)) - torch.mean(critic_fake.reshape(-1))) + scaled_gradient_penalty
     return loss_critic
 
-def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, prop_real=None, prop_fake=None, model="plain", device="cuda"):
+def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, prop_real=None, prop_fake=None, device="cuda"):
 
     gen_loss = torch.tensor(0.0).to(device)
     aux_loss = torch.tensor(0.0).to(device)
@@ -47,6 +47,8 @@ def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None
     for key, value in loss_val_dict.items():
         if value > 0 and key != 'ADV':
             aux_loss += value*loss_fn_dict[key](real_hi_res, fake_hi_res)
+        elif key == 'ADV' and value > 0:
+            aux_loss += value*F.binary_cross_entropy_with_logits(prop_fake, torch.ones_like(prop_fake))
 
     gen_loss += aux_loss
 
@@ -176,9 +178,9 @@ class CSCLoss(nn.Module):
         opt_csc = OmegaConf.load(opt_path)
         opt_csc['dist'] = False  # ensure distributed is False for loss computation
 
-        self.net = define_Model(opt_csc, mode='test', data_parallel=False)
-        self.net.load(model_id, mode='test')  # load model
-        self.model = self.net.get_bare_model(self.net.netG)
+        net = define_Model(opt_csc, mode='test', data_parallel=False)
+        net.load(model_id, mode='test')  # load model
+        self.model = net.get_bare_model(net.netG)
 
         self.L = len(self.model.output_names)  # number of layers to compare
 
@@ -186,12 +188,11 @@ class CSCLoss(nn.Module):
             self.eval()
             self.model.eval()
 
-        for param in self.model.parameters():
-            param.requires_grad = False
+        self.model.requires_grad_(True)
 
         if (verbose):
             print(f'Setting up CSC loss with features distance function: {feat_dist_func}')
-            print(f'Using Degradation architecture {self.net.__class__.__name__} with ID: {model_id}')
+            print(f'Using Degradation architecture {self.model.__class__.__name__} with ID: {model_id}')
 
     def plot_features(self, in0, in1, outs0, outs1):
 

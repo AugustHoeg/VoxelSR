@@ -88,7 +88,7 @@ class RRDBNet(nn.Module):
         #trunk = self.trunk_conv(checkpoint.checkpoint_sequential(self.RRDB_trunk, 6, fea))
         for i, layer in enumerate(self.RRDB_trunk):
             if i % 2 == 0 and self.use_checkpoint:  # and i != len(self.RRDB_trunk) - 1:
-                fea = checkpoint.checkpoint(layer, fea)
+                fea = checkpoint.checkpoint(layer, fea, use_reentrant=False)
             else:
                 fea = layer(fea)
         trunk = fea

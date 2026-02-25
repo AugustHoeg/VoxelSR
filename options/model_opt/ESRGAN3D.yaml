@@ -1,0 +1,28 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: gan
+model_architecture: ESRGAN3D
+netG:
+  net_type: ESRGAN3D
+  description: "Residual in Residual Dense Net 3D"
+  in_channels: 1
+  num_channels: 64
+  num_blocks: 12
+  upsample_method: nearest
+  use_checkpoint: true
+
+  init_type: kaiming_normal
+  init_bn_type: uniform
+  init_gain: 0.1
+
+netD:
+  net_type: mDCSRN_GAN
+  description: "Discriminator for ESRGAN3D (currently same as mDCSRN_GAN)"
+  in_channels: 1
+  n_conv_vec: [64, 64, 128, 128, 256, 256, 512, 512]
+  n_dense: 256
+  k_size: 3
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.1

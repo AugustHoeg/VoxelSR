@@ -10,6 +10,7 @@ import torch.nn as nn
 import wandb
 from torch.optim import Adam, AdamW
 from torch.optim import lr_scheduler
+from torch.nn.parallel import DistributedDataParallel
 
 import config
 from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D, FSCLoss3D
@@ -17,7 +18,7 @@ from models.model_base import ModelBase
 from models.select_network import define_G
 from utils import utils_3D_image
 
-from utils.utils_3D_image import crop_center
+from utils.utils_dist import get_rank, reduce_sum, reduce_max
 
 from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
@@ -294,7 +295,7 @@ class ModelDegradation(ModelBase):
             elif key == "BCE" and value > 0:
                 self.loss_fn_dict["BCE"] = nn.BCELoss()
             elif key == "LPIPS" and value > 0:
-                LPIPS_axes = [0, 1, 2]  # only along slice axis
+                LPIPS_axes = [0, 1, 2]  # Choose which axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis, or any combination thereof
                 print("Using LPIPS loss along axes:", LPIPS_axes)
                 self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
                     net_type='alex',
@@ -308,24 +309,8 @@ class ModelDegradation(ModelBase):
                     delta=1,
                     alpha=2.0,
                     drop_DC=False,
-                    device=self.device)
-
-        # self.loss_fn_dict = {
-        #     "MSE": nn.MSELoss(),
-        #     "L1": nn.L1Loss(),
-        #     "BCE_Logistic": nn.BCEWithLogitsLoss(),
-        #     "BCE": nn.BCELoss(),
-        #     "LPIPS": LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=LPIPS_axes),
-        #     "FSC": FSCLoss3D(size_hr=self.opt['dataset_opt']['patch_size_hr'], delta=1, device=self.device)
-        #
-        #     #"VGG": VGGLoss(layer_idx=36, device=self.device),
-        #     #"VGG3D": VGGLoss3D(num_parts=2*self.opt['up_factor'], layer_idx=35, loss_func=nn.MSELoss(), device=self.device),
-        #     #"GRAD": GradientLoss3D(kernel='diff', order=1, loss_func=nn.L1Loss(), sigma=None),  # sigma = 0.8,
-        #     #"LAPLACE": LaplacianLoss3D(sigma=1.0, padding='valid', loss_func=nn.L1Loss()),
-        #     #"TV3D": TotalVariationLoss3D(mode="L2"),  # or mode = "sum_of_squares", "L2",
-        #     #"TEXTURE3D": TextureLoss3D(layer_idx=35),
-        #     #"STRUCTURE_TENSOR": StructureLoss3D(sigma=0.5, rho=0.5)
-        # }
+                    device=self.device
+                )
 
         # Define losses for G and D
         self.G_train_loss = 0.0
@@ -468,17 +453,17 @@ class ModelDegradation(ModelBase):
     # ----------------------------------------
     def feed_data(self, data, need_H=True, add_key=None):
         if add_key is not None:
-            self.L = data['L'][add_key].as_tensor().to(self.device)
+            self.L = data['L'][add_key].as_tensor().to(self.device, non_blocking=True)
             if need_H:
-                self.H = data['H'][add_key].as_tensor().to(self.device)
+                self.H = data['H'][add_key].as_tensor().to(self.device, non_blocking=True)
         elif self.opt['dataset_opt']['dataset_type'] == 'MasterThesisDataset':
-            self.L = data[1].as_tensor().to(self.device)
+            self.L = data[1].as_tensor().to(self.device, non_blocking=True)
             if need_H:
-                self.H = data[0].as_tensor().to(self.device)
+                self.H = data[0].as_tensor().to(self.device, non_blocking=True)
         else:
-            self.L = data['L'].as_tensor().to(self.device)
+            self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
             if need_H:
-                self.H = data['H'].as_tensor().to(self.device)
+                self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
     # ----------------------------------------
     # feed L to netG and get E
@@ -499,22 +484,36 @@ class ModelDegradation(ModelBase):
         # ------------------------------------
         # optimize G
         # ------------------------------------
-
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            # Forward G
-            self.netG_forward()
-            #with torch.cuda.amp.autocast(dtype=torch.float64):
-            self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
+            self.netG_forward()  # Forward G
+            self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict,device=self.device)
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
 
-        #self.G_optimizer.zero_grad()  # set parameter gradients to zero
-        self.gen_scaler.scale(self.gen_loss).backward()  # backward-pass to compute gradients
-
+        # -------------------------------------------------
+        # update logic for gradient accumulation
+        # -------------------------------------------------
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
+
+        # -------------------------------------------------
+        # DDP optimization: skip gradient sync during accumulation
+        # -------------------------------------------------
+        if not self.update:
+            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+                with self.netG.no_sync():  # avoid expensive all-reduce
+                    self.gen_scaler.scale(self.gen_loss).backward()
+            else:
+                self.gen_scaler.scale(self.gen_loss).backward()
+        else:
+            # sync gradients
+            self.gen_scaler.scale(self.gen_loss).backward()
+
+        # ------------------------------------
+        # Optimizer step
+        # ------------------------------------
         if self.update:  # Gradient acculumation
             # ------------------------------------
             # clip_grad on G
@@ -524,9 +523,11 @@ class ModelDegradation(ModelBase):
                 # Unscales the gradients of optimizer's assigned params in-place if AMP is enabled
                 self.gen_scaler.unscale_(self.G_optimizer)
                 # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
-                # if self.opt['rank'] == 0:
-                #     print("G gradient norm:", grad_norm.item())
+                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.netG.parameters(),
+                    max_norm=G_clipgrad_max,
+                    norm_type=2
+                )
 
             self.gen_scaler.step(self.G_optimizer)  # update weights
             self.gen_scaler.update()
@@ -538,24 +539,38 @@ class ModelDegradation(ModelBase):
         else:  # Update gradient accumulation count
             self.G_accum_count += 1
 
+
     def optimize_parameters(self, current_step, update=False):
 
         # ------------------------------------
         # optimize G
         # ------------------------------------
-
-        # Forward G
         self.netG_forward()
-        self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
+        self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
 
-        self.gen_loss.backward()  # backward-pass to compute gradients
-
+        # -------------------------------------------------
+        # update logic for gradient accumulation
+        # -------------------------------------------------
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
+
+        # -------------------------------------------------
+        # DDP optimization: skip gradient sync during accumulation
+        # -------------------------------------------------
+        if not self.update:
+            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+                with self.netG.no_sync():  # avoid expensive all-reduce
+                    self.gen_loss.backward()
+            else:
+                self.gen_loss.backward()
+        else:
+            # sync gradients
+            self.gen_loss.backward()
+
         if self.update:  # Gradient acculumation
             # ------------------------------------
             # clip_grad on G
@@ -618,24 +633,44 @@ class ModelDegradation(ModelBase):
             if (self.patience_counter >= self.patience) and current_step > 75000:
                 self.early_stop = True
 
-    def record_test_log(self, current_step, idx_test):
-        # ------------------------------------
-        # record log
-        # ------------------------------------
+        early_stop_tensor = torch.tensor(int(self.early_stop), device=self.device)
+        early_stop_tensor = reduce_max(early_stop_tensor)  # Sync early stop decision across GPUs
+        self.early_stop = early_stop_tensor.item() == 1  # If any GPU has early_stop, set early_stop for all
 
+
+    def record_test_log(self, idx_test):
+
+        idx_tensor = torch.tensor(idx_test, device=self.device)
+        global_idx_tensor = reduce_sum(idx_tensor)
+
+        # ------------------------------------
+        # Reduce validation metrics across GPUs
+        # ------------------------------------
         for key, value in self.metric_val_dict.items():
-            # Get metric name for logging
-            metric_name = "Average " + key
-            # Record metric value using wandb
-            self.run.log({metric_name: self.metric_val_dict[key] / idx_test})
-            print(metric_name, self.metric_val_dict[key] / idx_test)
-            # Reset performance metric
+            metric_tensor = torch.tensor(float(value), device=self.device)
+            global_average = reduce_sum(metric_tensor) / global_idx_tensor
+
+            if get_rank() == 0:  # Only rank 0 logs
+                metric_name = "Average " + key
+                self.run.log({metric_name: global_average.item()})
+                print(metric_name, global_average.item())
+
+            # Reset local metric accumulator
             self.metric_val_dict[key] = 0.0
 
-        self.run.log({"G_valid_loss": self.G_valid_loss.item() / idx_test})
+        # ------------------------------------
+        # Reduce validation loss across GPUs
+        # ------------------------------------
+        loss_tensor = torch.tensor(float(self.G_valid_loss), device=self.device)
+        global_valid_loss = reduce_sum(loss_tensor) / global_idx_tensor
 
-        # Reset validation losses
+        if get_rank() == 0:  # Only rank 0 logs
+            self.run.log({"G_valid_loss": global_valid_loss.item()})
+            print("G_valid_loss", global_valid_loss.item())
+
+        # Reset validation loss
         self.G_valid_loss = 0.0
+
 
     # ----------------------------------------
     # test and inference
@@ -653,7 +688,7 @@ class ModelDegradation(ModelBase):
         self.netG_forward()
 
         # Compute loss for G
-        self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
+        self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
@@ -670,7 +705,7 @@ class ModelDegradation(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             # Compute loss for G
-            self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
+            self.gen_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
@@ -693,7 +728,7 @@ class ModelDegradation(ModelBase):
 
         roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['down_factor'])
         if self.opt['dataset_opt']['patch_size'] > roi:
-            out_dict['L'] = crop_center(self.L, center_size=roi).detach()[0].float().cpu()
+            out_dict['L'] = utils_3D_image.crop_center(self.L, center_size=roi).detach()[0].float().cpu()
         else:
             out_dict['L'] = self.L.detach()[0].float().cpu()
 

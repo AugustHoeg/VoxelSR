@@ -205,7 +205,7 @@ def main(opt: DictConfig):
     dataset = D(opt)
     data_dict = dataset.dataset_dict_test
 
-    if opt['model_opt']['model_architecture'] == "MTVNet":
+    if opt['model_opt']['netG']['net_type'] == "MTVNet":
         patch_size = opt['dataset_opt']['patch_size']
         center_size = opt['model_opt']['netG']['context_sizes'][-1]  # New
         context_width = (patch_size - center_size) // 2

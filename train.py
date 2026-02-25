@@ -232,6 +232,9 @@ def main(opt: DictConfig):
         print("Cuda device name", torch.cuda.get_device_name(0))
         print("Total GPU memory: %0.3f Gb" % opt['total_gpu_mem'])
 
+    # Enable flash attention globally if available
+    torch.backends.cuda.flash_sdp_enabled()
+
     # Define universal SR model using the KAIR define_Model framework
     from models.select_model import define_Model
     model = define_Model(opt, mode='train')
