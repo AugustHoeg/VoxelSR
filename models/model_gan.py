@@ -334,13 +334,11 @@ class ModelGAN(ModelBase):
             elif key == "BCE" and value > 0:
                 self.loss_fn_dict["BCE"] = nn.BCELoss()
             elif key == "LPIPS" and value > 0:
-                LPIPS_axes = [0, 1, 2]  # Choose which axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis, or any combination thereof
-                print("Using LPIPS loss along axes:", LPIPS_axes)
                 self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
                     net_type='alex',
                     version='0.1',
                     device=self.device,
-                    axes=LPIPS_axes
+                    axes=(0, 1, 2)  # Axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis.
                 )
             elif key == "FSC" and value > 0:
                 self.loss_fn_dict["FSC"] = FSCLoss3D(

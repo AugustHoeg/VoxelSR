@@ -15,11 +15,11 @@ netG:
   init_gain: 0.1
 
 netD:
-  net_type: mDCSRN_GAN
-  description: "Discriminator for ESRGAN3D (currently same as mDCSRN_GAN)"
+  net_type: ESRGAN3D
+  description: "Discriminator for ESRGAN3D (currently same arch as mDCSRN_GAN)"
   in_channels: 1
   n_conv_vec: [64, 64, 128, 128, 256, 256, 512, 512]
-  n_dense: 256
+  n_dense: 1024
   k_size: 3
   use_checkpoint: false
 

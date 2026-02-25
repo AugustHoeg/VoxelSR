@@ -15,15 +15,15 @@ run_profile: false
 # WandB parameters
 wandb_mode: offline
 wandb_entity: aulho
-wandb_project: ${dataset_opt.name}_REG_LPIPS_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
 train_mode: "scratch"   # "scratch", "finetune" or "resume"
-gpu_ids: [0, 1, 2, 3, 4, 5, 6, 7]
-dist: true
+gpu_ids: [0]
+dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
@@ -36,12 +36,12 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
-  validation_iterations: 250
-  checkpoint_test: 1250
-  checkpoint_save: 10000
-  checkpoint_print: 1250
-  checkpoint_save_visuals: 1250
+  iterations: 500
+  validation_iterations: 100
+  checkpoint_test: 100
+  checkpoint_save: 100
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
 
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
@@ -64,17 +64,17 @@ dataset_opt:
   synthetic: false
   patch_size: 32
 
-  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [HCP_1200] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 8
+    dataloader_batch_size: 1
+    num_load_workers: 2
     persist_workers: true
     pin_memory: true
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 8
+    dataloader_batch_size: 1
+    num_load_workers: 2
     persist_workers: true
     pin_memory: true
 
