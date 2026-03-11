@@ -17,7 +17,7 @@ G_loss_weights:
   LPIPS: 0
   FSC: 0
   CSC: 0
-  ADV: 0.001
+  ADV: 0
 
 # G optimizer parameters
 num_accum_steps_G: 1

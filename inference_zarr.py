@@ -5,16 +5,14 @@ import time
 import zarr
 
 import hydra
-import matplotlib.pyplot as plt
-import monai
 import numpy as np
 import scipy.stats as stats
 import torch
-import torchio as tio
 from PIL import Image
 from omegaconf import DictConfig
 from omegaconf import OmegaConf
-from tqdm import tqdm
+import lpips
+import matplotlib.pyplot as plt
 
 import config
 from utils import utils_3D_image
@@ -61,11 +59,12 @@ def create_metric_file(wandb_path, opt, dataset_name):
     return file_path
 
 
-def write_metric_statistics(file_path, psnr_vals, ssim_vals, nrmse_vals, text=None):
+def write_metric_statistics(file_path, psnr_vals, ssim_vals, nrmse_vals, lpips_vals, text=None):
 
     psnr_slice_mean, ci_psnr = get_mean_and_ci(psnr_vals['slice_vals'])
     ssim_slice_mean, ci_ssim = get_mean_and_ci(ssim_vals['slice_vals'])
     nrmse_slice_mean, ci_nrmse = get_mean_and_ci(nrmse_vals['slice_vals'])
+    lpips_slice_mean, ci_lpips = get_mean_and_ci(lpips_vals['slice_vals'])
 
     # Open the file in write mode and write the contents
     with open(file_path, 'a+') as file:
@@ -76,15 +75,17 @@ def write_metric_statistics(file_path, psnr_vals, ssim_vals, nrmse_vals, text=No
         file.write("PSNR SAMPLE LIST: " + str(torch.tensor(psnr_vals['sample_means']).numpy()) + "\n")
         file.write("SSIM SAMPLE LIST: " + str(torch.tensor(ssim_vals['sample_means']).numpy()) + "\n")
         file.write("NRMSE SAMPLE LIST: " + str(torch.tensor(nrmse_vals['sample_means']).numpy()) + "\n")
+        file.write("LPIPS SAMPLE LIST: " + str(torch.tensor(lpips_vals['sample_means']).numpy()) + "\n")
 
         # Write the individual values to the file
         file.write("AVERAGE SLICE-WISE PERFORMANCE METRICS \n")
         file.write("AVERAGE SLICE-WISE PSNR: " + str(psnr_slice_mean) + "+-" + str(ci_psnr) + "\n")
         file.write("AVERAGE SLICE-WISE SSIM: " + str(ssim_slice_mean) + "+-" + str(ci_ssim) + "\n")
         file.write("AVERAGE SLICE-WISE NRSME: " + str(nrmse_slice_mean) + "+-" + str(ci_nrmse) + "\n")
+        file.write("AVERAGE SLICE-WISE LPIPS: " + str(lpips_slice_mean) + "+-" + str(ci_lpips) + "\n")
 
 
-def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9):
+def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9, lpips_model=None, device='cuda'):
 
     num_slices = img_H.shape[slice_dim]
 
@@ -92,6 +93,7 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9):
     psnr_slice_list = []
     ssim_slice_list = []
     nrmse_slice_list = []
+    lpips_slice_list = []
 
     for i in range(0, num_slices, slice_step):
         if i % 100 == 0:
@@ -126,9 +128,16 @@ def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9):
         slice_nrmse = calculate_nrmse_2D(E_slice, H_slice, border=0)
         nrmse_slice_list.append(slice_nrmse)
 
-    return psnr_slice_list, ssim_slice_list, nrmse_slice_list
+        slice_lpips = -1
+        if lpips_model is not None:
+            E_slice = torch.from_numpy(E_slice).to(device)
+            H_slice = torch.from_numpy(H_slice).to(device)
+            slice_lpips = lpips_model(E_slice, H_slice).item()
+        lpips_slice_list.append(slice_lpips)
 
-def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-10, max_val=65535.0):
+    return psnr_slice_list, ssim_slice_list, nrmse_slice_list, lpips_slice_list
+
+def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-10, max_val=65535.0, lpips_model=None, device='cuda'):
 
     num_slices = img_H.shape[slice_dim]
 
@@ -136,6 +145,7 @@ def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-1
     psnr_slice_list = []
     ssim_slice_list = []
     nrmse_slice_list = []
+    lpips_slice_list = []
 
     for i in range(0, num_slices, slice_step):
         if i % 100 == 0:
@@ -152,8 +162,8 @@ def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-1
             E_slice = img_E[:, :, i]
 
         # Normalize to [0, 1]
-        H_slice = H_slice / max_val
-        E_slice = E_slice / max_val
+        H_slice = H_slice.astype(np.float32) / max_val
+        E_slice = E_slice.astype(np.float32) / max_val
 
         H_min, H_max = H_slice.min(), H_slice.max()
         if H_max - H_min < eps:
@@ -171,7 +181,14 @@ def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-1
         slice_nrmse = calculate_nrmse_2D(E_slice, H_slice, border=0)
         nrmse_slice_list.append(slice_nrmse)
 
-    return psnr_slice_list, ssim_slice_list, nrmse_slice_list
+        slice_lpips = -1
+        if lpips_model is not None:
+            E_slice = torch.from_numpy(E_slice).to(device)
+            H_slice = torch.from_numpy(H_slice).to(device)
+            slice_lpips = lpips_model(E_slice, H_slice).item()
+        lpips_slice_list.append(slice_lpips)
+
+    return psnr_slice_list, ssim_slice_list, nrmse_slice_list, lpips_slice_list
 
 @hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
@@ -197,8 +214,11 @@ def main(opt: DictConfig):
     print(f"Running inference with mode: {inference_mode}")
 
     from models.select_model import define_Model
-    model = define_Model(opt, mode='test')
+    model = define_Model(opt, mode='test', data_parallel=False)  # currently supports only 1 GPU
     model.init_test(experiment_id)
+
+    lpips_model = lpips.LPIPS(net='alex', version='0.1', lpips=True, eval_mode=True, verbose=False)
+    lpips_model.to(model.device)  # move to same device as model
 
     # Define dataset
     from data.Dataset_VoDaSuRe_OME import Dataset_VoDaSuRe_OME as D
@@ -239,6 +259,7 @@ def main(opt: DictConfig):
         psnr_sample_means = []
         ssim_sample_means = []
         nrmse_sample_means = []
+        lpips_sample_means = []
 
         for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
             group_text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
@@ -251,6 +272,7 @@ def main(opt: DictConfig):
             psnr_vals = {"sample_means": [], "slice_vals": []}
             ssim_vals = {"sample_means": [], "slice_vals": []}
             nrmse_vals = {"sample_means": [], "slice_vals": []}
+            lpips_vals = {"sample_means": [], "slice_vals": []}
 
             for image_idx, zarr_path in enumerate(paths):
                 print(f"Processing image {image_idx + 1}/{len(paths)}: {zarr_path}")
@@ -317,23 +339,34 @@ def main(opt: DictConfig):
                 slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
 
                 start = time.time()
-                psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=slice_step, max_val=65535.0)
-                #psnr_slice_list, ssim_slice_list, nrmse_slice_list = get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=slice_step)
+                psnr_slice_list, ssim_slice_list, nrmse_slice_list, lpips_slice_list = get_full_sample_metrics_V2(
+                    img_H,
+                    img_E,
+                    slice_dim=0,
+                    slice_step=slice_step,
+                    max_val=65535.0,
+                    lpips_model=lpips_model,
+                    device=model.device
+                )
+
                 stop = time.time()
                 print("Time elapsed for full sample evaluation:", stop - start)
 
                 sample_psnr = np.mean(psnr_slice_list)
                 sample_ssim = np.mean(ssim_slice_list)
                 sample_nrmse = np.mean(nrmse_slice_list)
-                print("Dimension %d, Sample PSNR: %0.4f, SSIM: %0.6f, NRMSE: %0.6f" % (0, sample_psnr, sample_ssim, sample_nrmse))
+                sample_lpips = np.mean(lpips_slice_list)
+                print("Dimension %d, Sample PSNR: %0.4f, SSIM: %0.6f, NRMSE: %0.6f, LPIPS: %0.6f" % (0, sample_psnr, sample_ssim, sample_nrmse, sample_lpips))
 
                 psnr_vals['slice_vals'].extend(psnr_slice_list)
                 ssim_vals['slice_vals'].extend(ssim_slice_list)
                 nrmse_vals['slice_vals'].extend(nrmse_slice_list)
+                lpips_vals['slice_vals'].extend(lpips_slice_list)
 
                 psnr_vals['sample_means'].append(sample_psnr)
                 ssim_vals['sample_means'].append(sample_ssim)
                 nrmse_vals['sample_means'].append(sample_nrmse)
+                lpips_vals['sample_means'].append(sample_lpips)
 
                 for axis in range(3):
                     target_shape = list(img_H.shape)
@@ -369,15 +402,17 @@ def main(opt: DictConfig):
             psnr_sample_means.extend(psnr_vals['sample_means'])
             ssim_sample_means.extend(ssim_vals['sample_means'])
             nrmse_sample_means.extend(nrmse_vals['sample_means'])
+            lpips_sample_means.extend(lpips_vals['sample_means'])
 
             # Save group pair metrics
-            write_metric_statistics(metric_file_path, psnr_vals, ssim_vals, nrmse_vals, text=group_text)
+            write_metric_statistics(metric_file_path, psnr_vals, ssim_vals, nrmse_vals, lpips_vals, text=group_text)
 
         # Average metrics across group pairs
         avg_psnr = np.mean(psnr_sample_means)
         avg_ssim = np.mean(ssim_sample_means)
         avg_nrmse = np.mean(nrmse_sample_means)
-        print(f"Performance metrics for dataset {name}: Average PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.6f}, NRMSE: {avg_nrmse:.6f}")
+        avg_lpips = np.mean(lpips_sample_means)
+        print(f"Performance metrics for dataset {name}: Average PSNR: {avg_psnr:.4f}, SSIM: {avg_ssim:.6f}, NRMSE: {avg_nrmse:.6f}, LPIPS: {avg_lpips:.6f}")
 
         # Write final dataset metric averages
         with open(metric_file_path, 'a+') as file:
@@ -385,6 +420,7 @@ def main(opt: DictConfig):
             file.write("PSNR AVERAGE: " + str(avg_psnr) + "\n")
             file.write("SSIM AVERAGE: " + str(avg_ssim) + "\n")
             file.write("NRMSE AVERAGE: " + str(avg_nrmse) + "\n")
+            file.write("LPIPS AVERAGE: " + str(avg_lpips) + "\n")
 
 
 if __name__ == "__main__":

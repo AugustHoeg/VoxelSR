@@ -73,7 +73,6 @@ class ModelGAN(ModelBase):
         # If there exists several logs using the same ID, will load latest one.
         self.load(experiment_id, mode='test')  # load model
         self.netG.eval()  # set eval mode
-        self.netD.eval()  # set eval mode
         self.define_metrics()  # define metrics
         self.define_mixed_precision()  # enable automatic mixed precision
         self.define_visual_eval()
@@ -136,7 +135,8 @@ class ModelGAN(ModelBase):
                     print('Loading pretrained model for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_file).split(os.sep)[-4:])))
                     print('Loading pretrained model for D [{:s}] ...'.format(os.sep.join(os.path.normpath(D_file).split(os.sep)[-4:])))
                 self.load_network(G_file, self.netG, strict=self.opt_train['G_param_strict'])
-                self.load_network(D_file, self.netD, strict=self.opt_train['D_param_strict'])
+                if mode == 'train':
+                    self.load_network(D_file, self.netD, strict=self.opt_train['D_param_strict'])
                 self.last_iteration = int(os.path.basename(G_file).split('_')[0])
 
     # ----------------------------------------
@@ -177,6 +177,7 @@ class ModelGAN(ModelBase):
                     print('Loading optimizer states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
                     print('Loading optimizer states for D [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
                 self.load_optimizer(G_opt_file, self.G_optimizer)
+                self.load_optimizer(D_opt_file, self.D_optimizer)
                 self.load_optimizer(D_opt_file, self.D_optimizer)
 
     # ----------------------------------------
