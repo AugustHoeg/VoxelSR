@@ -21,7 +21,23 @@ figures/**
 results/**
 tests/**
 
+# Files to ignore
 loss_functions/loss_functions.py
+models/convnext.py
+models/convnext3d.py
+models/ConvNeXtSR.py
+models/ConvNeXtSR_old.py
+models/ConvNeXtSR_Res.py
+models/DegradeNet.py
+models/DRCT_arch.py
+models/DTVNet_arch.py
+models/FlashAttentionTest.py
+models/MTVNet_arch_flashattn.py
+models/MTVNeXt_arch.py
+models/MTVNeXt_arch_crop_merge.py
+models/MTVNeXt_arch_no_cross.py
+models/xcit.py
+models/xcit3D.py
 
 saved_image_cubes/**
 LAM_3d/saved_image_cubes/**
