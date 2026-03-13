@@ -1,182 +1,187 @@
 import os
 import time
-
-import monai.transforms
 import numpy as np
+import matplotlib.pyplot as plt
+import hydra
+from hydra.core.hydra_config import HydraConfig
+from omegaconf import DictConfig
+from omegaconf import OmegaConf
 import torch
-from monai.data import SmartCacheDataset
+from monai.data import SmartCacheDataset, DataLoader
+from utils.utils_3D_image import crop_center
 
 import config
-from train import crop_context, crop_center
-from utils.load_options import load_json, parse_arguments
+from utils.load_options import init_options, set_seed
+
+def test_plot(train_batch):
+    size_hr = train_batch['H'].shape[-1]
+    size_lr = train_batch['L'].shape[-1]
+    batch_size = len(train_batch['H'])
+
+    plt.figure(figsize=(3 * batch_size, 6))  # wider figure for multiple samples
+
+    for i in range(batch_size):
+        # Plot HR slice
+        plt.subplot(2, batch_size, i + 1)
+        plt.imshow(train_batch['H'][i, 0, :, :, size_hr // 2], cmap='gray', vmin=0.0, vmax=1.0)
+        plt.title(f'HR #{i}')
+        plt.axis('off')
+
+        # Plot LR slice
+        plt.subplot(2, batch_size, batch_size + i + 1)
+        plt.imshow(train_batch['L'][i, 0, :, :, size_lr // 2], cmap='gray', vmin=0.0, vmax=1.0)
+        plt.title(f'LR #{i}')
+        plt.axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+    # To use, add this line to the training loop:
+    # test_plot(train_batch)  # Uncomment to visualize training batches
 
 
-def save_image_cubes(model, opt, number_of_cubes, image_dir,  train_loader, test_loader, print_status=True):
+def save_image_cubes(opt, number_of_cubes, image_dir, train_loader, test_loader, print_status=True):
 
     current_step = 0
-
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cuda.matmul.allow_tf32 = True  # Allow TF32 matrix multiplications on Ampere GPUs and later
-    torch.backends.cudnn.allow_tf32 = True  # Allow TF32 operations on Ampere GPUs and later
-
-    n_train_batches = len(train_loader)  # number of batches per epoch in the training dataset
-
-    checkpoint_print = opt['train']['checkpoint_print']
-    checkpoint_save = opt['train']['checkpoint_save']
-    checkpoint_test = opt['train']['checkpoint_test']
-    if checkpoint_print == 0: checkpoint_print = n_train_batches
-    if checkpoint_save == 0: checkpoint_save = n_train_batches
-    if checkpoint_test == 0: checkpoint_test = n_train_batches
-
-    start_time = time.time()
-    save_time = opt['save_time']
-
     idx = 0
 
+    n_train_batches = len(train_loader)  # number of batches per epoch in the training dataset
+    n_test_batches = len(test_loader)   # number of batches per epoch in the test dataset
+
+    checkpoint_print = opt['train_opt']['checkpoint_print']
+    if checkpoint_print == 0: checkpoint_print = n_train_batches
+
     # Create directories for saving image cubes if they do not exist
-    hr_dir = os.path.join(image_dir, f"HR_{opt['datasets']['degradation_type']}/")
-    lr_dir = os.path.join(image_dir, f"LR_{opt['datasets']['degradation_type']}/")
+    hr_dir = os.path.join(image_dir, f"HR/")
+    lr_dir = os.path.join(image_dir, f"LR/")
     os.makedirs(hr_dir, exist_ok=True)
     os.makedirs(lr_dir, exist_ok=True)
 
-    # -------------------------------
-    while current_step < number_of_cubes:
-
-        torch.cuda.empty_cache()
-        torch.cuda.reset_peak_memory_stats()
+    while idx < number_of_cubes:
 
         for batch_idx, test_batch in enumerate(test_loader):
 
             current_step += 1
-            idx += 1
+            test_plot(test_batch)
 
-            # -------------------------------
-            # 1) load batches of HR and LR images onto GPU and feed to model
-            # -------------------------------
-            #if opt['model_architecture'] == "MTVNet" and not opt['datasets']['enable_femur_padding']:
-            #    test_batch['H'] = crop_context(test_batch['H'], L=model.opt['netG']['num_levels'], level_ratio=model.opt['netG']['level_ratio'])
-
-            # Save cubes here:
             print("Cube idx: ", idx)
-            # Save the tensor as a .npy file
-            HR_cube = test_batch['H'][0].float().detach().cpu().numpy()
-            LR_cube_32 = crop_center(test_batch['L'], center_size=32)[0].float().detach().cpu().numpy()
-            LR_cube_64 = crop_center(test_batch['L'], center_size=64)[0].float().detach().cpu().numpy()
-            LR_cube_128 = test_batch['L'][0].float().detach().cpu().numpy()
-            # Create the filename with the format "cube_xxx.npy"
+            for i in range(len(test_batch['L'])):
+                HR_cube = test_batch['H'][i].float().detach().cpu().numpy()
+                LR_cube_32 = crop_center(test_batch['L'], center_size=32)[i].float().detach().cpu().numpy()
+                LR_cube_64 = crop_center(test_batch['L'], center_size=64)[i].float().detach().cpu().numpy()
+                LR_cube_128 = test_batch['L'][i].float().detach().cpu().numpy()
 
-            np.save(os.path.join(os.path.join(image_dir, f"HR_{opt['datasets']['degradation_type']}/"),  f"cube_{idx:03d}.npy"), HR_cube)
-            np.save(os.path.join(os.path.join(image_dir, f"LR_{opt['datasets']['degradation_type']}/"), f"cube_32_{idx:03d}.npy"), LR_cube_32)
-            np.save(os.path.join(os.path.join(image_dir, f"LR_{opt['datasets']['degradation_type']}/"), f"cube_64_{idx:03d}.npy"), LR_cube_64)
-            np.save(os.path.join(os.path.join(image_dir, f"LR_{opt['datasets']['degradation_type']}/"), f"cube_128_{idx:03d}.npy"), LR_cube_128)
+                if LR_cube_128.sum() / np.prod(LR_cube_128.shape) < 0.1:
+                    continue
 
-            if idx >= number_of_cubes:
-                break
+                # Create the filename with the format "cube_xxx.npy"
+                np.save(os.path.join(os.path.join(image_dir, f"HR/"), f"cube_{idx:03d}.npy"), HR_cube)
+                np.save(os.path.join(os.path.join(image_dir, f"LR/"), f"cube_32_{idx:03d}.npy"), LR_cube_32)
+                np.save(os.path.join(os.path.join(image_dir, f"LR/"), f"cube_64_{idx:03d}.npy"), LR_cube_64)
+                np.save(os.path.join(os.path.join(image_dir, f"LR/"), f"cube_128_{idx:03d}.npy"), LR_cube_128)
 
-            # -------------------------------
-            # 4) print training information
-            # -------------------------------
-            if current_step % checkpoint_print == 0 and opt['rank'] == 0:
-                print("Iteration %d / %d" % (current_step, number_of_cubes))
+                idx += 1
 
-        # Update train_loader with new samples if SmartCacheDataset
-        if type(train_loader.dataset) == SmartCacheDataset:
-            train_dataset.update_cache()
+                # -------------------------------
+                # 4) print training information
+                # -------------------------------
+                if current_step % checkpoint_print == 0 and opt['rank'] == 0:
+                    print("Iteration %d / %d" % (current_step, number_of_cubes))
 
-        # -------------------------------
-        # 7) Print maximum reserved GPU memory
-        # -------------------------------
-        max_memory_allocated = torch.cuda.max_memory_allocated()
-        max_memory_reserved = torch.cuda.max_memory_reserved()
-        print("Maximum memory reserved during training step: %0.3f Gb / %0.3f Gb" % (
-        max_memory_reserved / 10 ** 9, opt['total_gpu_mem']))
-
-        if print_status:
-            print(f"Iteration: {current_step}/{number_of_cubes}")
-
-    # Shutdown SmartCacheDatasets
-    if type(train_loader.dataset) == SmartCacheDataset:
-        # stop replacement thread of SmartCache
-        train_dataset.shutdown()
-        test_dataset.shutdown()
-
-    print("Training finished")
+                if idx >= number_of_cubes:
+                    print("Cube generation finished")
+                    return 0
 
     return 0
 
-if __name__ == "__main__":
 
-    print("GENERATE CUBES")
+@hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
+def main(opt: DictConfig):
+
+    # Returns None if no arguments parsed, as when run in PyCharm
+    #args = parse_arguments()
+
+    # Enable changes to the configuration
+    OmegaConf.set_struct(opt, False)
+
+    # Initialize options
+    opt_path = os.path.join(config.ROOT_DIR, 'options', f'{HydraConfig.get().job.config_name}.yaml')
+    init_options(opt, opt_path)
+
+    print(f"RUNNING TRAIN MODE: {opt['train_mode'].upper()}")
 
     print("Cuda is available", torch.cuda.is_available())
     print("Cuda device count", torch.cuda.device_count())
     print("Cuda current device", torch.cuda.current_device())
     print("Cuda device name", torch.cuda.get_device_name(0))
 
-    # Returns None if no arguments parsed, as when run in PyCharm
-    args = parse_arguments()
+    # Reset seed
+    set_seed(opt)
 
-    # Define experiment parameters
-    options_file = args.options_file
-    print("options_file", options_file)
-
-    # Load default experiment option
-    if options_file is None:
-        opt_path = os.path.join(config.ROOT_DIR, 'options', f'train_{config.MODEL_ARCHITECTURE}.json')
-    else:
-        opt_path = os.path.join(config.ROOT_DIR, 'options', options_file)
-
-    # Load options
-    opt = load_json(opt_path)
-
-    # Overwrite dataset in options file if specified
-    if args.dataset is not None:
-        opt['datasets']['name'] = args.dataset
-
-    if args.cluster is not None:
-        opt['cluster'] = args.cluster
-    else:  # Default is opt['cluster'] = "DTU_HPC"
-        opt['cluster'] = "DTU_HPC"
-
-    # Define universal SR model using the KAIR define_Model framework
-    from models.select_model import define_Model
-    model = define_Model(opt)
-    # Run initialization of model for training
-    model.init_train()
-
+    # Define dataloaders
     from data.select_dataset import define_Dataset
-    train_dataset, test_dataset, baseline_dataset = define_Dataset(opt)  # optional to have baseline dataloader as final output
+    train_dataset, test_dataset, baseline_dataset = define_Dataset(opt, return_filepaths=False)  # optional to have baseline dataloader as final output
 
+    dataloader_params_train = opt['dataset_opt']['train_dataloader_params']
+    dataloader_params_test = opt['dataset_opt']['test_dataloader_params']
 
-    dataloader_params_train = opt['datasets']['train']['dataloader_params']
-    dataloader_params_test = opt['datasets']['test']['dataloader_params']
+    train_loader = DataLoader(train_dataset,
+                              batch_size=dataloader_params_train['dataloader_batch_size'],
+                              shuffle=dataloader_params_train['dataloader_shuffle'],
+                              num_workers=dataloader_params_train['num_load_workers'],
+                              persistent_workers=dataloader_params_train['persist_workers'],
+                              pin_memory=dataloader_params_train['pin_memory'],
+                              drop_last=True)
 
-    train_loader = monai.data.DataLoader(train_dataset,
-                                         batch_size=dataloader_params_train['dataloader_batch_size'],
-                                         shuffle=dataloader_params_train['dataloader_shuffle'],
-                                         num_workers=dataloader_params_train['num_load_workers'],
-                                         persistent_workers=dataloader_params_train['persist_workers'],
-                                         pin_memory=dataloader_params_train['pin_memory'])
-
-    test_loader = monai.data.DataLoader(test_dataset,
-                                        batch_size=dataloader_params_test['dataloader_batch_size'],
-                                        shuffle=dataloader_params_test['dataloader_shuffle'],
-                                        num_workers=dataloader_params_test['num_load_workers'],
-                                        persistent_workers=dataloader_params_test['persist_workers'],
-                                        pin_memory=dataloader_params_test['pin_memory'])
+    test_loader = DataLoader(test_dataset,
+                             batch_size=dataloader_params_test['dataloader_batch_size'],
+                             shuffle=dataloader_params_test['dataloader_shuffle'],
+                             num_workers=dataloader_params_test['num_load_workers'],
+                             persistent_workers=dataloader_params_test['persist_workers'],
+                             pin_memory=dataloader_params_test['pin_memory'],
+                             drop_last=True)
 
     # Create directory for test patch comparisons
-    image_dir = os.path.join("saved_image_cubes", opt['datasets']['name'])
+    if "datasets" not in opt['dataset_opt']:
+        image_dir = os.path.join("saved_image_cubes", opt['dataset_opt']['name'])
+    else:
+        image_dir = os.path.join("saved_image_cubes", opt['dataset_opt']['datasets'])
+        print(f"Using {opt['dataset_opt']['datasets']} for saving image cubes.")
+        print(f"Synthetic: {opt['dataset_opt']['synthetic']}")
+
     print("Saving image comparisons to:", image_dir)
 
-    if opt['datasets']['dataset_type'] == "MonaiSmartCacheDataset":
+    if opt['dataset_opt']['dataset_type'] == "MonaiSmartCacheDataset":
         train_dataset.start()
         test_dataset.start()
 
-    number_of_cubes = 50  # Number of cubes to save
+    number_of_cubes = 100  # Number of cubes to save
 
     time_start = time.time()
-    save_image_cubes(model, opt, number_of_cubes, image_dir,  train_loader, test_loader, print_status=True)
+
+    if opt['run_profile']:
+        from torch.profiler import profile, tensorboard_trace_handler, ProfilerActivity
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                     profile_memory=True,
+                     record_shapes=False,
+                     on_trace_ready=tensorboard_trace_handler("./profiles")) as prof:
+            out_dict = save_image_cubes(opt, number_of_cubes, image_dir, train_loader, test_loader, print_status=True)
+    else:
+        out_dict = save_image_cubes(opt, number_of_cubes, image_dir, train_loader, test_loader, print_status=True)
     time_end = time.time()
-    print("Time taken: ", time_end - time_start)
+    print("Time taken to train: ", time_end - time_start)
+
     print("Done")
+
+
+if __name__ == "__main__":
+    main()
+
+    time.sleep(5)  # sleep before attempting removing .log files
+    # remove any .log files in root directory
+    for file in os.listdir(config.ROOT_DIR):
+        if file.endswith(".log"):
+            try:
+                os.remove(os.path.join(config.ROOT_DIR, file))
+            except Exception as e:
+                print(f"Could not remove file {file}: {e}")

@@ -21,6 +21,8 @@ figures/**
 results/**
 tests/**
 
+loss_functions/loss_functions.py
+
 saved_image_cubes/**
 LAM_3d/saved_image_cubes/**
 LAM_3d/saved_models/**

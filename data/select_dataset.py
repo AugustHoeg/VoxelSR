@@ -31,19 +31,8 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         from data.Dataset_VoDaSuRe_OME import Dataset_VoDaSuRe_OME as D
         dataset = D(opt)
         dataset_dict_train, dataset_dict_test = dataset.get_dataset_dicts()
-        #train_files, test_files = dataset.get_file_paths()
         transforms = dataset.get_transforms(mode="train")
         test_transforms = dataset.get_transforms(mode="test")
-        #baseline_transforms = dataset.get_baseline_transforms(mode="test")
-        data_path = dataset.data_path
-
-    elif dataset_name == "VoDaSuRe":
-        from data.Dataset_VoDaSuRe import Dataset_VoDaSuRe as D
-        dataset = D(opt)
-        train_files, test_files = dataset.get_file_paths()
-        transforms = dataset.get_transforms(mode="train")
-        test_transforms = dataset.get_transforms(mode="test")
-        baseline_transforms = dataset.get_baseline_transforms(mode="test")
         data_path = dataset.data_path
 
     elif dataset_name == "FEMur":
@@ -100,15 +89,6 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
         transforms = dataset.get_transforms(mode="train")
         test_transforms = dataset.get_transforms(mode="test")
         baseline_transforms = dataset.get_baseline_transforms(mode="test")
-        data_path = dataset.data_path
-
-    elif dataset_name == "HCP_1200_new":
-        from data.Dataset_HCP_1200_new import Dataset_HCP_1200 as D
-        dataset = D(opt)
-        train_files, test_files = dataset.get_file_paths()
-        transforms = dataset.get_transforms(mode="train")
-        test_transforms = dataset.get_transforms(mode="test")
-        baseline_transforms = dataset.get_transforms(mode="test", baseline=True)
         data_path = dataset.data_path
 
     elif dataset_name == "IXI":
