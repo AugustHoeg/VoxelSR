@@ -47,3 +47,6 @@ invoke testzarrid ID000000
 ### Issues
 Please contact: aulho@dtu.dk
 
+### Note
+This repository is based on [KAIR](https://github.com/cszn/KAIR).
+
