@@ -44,6 +44,14 @@ invoke testzarrid ID000000
 ```
 - Performance statistics will also be saved in  ```/logs``` in the same location as the trained model parameters.
 
+### Dataset Path Configuration
+
+By default, datasets are expected to be located under: ```../3D_datasets/datasets```
+If your datasets are stored elsewhere, you can provide a custom dataset path using the following syntax:
+
+```invoke trainid <model_name> <dataset_name> <experiment_id> --dataset-path="<path/to/dataset>"```
+```invoke testzarrid <experiment_id> --dataset-path="<path/to/dataset>"```
+
 ### Issues
 Please contact: aulho@dtu.dk
 
