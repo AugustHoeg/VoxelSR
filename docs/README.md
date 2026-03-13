@@ -49,8 +49,12 @@ invoke testzarrid ID000000
 By default, datasets are expected to be located under: ```../3D_datasets/datasets```
 If your datasets are stored elsewhere, you can provide a custom dataset path using the following syntax:
 
-```invoke trainid <model_name> <dataset_name> <experiment_id> --dataset-path="<path/to/dataset>"```
-```invoke testzarrid <experiment_id> --dataset-path="<path/to/dataset>"```
+```python
+invoke trainid <model_name> <dataset_name> <experiment_id> --dataset-path="<path/to/dataset>"
+```
+```python
+invoke testzarrid <experiment_id> --dataset-path="<path/to/dataset>"
+```
 
 ### Issues
 Please contact: aulho@dtu.dk
