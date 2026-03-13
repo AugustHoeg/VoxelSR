@@ -365,6 +365,102 @@ def get_shell_masks_3d(
     return shells, spatial_freq
 
 
+def radial_power_spectrum_2d(image, apply_window=True):
+
+    H, W = image.shape
+
+    # subtract mean, min and max
+    img = image
+    img = img - img.mean()
+    img = img - img.min()
+    img = img / img.max()
+
+    # optional Hann window to reduce FFT edge artifacts
+    if apply_window:
+        wy = torch.hann_window(H, device=img.device)
+        wx = torch.hann_window(W, device=img.device)
+        window = wy[:, None] * wx[None, :]
+        img = img * window
+
+    # FFT
+    fft = torch.fft.fftn(img)
+    fft = torch.fft.fftshift(fft)
+
+    # power spectrum
+    power = torch.abs(fft) ** 2
+
+    # coordinate grid
+    y = torch.arange(H, device=img.device) - H // 2
+    x = torch.arange(W, device=img.device) - W // 2
+
+    yy, xx = torch.meshgrid(y, x, indexing='ij')
+
+    r = torch.sqrt(xx**2 + yy**2)
+    r = r.long()
+
+    # radial averaging
+    r_flat = r.flatten()
+    power_flat = power.flatten()
+
+    max_r = r.max() + 1
+
+    radial_sum = torch.bincount(r_flat, weights=power_flat, minlength=max_r)
+    counts = torch.bincount(r_flat, minlength=max_r)
+
+    radial_profile = radial_sum / counts.clamp(min=1)
+
+    return radial_profile, power
+
+
+def radial_power_spectrum_3d(volume, apply_window=True):
+
+    D, H, W = volume.shape
+
+    # subtract mean, min and max
+    vol = volume
+    vol = vol - vol.mean()
+    vol = vol - vol.min()
+    vol = vol / vol.max()
+
+    # optional 3D Hann window
+    if apply_window:
+        wz = torch.hann_window(D, device=vol.device)
+        wy = torch.hann_window(H, device=vol.device)
+        wx = torch.hann_window(W, device=vol.device)
+
+        window = wz[:, None, None] * wy[None, :, None] * wx[None, None, :]
+        vol = vol * window
+
+    # FFT
+    fft = torch.fft.fftn(vol)
+    fft = torch.fft.fftshift(fft)
+
+    # power spectrum
+    power = torch.abs(fft) ** 2
+
+    # coordinate grid
+    z = torch.arange(D, device=vol.device) - D // 2
+    y = torch.arange(H, device=vol.device) - H // 2
+    x = torch.arange(W, device=vol.device) - W // 2
+
+    zz, yy, xx = torch.meshgrid(z, y, x, indexing='ij')
+
+    r = torch.sqrt(xx**2 + yy**2 + zz**2)
+    r = r.long()
+
+    # radial averaging
+    r_flat = r.flatten()
+    power_flat = power.flatten()
+
+    max_r = r.max() + 1
+
+    radial_sum = torch.bincount(r_flat, weights=power_flat, minlength=max_r)
+    counts = torch.bincount(r_flat, minlength=max_r)
+
+    radial_profile = radial_sum / counts.clamp(min=1)
+
+    return radial_profile, power
+
 
 
 if __name__ == "__main__":

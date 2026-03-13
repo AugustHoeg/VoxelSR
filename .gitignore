@@ -19,6 +19,7 @@ node_modules/
 saved_models/
 figures/**
 results/**
+tests/**
 
 saved_image_cubes/**
 LAM_3d/saved_image_cubes/**
@@ -27,9 +28,12 @@ LAM_3d/Results/**
 LAM_3d/Figures/**
 LAM_3d/*.sh
 
+figures/plots/**
+
 **/*.h5
 *.h5
 *.png
+*.pdf
 
 *.log
 *.wandb

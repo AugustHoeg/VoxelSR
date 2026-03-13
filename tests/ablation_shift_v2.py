@@ -164,7 +164,7 @@ if __name__ == '__main__':
             #ax.imshow(difference, cmap='gray', vmin=0, vmax=255)
 
             ax.imshow(difference_full, cmap='gray')
-            ax.text(0.5, -0.03, "Difference image:\n HR, LR w. shift", ha='center', va='top', fontsize=18, transform=ax.transAxes)
+            ax.text(0.5, -0.02, "Difference image:\n HR, LR w. shift", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
             rect = patches.Rectangle(red_box_coords, red_box_size, red_box_size, linewidth=1.5, edgecolor='r',
                                      facecolor='none')
@@ -225,7 +225,7 @@ if __name__ == '__main__':
 
             ax.imshow(SR_crop, cmap='gray', vmin=0, vmax=255)
             text = r"RRDBNet3D ($\times 4$)"
-            ax.text(0.5, -0.03, f"Downsampled w. shift \n {text}", ha='center', va='top', fontsize=18, transform=ax.transAxes)
+            ax.text(0.5, -0.02, f"Downsampled w. shift \n {text}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
         elif j == 2:  # show crop region
 
@@ -233,7 +233,7 @@ if __name__ == '__main__':
 
             ax.imshow(SR_no_shift_crop, cmap='gray', vmin=0, vmax=255)
             text = r"RRDBNet3D ($\times 4$)"
-            ax.text(0.5, -0.03, f"Downsampled w.o shift \n {text}", ha='center', va='top', fontsize=18, transform=ax.transAxes)
+            ax.text(0.5, -0.02, f"Downsampled w.o shift \n {text}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
 
         elif j == 3:  # show difference image
@@ -252,7 +252,7 @@ if __name__ == '__main__':
 
             ax.imshow(SR_REG_crop, cmap='gray', vmin=0, vmax=255)
             text = r"RRDBNet3D ($\times 4$)"
-            ax.text(0.5, -0.03, f"Registered w.o shift \n {text}", ha='center', va='top', fontsize=18,
+            ax.text(0.5, -0.02, f"Registered w.o shift \n {text}", ha='center', va='top', fontsize=16,
                     transform=ax.transAxes)
 
         ax.set_xticks([])
@@ -261,5 +261,5 @@ if __name__ == '__main__':
     datetime = np.datetime64('now')
     time = str(datetime).replace(":", "-").replace(" ", "_")
     save_path = f"../figures/rebuttal_registration_{img_idx}.pdf"
-    fig.savefig(save_path, format="pdf")
+    fig.savefig(save_path, format="pdf", bbox_inches="tight")
     plt.show()

@@ -112,7 +112,7 @@ if __name__ == '__main__':
             large_img_location = (650, 650)
 
             if j == 0:
-                img_idx = 45 # 18
+                img_idx = 18 # 45 # 18
                 dataset = "VoDaSuRe_DOWN"
                 group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
                 LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
@@ -123,7 +123,7 @@ if __name__ == '__main__':
                 lpips_str = f"w.o LPIPS loss"
 
             elif j == 1:
-                img_idx = 45 #18
+                img_idx = 18 # 45 #18
                 dataset = "VoDaSuRe"
                 group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
                 LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
@@ -135,7 +135,7 @@ if __name__ == '__main__':
 
             if j == 2:
 
-                img_idx = 36 # 9
+                img_idx = 18 # 36 # 9
                 dataset = "VoDaSuRe_LPIPS"
                 group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
                 LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
@@ -146,7 +146,7 @@ if __name__ == '__main__':
                 lpips_str = f"w. LPIPS loss"
 
             elif j == 3:
-                img_idx = 36 # 9
+                img_idx = 9 # 36 # 9
                 dataset = "VoDaSuRe_LPIPS"
                 group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
                 LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
@@ -202,15 +202,15 @@ if __name__ == '__main__':
             ax.imshow(img.transpose(1, 0, 2))
             #ax.text(0.5, -0.04, f"{large_image_string}, TV: {tv:.2f}", ha='center', va='top', fontsize=10, transform=ax.transAxes)
             if j % 2 == 0:
-                ax.set_title(f"{LR_title}", fontsize=19, pad=0., y=1.03)
+                ax.set_title(f"{LR_title}", fontsize=16, pad=0., y=1.03)
             else:
-                ax.set_title(f"{LR_title}", fontsize=19, pad=0., y=1.03)
+                ax.set_title(f"{LR_title}", fontsize=16, pad=0., y=1.03)
             # ax.text(0.5, -0.02, f"{box_name}, TV: {tv:.2f}", ha='center', va='top', fontsize=16,
             #         transform=ax.transAxes)
             #ax.text(0.5, -0.03, f"TV: {tv:.2f}, LPIPS: {lpips_str}", ha='center', va='top',
             #        transform=ax.transAxes, fontsize=14)
-            ax.text(0.5, -0.03, f"{lpips_str}", ha='center', va='top',
-                    transform=ax.transAxes, fontsize=20)
+            ax.text(0.5, -0.02, f"{lpips_str}", ha='center', va='top',
+                    transform=ax.transAxes, fontsize=16)
 
             ax.set_xticks([])
             ax.set_yticks([])
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     #plt.subplots_adjust(hspace=0.45)
     save_path = f"../figures/{large_image_string}_rebuttal_LPIPS_{img_idx}_{red_box_size}.pdf"
     #plt.tight_layout(h_pad=0.1, w_pad=0.1)
-    fig.savefig(save_path, format="pdf")
+    fig.savefig(save_path, format="pdf", bbox_inches="tight")
     plt.show()
 
 

@@ -18,7 +18,7 @@ import config
 from data.train_transforms_implicit import ImplicitModelTransformFastd
 from models.model_implicit import coords_to_image
 from utils import utils_3D_image
-from utils.utils_3D_image import run_strided_inference
+from utils.utils_3D_image import run_strided_inference_pad
 from utils.load_options import load_options_from_experiment_id
 from utils.utils_2D_image import upscale_slices, upscale_slices_upfactor
 from utils.utils_image import calculate_ssim_2D, calculate_nrmse_2D, calculate_psnr_2D
@@ -297,6 +297,8 @@ def main(opt: DictConfig):
     border = 4  # border voxels
     border_hr = border * opt['up_factor']
 
+    batch_size = opt.dataset_opt.train_dataloader_params.dataloader_batch_size
+
     # Create directory for test patch comparisons
     image_dir = os.path.join(wandb_path, "files/", "media/", "images/")
     print("Saving image comparisons to:", image_dir)
@@ -323,8 +325,8 @@ def main(opt: DictConfig):
                    {"avg_psnr_list": [], "avg_ssim_list": [], "avg_nrmse_list": [], "psnr_slice_list": [], "ssim_slice_list": [], "nrmse_slice_list": []}]
 
     test_batch_size = opt['dataset_opt']['test_dataloader_params']['dataloader_batch_size']
-    overlap_lr = 2 * border + 2 * context_width
-    overlap_hr = border * opt['up_factor']
+    #overlap_lr = 2 * border + 2 * context_width
+    #overlap_hr = border * opt['up_factor']
 
     for sample_idx, baseline_batch in enumerate(baseline_loader):
 
@@ -334,13 +336,27 @@ def main(opt: DictConfig):
         del baseline_batch
 
         time_in = time.time()
-        img_E = run_strided_inference(model=model,
-                                      img_L=img_L[0],
-                                      f=opt['up_factor'],
-                                      size_lr=patch_size,
-                                      border=overlap_lr,
-                                      batch_size=test_batch_size,
-                                      overlap_mode="hann")
+        # img_E = run_strided_inference(model=model,
+        #                               img_L=img_L[0],
+        #                               f=opt['up_factor'],
+        #                               size_lr=patch_size,
+        #                               border=overlap_lr,
+        #                               batch_size=test_batch_size,
+        #                               overlap_mode="hann")
+
+        img_E = run_strided_inference_pad(
+            model=model,
+            img_L=img_L,
+            f=opt['up_factor'],
+            size_lr=opt.dataset_opt.patch_size,
+            size_hr=patch_size_hr,
+            border=4 + context_width * 2,
+            context_width=context_width,
+            batch_size=batch_size,
+            overlap_mode="hann",
+            model_input_type=opt['input_type']
+        )
+
         img_E = img_E.unsqueeze(0)
         time_end = time.time()
         print(f'Time taken for sample {sample_idx}: {time_end - time_in} seconds')

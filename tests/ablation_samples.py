@@ -179,7 +179,9 @@ if __name__ == '__main__':
                 ax.set_title(f"Sample included", fontsize=16, pad=0., y=1.03)
             #ax.text(0.5, -0.02, f"{box_name}, TV: {tv:.2f}", ha='center', va='top', fontsize=17, transform=ax.transAxes)
             #ax.text(0.5, -0.02, rf"{box_name} $(4\times)$", ha='center', va='top', fontsize=16, transform=ax.transAxes)
-            ax.text(0.5, -0.02, rf"{box_name}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
+
+            # ax.text(0.5, -0.02, rf"{box_name}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
+            ax.text(0.5, -0.02, rf"{box_name} $(4\times)$", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
             ax.set_xticks([])
             ax.set_yticks([])
