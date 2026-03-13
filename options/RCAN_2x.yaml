@@ -14,7 +14,7 @@ run_profile: false
 
 # WandB parameters
 wandb_mode: offline
-wandb_entity: aulho
+wandb_entity: null
 wandb_project: ${dataset_opt.name}_MRI_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_000

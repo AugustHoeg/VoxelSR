@@ -26,9 +26,14 @@ def train(ctx, model, dataset):
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset}")
 
 @task
-def trainid(ctx, model, dataset, experiment_id):
-    """Run the training script."""
-    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id}")
+def trainid(ctx, model, dataset, experiment_id, dataset_path=None):
+    ctx.run(
+        f"python -u train.py "
+        f"-cn {model} "
+        f"dataset_opt={dataset} "
+        f"experiment_id={model}_{dataset}_{experiment_id} "
+        f"dataset_opt.dataset_path={dataset_path if dataset_path is not None else '../3D_datasets/datasets/'}"
+    )
 
 @task
 def finetune(ctx, model, dataset, experiment_id, pretrained_experiment_id):
@@ -46,10 +51,12 @@ def testzarr(ctx, experiment_id):
     """Run the testing script."""
     ctx.run(f"python -u inference_zarr.py experiment_id={experiment_id}")
 
-@task
-def testzarrid(ctx, model, dataset, experiment_id):
-    """Run the testing script."""
-    ctx.run(f"python -u inference_zarr.py experiment_id={model}_{dataset}_{experiment_id}")
+def testzarrid(ctx, model, dataset, experiment_id, dataset_path=None):
+    ctx.run(
+        f"python -u inference_zarr.py "
+        f"experiment_id={model}_{dataset}_{experiment_id} "
+        f"dataset_opt.dataset_path={dataset_path if dataset_path is not None else '../3D_datasets/datasets/'}"
+    )
 
 @task
 def testzarrcross(ctx, experiment_id, datasets, mode):
