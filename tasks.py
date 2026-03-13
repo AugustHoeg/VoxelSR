@@ -42,26 +42,6 @@ def finetuneid(ctx, model, dataset, experiment_id, pretrained_experiment_id):
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id} train_mode='finetune' path.pretrained_experiment_id={model}_{dataset}_{pretrained_experiment_id}")
 
 @task
-def test(ctx, experiment_id):
-    """Run the testing script."""
-    ctx.run(f"python -u test.py experiment_id={experiment_id}")
-
-@task
-def testid(ctx, model, dataset, experiment_id):
-    """Run the testing script."""
-    ctx.run(f"python -u test.py experiment_id={model}_{dataset}_{experiment_id}")
-
-@task
-def runtest(ctx, experiment_id):
-    """Run the testing script."""
-    ctx.run(f"python -u run_test.py experiment_id={experiment_id}")
-
-@task
-def runtestid(ctx, model, dataset, experiment_id):
-    """Run the testing script."""
-    ctx.run(f"python -u run_test.py experiment_id={model}_{dataset}_{experiment_id}")
-
-@task
 def testzarr(ctx, experiment_id):
     """Run the testing script."""
     ctx.run(f"python -u inference_zarr.py experiment_id={experiment_id}")
