@@ -4,6 +4,8 @@ synthetic: true # Set to true to use downsampled HR data as LR input
 dataset_type: CacheDataset
 enable_femur_padding: false
 
+dataset_path: "../3D_datasets/datasets"  # Root path to datasets, e.g. "../3D_datasets/datasets/VoDaSuRe"
+
 # Cropping and normalization
 n_channels: 1
 patch_size: 32

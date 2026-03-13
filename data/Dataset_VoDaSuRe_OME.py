@@ -2,14 +2,12 @@ import os
 import torch
 import glob
 import numpy as np
-from data.train_transforms import BasicSRTransforms, GlobalScaleIntensityd, RandSRFlipd, RandSRRotated, RandSRZoomd, RandSRContrastd, RandSRCLAHEd
+from data.train_transforms import RandSRFlipd, RandSRRotated, RandSRZoomd, RandSRContrastd, RandSRCLAHEd
 import monai.transforms as mt
-from data.train_transforms import GaussianblurImaged, KspaceTruncd, \
-    RandomCropPairImplicitd, RandomCropUniform, RandomCropForeground, \
-    RandomCropLabel, get_context_pad_size # CustomRand3DElasticd
+from data.train_transforms import get_context_pad_size
 
 class Dataset_VoDaSuRe_OME():
-    def __init__(self, opt):
+    def __init__(self, opt, dataset_path="../3D_datasets/datasets/"):
 
         self.synthetic = opt['dataset_opt']['synthetic']
         if opt['rank'] == 0:
@@ -21,127 +19,81 @@ class Dataset_VoDaSuRe_OME():
         self.patch_size_lr = opt['dataset_opt']['patch_size']
         self.degradation_type = opt['dataset_opt']['degradation_type']
 
-        if opt['run_type'] == "HOME PC":
-            self.data_path = "../Vedrana_master_project/3D_datasets/datasets/"
+        self.dataset_path = dataset_path
 
-            train_paths = {}
-            test_paths = {}
-            if "HCP_1200" in opt['dataset_opt']['datasets']:
-                train_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr"))
-                test_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr"))
+        train_paths = {}
+        test_paths = {}
+        if "HCP_1200" in opt['dataset_opt']['datasets']:
+            train_paths["HCP_1200"] = glob.glob(os.path.join(self.dataset_path, "HCP_1200/ome/train/*.zarr"))
+            test_paths["HCP_1200"] = glob.glob(os.path.join(self.dataset_path, "HCP_1200/ome/test/*.zarr"))
 
-            if "IXI" in opt['dataset_opt']['datasets']:
-                train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))
-                test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))
+        if "IXI" in opt['dataset_opt']['datasets']:
+            train_paths["IXI"] = glob.glob(os.path.join(self.dataset_path, "IXI/ome/train/*.zarr"))
+            test_paths["IXI"] = glob.glob(os.path.join(self.dataset_path, "IXI/ome/test/*.zarr"))
 
-            if "LITS" in opt['dataset_opt']['datasets']:
-                train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr"))
-                test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr"))
+        if "LITS" in opt['dataset_opt']['datasets']:
+            train_paths["LITS"] = glob.glob(os.path.join(self.dataset_path, "LITS/ome/train/*.zarr"))
+            test_paths["LITS"] = glob.glob(os.path.join(self.dataset_path, "LITS/ome/test/*.zarr"))
 
-            if "VoDaSuRe" in opt['dataset_opt']['datasets']:
-                train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
-                test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
+        if "CTSpine1K" in opt['dataset_opt']['datasets']:
+            train_paths["CTSpine1K"] = glob.glob(os.path.join(self.dataset_path, "CTSpine1K/ome/train/*.zarr"))
+            test_paths["CTSpine1K"] = glob.glob(os.path.join(self.dataset_path, "CTSpine1K/ome/test/*.zarr"))
 
-            sampling_weights = {"HCP_1200": 1.0,
-                                "IXI":      1.0,
-                                "LITS":     1.0,
-                                "VoDaSuRe": 1.0}
+        if "LIDC-IDRI" in opt['dataset_opt']['datasets']:
+            train_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.dataset_path, "LIDC_IDRI/ome/train/*.zarr"))
+            test_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.dataset_path, "LIDC_IDRI/ome/test/*.zarr"))
 
-            group_pairs = {}
-            group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-            group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-            group_pairs["LITS"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+        if "VoDaSuRe" in opt['dataset_opt']['datasets']:
+            train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.dataset_path, "VoDaSuRe/ome/train/*.zarr"))
+            test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.dataset_path, "VoDaSuRe/ome/test/*.zarr"))
 
-            if self.synthetic:
-                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-            else:
-                group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
+            if "domain_test_wood" in opt:
+                train_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Larch_B_bin1x1_ome_1.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Oak_A_bin1x1_ome_1.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Bamboo_A_bin1x1_ome_1.zarr")]
 
-            store_type = {"HCP_1200": "LocalStore",
-                          "IXI":      "LocalStore",
-                          "LITS":     "LocalStore",
-                          "VoDaSuRe": "LocalStore"}
+                test_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Cypress_A_bin1x1_ome_0.zarr"),
+                                          os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr")]
 
-        elif opt['cluster'] == "TITANS":
-            self.data_path = ""
-            raise NotImplementedError(f"Dataset VoDaSuRe not supported for run type: {opt['run_type']}")
+                print("Running domain generalization test on wood samples!")
+                print("Train paths: ", train_paths["VoDaSuRe"])
+                print("Test paths: ", test_paths["VoDaSuRe"])
 
-        else:  # Default is opt['cluster'] = "DTU_HPC"
-            self.data_path = "../3D_datasets/datasets/"
+            if "domain_test_bone" in opt:
+                train_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Femur_15_80kV_ome.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Femur_21_80kV_ome.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Femur_74_80kV_ome.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Femur_01_80kV_ome.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/train/bone_1_ome.zarr"),
+                                           os.path.join(self.dataset_path, "VoDaSuRe/ome/test/bone_2_ome.zarr")]
 
-            train_paths = {}
-            test_paths = {}
-            if "HCP_1200" in opt['dataset_opt']['datasets']:
-                train_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/train/*.zarr"))
-                test_paths["HCP_1200"] = glob.glob(os.path.join(self.data_path, "HCP_1200/ome/test/*.zarr"))
+                test_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Vertebrae_A_80kV_ome.zarr"),
+                                          os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Vertebrae_B_80kV_ome.zarr"),
+                                          os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Vertebrae_C_80kV_ome.zarr"),
+                                          os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Vertebrae_D_80kV_ome.zarr"),
+                                          os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Ox_bone_A_bin1x1_ome_0.zarr")]
 
-            if "IXI" in opt['dataset_opt']['datasets']:
-                train_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/train/*.zarr"))
-                test_paths["IXI"] = glob.glob(os.path.join(self.data_path, "IXI/ome/test/*.zarr"))
+                print("Running domain generalization test on bone samples!")
+                print("Train paths: ", train_paths["VoDaSuRe"])
+                print("Test paths: ", test_paths["VoDaSuRe"])
 
-            if "LITS" in opt['dataset_opt']['datasets']:
-                train_paths["LITS"] = glob.glob(os.path.join(self.data_path, "LITS/ome/train/*.zarr"))
-                test_paths["LITS"] = glob.glob(os.path.join(self.data_path, "LITS/ome/test/*.zarr"))
+            if "single_sample_test" in opt:
+                train_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_ome_1.zarr")]
 
-            if "CTSpine1K" in opt['dataset_opt']['datasets']:
-                train_paths["CTSpine1K"] = glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/train/*.zarr"))
-                test_paths["CTSpine1K"] = glob.glob(os.path.join(self.data_path, "CTSpine1K/ome/test/*.zarr"))
+                test_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr")]
 
-            if "LIDC-IDRI" in opt['dataset_opt']['datasets']:
-                train_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/train/*.zarr"))
-                test_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr"))
+                print("Running single sample test on: Elm_A_bin1x1_ome_0.zarr")
+                print("Train paths: ", train_paths["VoDaSuRe"])
+                print("Test paths: ", test_paths["VoDaSuRe"])
 
-            if "VoDaSuRe" in opt['dataset_opt']['datasets']:
-                train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
-                test_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/test/*.zarr"))
+            if "test_registration" in opt:
+                train_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_shifted_ome_1.zarr")]
 
-                if "domain_test_wood" in opt:
-                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Larch_B_bin1x1_ome_1.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Oak_A_bin1x1_ome_1.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Bamboo_A_bin1x1_ome_1.zarr")]
+                test_paths["VoDaSuRe"] = [os.path.join(self.dataset_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_shifted_ome_0.zarr")]
 
-                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Cypress_A_bin1x1_ome_0.zarr"),
-                                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr")]
-
-                    print("Running domain generalization test on wood samples!")
-                    print("Train paths: ", train_paths["VoDaSuRe"])
-                    print("Test paths: ", test_paths["VoDaSuRe"])
-
-                if "domain_test_bone" in opt:
-                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_15_80kV_ome.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_21_80kV_ome.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_74_80kV_ome.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/test/Femur_01_80kV_ome.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/train/bone_1_ome.zarr"),
-                                               os.path.join(self.data_path, "VoDaSuRe/ome/test/bone_2_ome.zarr")]
-
-                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Vertebrae_A_80kV_ome.zarr"),
-                                              os.path.join(self.data_path, "VoDaSuRe/ome/train/Vertebrae_B_80kV_ome.zarr"),
-                                              os.path.join(self.data_path, "VoDaSuRe/ome/train/Vertebrae_C_80kV_ome.zarr"),
-                                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Vertebrae_D_80kV_ome.zarr"),
-                                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Ox_bone_A_bin1x1_ome_0.zarr")]
-
-                    print("Running domain generalization test on bone samples!")
-                    print("Train paths: ", train_paths["VoDaSuRe"])
-                    print("Test paths: ", test_paths["VoDaSuRe"])
-
-                if "single_sample_test" in opt:
-                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_ome_1.zarr")]
-
-                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr")]
-
-                    print("Running single sample test on: Elm_A_bin1x1_ome_0.zarr")
-                    print("Train paths: ", train_paths["VoDaSuRe"])
-                    print("Test paths: ", test_paths["VoDaSuRe"])
-
-                if "test_registration" in opt:
-                    train_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_shifted_ome_1.zarr")]
-
-                    test_paths["VoDaSuRe"] = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_shifted_ome_0.zarr")]
-
-                    print("Running single sample test on: Elm_A_bin1x1_shifted_ome_0.zarr")
-                    print("Train paths: ", train_paths["VoDaSuRe"])
-                    print("Test paths: ", test_paths["VoDaSuRe"])
+                print("Running single sample test on: Elm_A_bin1x1_shifted_ome_0.zarr")
+                print("Train paths: ", train_paths["VoDaSuRe"])
+                print("Test paths: ", test_paths["VoDaSuRe"])
 
             sampling_weights = {"HCP_1200":  3.0,
                                 "IXI":       1.0,
@@ -150,72 +102,12 @@ class Dataset_VoDaSuRe_OME():
                                 "LIDC-IDRI": 5.0,
                                 "VoDaSuRe":  15.0}
 
-
-            # group_pairs = {
-            #     "HCP_1200": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-            #     },
-            #     "IXI": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-            #     },
-            #     "LITS": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-            #     },
-            #     "CTSpine1K": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-            #     },
-            #     "LIDC-IDRI": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}]
-            #     },
-            #     "VoDaSuRe": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}, {"H": "HR/1", "L": "HR/3"}, {"H": "HR/0", "L": "REG/0"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}, {"H": "HR/1", "L": "HR/2"}, {"H": "HR/1", "L": "REG/0"}]
-            #     },
-            # }
-
-            # group_pairs = {  # only synthetic
-            #     "HCP_1200": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}]
-            #     },
-            #     "IXI": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}]
-            #     },
-            #     "LITS": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}]
-            #     },
-            #     "CTSpine1K": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}]
-            #     },
-            #     "LIDC-IDRI": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}]
-            #     },
-            #     "VoDaSuRe": {
-            #         "4": [{"H": "HR/0", "L": "HR/2"}],
-            #         "2": [{"H": "HR/0", "L": "HR/1"}]
-            #     },
-            # }
-
             group_pairs = {}
             group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
             group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
             group_pairs["LITS"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
             group_pairs["CTSpine1K"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
             group_pairs["LIDC-IDRI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-
-            #if self.synthetic:
-            #    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-            #else:
-            #    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
 
             if "ablation_downsampling_test" in opt:
                 print("Running ablation downsample test")

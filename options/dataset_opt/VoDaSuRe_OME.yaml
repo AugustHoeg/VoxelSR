@@ -4,6 +4,8 @@ synthetic: false  # Set to true to use downsampled HR data as LR input
 dataset_type: ZarrDatasetBase  # ZarrDatasetCache, ZarrDatasetBase
 enable_femur_padding: false
 
+dataset_path: "../3D_datasets/datasets"  # Root path to datasets, e.g. "../3D_datasets/datasets/VoDaSuRe"
+
 # Define datasets here
 datasets: [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 

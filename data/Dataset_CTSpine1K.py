@@ -2,24 +2,15 @@ import os
 import glob
 from data.train_transforms import BasicSRTransforms
 class Dataset_CTSpine1K():
-    def __init__(self, opt):
+    def __init__(self, opt, dataset_path="../3D_datasets/datasets/"):
         self.opt = opt
         self.patch_size_hr = opt['dataset_opt']['patch_size_hr']
         self.patch_size_lr = opt['dataset_opt']['patch_size']
         self.degradation_type = opt['dataset_opt']['degradation_type']
 
-        if opt['run_type'] == "HOME PC":
-            self.data_path = "../Vedrana_master_project/3D_datasets/datasets/CTSpine1K/" # maybe need to edit in pycharm due to inconsisted indent
-            self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/1/NIFTI/", "image.nii.gz")))
-            self.HR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/1/NIFTI/", "image.nii.gz")))
-        elif opt['cluster'] == "TITANS":
-            raise Exception(f"Dataset CTSpine1K not supported for run type: {opt['run_type']}")
-
-        else:  # Default is opt['cluster'] = DTU_HPC
-            self.data_path = "../3D_datasets/datasets/CTSpine1K/"
-            self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/1/NIFTI/", "image.nii.gz")))
-            self.HR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/1/NIFTI/", "image.nii.gz")))
-
+        self.data_path = os.path.join(dataset_path, "BraTS2023/")
+        self.HR_train = sorted(glob.glob(os.path.join(self.data_path, "train/*/1/NIFTI/", "image.nii.gz")))
+        self.HR_test = sorted(glob.glob(os.path.join(self.data_path, "test/*/1/NIFTI/", "image.nii.gz")))
 
     def get_file_paths(self):
 

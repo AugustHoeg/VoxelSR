@@ -260,6 +260,9 @@ def main(opt: DictConfig):
     # Reset seed
     set_seed(opt)
 
+    # Print data path
+    print("Dataset path:", opt['dataset_opt']['dataset_path'])
+
     # Define dataloaders
     from data.select_dataset import define_Dataset
     train_dataset, test_dataset, baseline_dataset = define_Dataset(opt, return_filepaths=False)  # optional to have baseline dataloader as final output
