@@ -33,7 +33,7 @@ invoke trainid RRDBNet3D HCP_1200 ID000000
 ```
 - Trained models will be saved in ```/logs``` under the appropriate dataset and run name.   
 
-## Testing
+### Testing
 To run the test procedure, run the following command with a completed experiment's id:
 ```python
 invoke testzarrid <experiment_id> 
