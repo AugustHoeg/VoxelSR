@@ -27,11 +27,19 @@ To run the SR training procedure, run the command:
 ```python
 invoke trainid <model_name> <dataset_name> <experiment_id> 
 ```
-For example ```RRDBNet3D``` on dataset ```HCP_1200``` with experiment id ```ÌD000000```:
+For example ```RRDBNet3D``` on dataset ```VoDaSuRe_OME``` with experiment id ```ÌD000000```:
 ```python
-invoke trainid RRDBNet3D HCP_1200 ID000000 
+invoke trainid RRDBNet3D VoDaSuRe_OME ID000000 
 ```
 - Trained models will be saved in ```/logs``` under the appropriate dataset and run name.   
+
+### Training with synthetic vs. real LR data
+
+The VoDaSuRe dataset features both synthetically downsampled and realistically acquired LR data. To disable real LR data training, use the flag: ```synthetic```.
+```python
+invoke trainid <model_name> <dataset_name> <experiment_id> --synthetic
+```
+The ```synthetic``` flag is currently only used for VoDaSuRe, and is ignored for other datasets.
 
 ### Testing
 To run the test procedure, run the following command with a completed experiment's id:
