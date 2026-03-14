@@ -35,12 +35,11 @@ invoke trainid RRDBNet3D VoDaSuRe_OME ID000000
 
 ### Training with synthetic vs. real LR data
 
-The VoDaSuRe dataset features both synthetically downsampled and realistically acquired LR data. 
-To disable real LR data training, use the flag: ```synthetic```.
+The VoDaSuRe dataset features both synthetically downsampled and realistically acquired LR data. To enable synthetic LR training mode, use the ```synthetic``` flag.
 ```python
 invoke trainid <model_name> <dataset_name> <experiment_id> --synthetic
 ```
-The ```synthetic``` flag is currently only used for VoDaSuRe, and is ignored for other datasets.
+This flag is currently only used for VoDaSuRe. If not set, training will default to the option specified in the main config.
 
 ### Testing
 To run the test procedure, run the following command with a completed experiment's id:
