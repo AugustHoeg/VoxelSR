@@ -50,8 +50,6 @@ def trainid(ctx, model, dataset, experiment_id, dataset_path=None, synthetic=Fal
 
     if synthetic:
         cmd += f"dataset_opt.synthetic=True "
-    else:
-        cmd += f"dataset_opt.synthetic=False "
 
     ctx.run(cmd)
 
