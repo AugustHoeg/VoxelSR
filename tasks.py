@@ -21,19 +21,39 @@ def requirements(ctx):
     ctx.run("pip install -r requirements.txt")
 
 @task
-def train(ctx, model, dataset):
-    """Run the training script."""
-    ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset}")
+def train(ctx, model, dataset, dataset_path=None, synthetic=False):
+
+    cmd = (
+        f"python -u train.py "
+        f"-cn {model} "
+        f"dataset_opt={dataset} "
+        f"dataset_opt.dataset_path={dataset_path if dataset_path is not None else '../3D_datasets/datasets/'} "
+    )
+
+    if synthetic:
+        cmd += f"dataset_opt.synthetic=True "
+    else:
+        cmd += f"dataset_opt.synthetic=False "
+
+    ctx.run(cmd)
 
 @task
-def trainid(ctx, model, dataset, experiment_id, dataset_path=None):
-    ctx.run(
+def trainid(ctx, model, dataset, experiment_id, dataset_path=None, synthetic=False):
+
+    cmd = (
         f"python -u train.py "
         f"-cn {model} "
         f"dataset_opt={dataset} "
         f"experiment_id={model}_{dataset}_{experiment_id} "
-        f"dataset_opt.dataset_path={dataset_path if dataset_path is not None else '../3D_datasets/datasets/'}"
+        f"dataset_opt.dataset_path={dataset_path if dataset_path is not None else '../3D_datasets/datasets/'} "
     )
+
+    if synthetic:
+        cmd += f"dataset_opt.synthetic=True "
+    else:
+        cmd += f"dataset_opt.synthetic=False "
+
+    ctx.run(cmd)
 
 @task
 def finetune(ctx, model, dataset, experiment_id, pretrained_experiment_id):

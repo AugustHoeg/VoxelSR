@@ -13,7 +13,7 @@ up_factor: 2  # upscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
@@ -55,7 +55,7 @@ dataset_opt:
   synthetic: true
   patch_size: 32
 
-  datasets: [HCP_1200] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
     dataloader_batch_size: 1
