@@ -64,9 +64,12 @@ invoke trainid <model_name> <dataset_name> <experiment_id> --dataset-path="<path
 invoke testzarrid <experiment_id> --dataset-path="<path/to/dataset>"
 ```
 
-### Issues
+## Issues
 Please contact: aulho@dtu.dk
 
-### Note
+## Note
 This repository is based on [KAIR](https://github.com/cszn/KAIR).
+
+## License
+Apache 2.0 License (see LICENSE file).
 
