@@ -100,6 +100,8 @@ for z_hr in tqdm(range(0, num_slices_hr, slice_step)):
             else:
                 img = vol[z_hr, :, :]
 
+            img = (img >> 8).astype(np.uint8)  # Convert from uint16 to uint8
+
             img = fit_to_cell(img)
 
             y0 = r * cell_h
