@@ -39,7 +39,7 @@ rows = len(datasets)
 cols = len(sample_paths)
 
 # Determine slice count
-num_slices = min(v.shape[0] for v in hr_vols)
+num_slices_hr = min(v.shape[0] for v in hr_vols)
 
 # -----------------------------
 # VIDEO SIZE
@@ -86,7 +86,7 @@ def fit_to_cell(img):
 # GENERATE VIDEO
 # -----------------------------
 
-for z in tqdm(range(0, num_slices, slice_step)):
+for z_hr in tqdm(range(0, num_slices_hr, slice_step)):
 
     frame = np.zeros((frame_h, frame_w), dtype=np.uint8)
 
@@ -94,7 +94,11 @@ for z in tqdm(range(0, num_slices, slice_step)):
 
         for c, vol in enumerate(dataset):
 
-            img = vol[z, :, :]
+            if r > 0:
+                z_lr = z_hr // 4
+                img = vol[z_lr, :, :]
+            else:
+                img = vol[z_hr, :, :]
 
             img = fit_to_cell(img)
 
