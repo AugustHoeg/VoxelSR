@@ -21,8 +21,8 @@ offset_x = -200
 
 cell_size = 256  # display size
 
-pan_amp_x = 60
-pan_amp_y = 60
+pan_amp_x = 4
+pan_amp_y = 4
 
 # -----------------------------
 # FONT STYLE
@@ -176,13 +176,13 @@ writer = cv2.VideoWriter(
 # GENERATE VIDEO
 # -----------------------------
 
+current_offset_x = offset_x
+current_offset_y = offset_y
+
 for z_hr in tqdm(range(0, num_slices_lr, slice_subsample)):
 
-    pan_x = int(pan_amp_x)
-    pan_y = int(pan_amp_y)
-
-    current_offset_x = offset_x + pan_x
-    current_offset_y = offset_y + pan_y
+    current_offset_x += int(pan_amp_x)
+    current_offset_y += int(pan_amp_y)
 
     for r, dataset in enumerate(datasets):
 
