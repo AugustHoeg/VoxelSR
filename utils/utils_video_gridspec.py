@@ -136,7 +136,8 @@ for r in range(rows):
             vmax=255
         )
 
-        ax.set_title(col_titles[c], fontsize=12, y=1.01)
+        if r == 0:
+            ax.set_title(col_titles[c], fontsize=12, y=1.01)
 
         if r == 0 and c == 0:
             ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
