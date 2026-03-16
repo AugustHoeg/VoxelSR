@@ -11,8 +11,11 @@ from tqdm import tqdm
 fps = 20
 slice_step = 1
 
-cell_h = 512
-cell_w = 512
+cell_h = 256
+cell_w = 256
+
+size_hr = 256
+size_lr = 64
 
 # -----------------------------
 # DATA
@@ -23,8 +26,12 @@ base_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/VoDaSuRe/ome/
 sample_paths = [
     "Bamboo_A_bin1x1_ome_1.zarr",
     "Cardboard_A_bin1x1_ome_1.zarr",
-    "Femur_15_80kV_ome.zarr",
-    "Vertebrae_A_80kV_ome.zarr",
+    "Elm_A_bin1x1_ome_1.zarr",
+    "Larch_B_bin1x1_ome_1.zarr",
+    "MDF_A_bin1x1_ome_1.zarr",
+    "Oak_A_bin1x1_ome_1.zarr",
+    #"Femur_15_80kV_ome.zarr",
+    #"Vertebrae_A_80kV_ome.zarr",
 ]
 
 sample_paths = [os.path.join(base_path, f) for f in sample_paths]
@@ -39,7 +46,7 @@ rows = len(datasets)
 cols = len(sample_paths)
 
 # Determine slice count
-num_slices_hr = 200  # min(v.shape[0] for v in hr_vols)
+num_slices_lr = min(v.shape[0] for v in lr_vols)  # min(v.shape[0] for v in hr_vols)
 
 # -----------------------------
 # VIDEO SIZE
@@ -86,7 +93,7 @@ def fit_to_cell(img):
 # GENERATE VIDEO
 # -----------------------------
 
-for z_hr in tqdm(range(0, num_slices_hr, slice_step)):
+for z_hr in tqdm(range(0, num_slices_lr, slice_step)):
 
     frame = np.zeros((frame_h, frame_w), dtype=np.uint8)
 
@@ -94,11 +101,12 @@ for z_hr in tqdm(range(0, num_slices_hr, slice_step)):
 
         for c, vol in enumerate(dataset):
 
+            H, W = vol.shape[1:]
             if r > 0:
                 z_lr = z_hr // 4
-                img = vol[z_lr, :, :]
+                img = vol[z_lr, H//2 - size_lr//2:H//2 + size_lr//2, W//2 - size_lr//2:W//2 + size_lr//2]
             else:
-                img = vol[z_hr, :, :]
+                img = vol[z_hr, H//2 - size_hr//2:H//2 + size_hr//2, W//2 - size_hr//2:W//2 + size_hr//2]
 
             img = (img >> 8).astype(np.uint8)  # Convert from uint16 to uint8
 
