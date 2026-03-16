@@ -163,7 +163,7 @@ fig.canvas.draw()
 
 width, height = fig.canvas.get_width_height()
 
-fourcc = cv2.VideoWriter_fourcc(*"avc1")
+fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
 writer = cv2.VideoWriter(
     "Vodasure_banner.mp4",
