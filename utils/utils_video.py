@@ -20,7 +20,7 @@ size_lr = 64
 # New parameters
 offset_y = 200  # in-plane offset for y (vertical)
 offset_x = 200  # in-plane offset for x (horizontal)
-slice_subsample = 2  # use every Nth slice
+slice_subsample = 4  # use every Nth slice
 
 # -----------------------------
 # DATA
@@ -35,6 +35,7 @@ sample_paths = [
     "Larch_B_bin1x1_ome_1.zarr",
     "MDF_A_bin1x1_ome_1.zarr",
     "Oak_A_bin1x1_ome_1.zarr",
+    "Cypress_A_bin1x1_ome_1.zarr"
     # "Femur_15_80kV_ome.zarr",
     # "Vertebrae_A_80kV_ome.zarr",
 ]
@@ -113,7 +114,7 @@ for z_hr in tqdm(range(0, num_slices_lr, slice_subsample)):
         for c, vol in enumerate(dataset):
             if r > 0:
                 z_lr = z_hr // 4
-                img = extract_slice(vol, z_lr, size_lr, offset_y, offset_x)
+                img = extract_slice(vol, z_lr, size_lr, offset_y // 4, offset_x // 4)
             else:
                 img = extract_slice(vol, z_hr, size_hr, offset_y, offset_x)
 
