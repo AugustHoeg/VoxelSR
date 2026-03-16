@@ -49,9 +49,6 @@ sample_paths = [
 
 sample_paths = [os.path.join(base_path, f) for f in sample_paths]
 
-col_titles = [os.path.basename(p).split("_")[0] for p in sample_paths]
-row_titles = ["HR", "LR", "Registered"]
-
 # -----------------------------
 # LOAD DATASETS
 # -----------------------------
@@ -197,29 +194,6 @@ for z_hr in tqdm(range(0, num_slices_lr, slice_subsample)):
             x0 = left_margin + c * cell_w
 
             frame[y0:y0+cell_h, x0:x0+cell_w] = img
-
-    # column titles
-    for c, title in enumerate(col_titles):
-
-        x = left_margin + c * cell_w + cell_w // 2 - 40
-
-        cv2.putText(
-            frame,
-            title,
-            (x, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            255,
-            1,
-            cv2.LINE_AA
-        )
-
-    # row titles
-    for r, title in enumerate(row_titles):
-
-        y = top_margin + r * cell_h + cell_h // 2 - 40
-
-        draw_vertical_text(frame, title, 10, y)
 
     writer.write(frame)
 
