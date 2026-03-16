@@ -16,8 +16,8 @@ slice_subsample = 4
 size_hr = 256
 size_lr = 64
 
-offset_y = -200
-offset_x = -200
+offset_y = -400
+offset_x = -400
 
 cell_size = 256  # display size
 
