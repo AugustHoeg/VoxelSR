@@ -18,8 +18,8 @@ size_hr = 256
 size_lr = 64
 
 # New parameters
-offset_y = 0  # in-plane offset for y (vertical)
-offset_x = 0  # in-plane offset for x (horizontal)
+offset_y = 200  # in-plane offset for y (vertical)
+offset_x = 200  # in-plane offset for x (horizontal)
 slice_subsample = 2  # use every Nth slice
 
 # -----------------------------
