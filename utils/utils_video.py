@@ -39,7 +39,7 @@ rows = len(datasets)
 cols = len(sample_paths)
 
 # Determine slice count
-num_slices_hr = min(v.shape[0] for v in hr_vols)
+num_slices_hr = 200  # min(v.shape[0] for v in hr_vols)
 
 # -----------------------------
 # VIDEO SIZE
