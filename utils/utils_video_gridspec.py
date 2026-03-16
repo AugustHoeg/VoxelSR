@@ -138,11 +138,11 @@ for r in range(rows):
 
         ax.set_title(col_titles[c], fontsize=12, y=1.01)
 
-        if r == 0:
+        if r == 0 and c == 0:
             ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
-        elif r == 1:
+        elif r == 1 and c == 0:
             ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
-        else:
+        elif r == 2 and c == 0:
             ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
 
         row_axes.append(ax)
