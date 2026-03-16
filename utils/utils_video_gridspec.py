@@ -126,14 +126,16 @@ for r in range(rows):
 fig.subplots_adjust(left=0.12, right=0.98, bottom=0.05, top=0.9,
                     wspace=0.02, hspace=0.02)
 
-# column titles
 for c, title in enumerate(col_titles):
 
-    x = (c + 0.5) / cols
+    bbox = axes[0][c].get_position()
+
+    x = bbox.x0 + bbox.width / 2
+    y = bbox.y1 + 0.02
 
     fig.text(
         x,
-        0.94,
+        y,
         title,
         ha="center",
         va="bottom",
@@ -143,14 +145,17 @@ for c, title in enumerate(col_titles):
 # row titles
 for r, title in enumerate(row_titles):
 
-    y = 1 - (r + 0.5) / rows
+    bbox = axes[r][0].get_position()
+
+    x = bbox.x0 - 0.03
+    y = bbox.y0 + bbox.height / 2
 
     fig.text(
-        0.04,
+        x,
         y,
         title,
+        ha="right",
         va="center",
-        ha="center",
         fontsize=14,
         rotation=90
     )
@@ -158,6 +163,8 @@ for r, title in enumerate(row_titles):
 # -----------------------------
 # VIDEO SETUP
 # -----------------------------
+
+fig.patch.set_facecolor("#f5f5f5")
 
 fig.canvas.draw()
 
