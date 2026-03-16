@@ -25,16 +25,24 @@ cell_size = 256  # display size
 # FONT STYLE
 # -----------------------------
 
-plt.rcParams["font.family"] = "serif"
-plt.rcParams["font.serif"] = ["Times New Roman", "Times", "DejaVu Serif"]
+plt.rcParams["font.family"] = "Times New Roman"
+plt.rcParams["text.usetex"] = True
 
 # -----------------------------
 # DATA
 # -----------------------------
 
 base_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/VoDaSuRe/ome/train/"
+#base_path = "../../3D_datasets/datasets/VoDaSuRe/ome/train/"
 
 sample_paths = [
+    #"Femur_15_80kV_ome.zarr",
+    #"Femur_15_80kV_ome.zarr",
+    #"Femur_15_80kV_ome.zarr",
+    #"Femur_15_80kV_ome.zarr",
+    #"Femur_15_80kV_ome.zarr",
+    #"Femur_15_80kV_ome.zarr",
+    #"Femur_15_80kV_ome.zarr",
     "Bamboo_A_bin1x1_ome_1.zarr",
     "Cardboard_A_bin1x1_ome_1.zarr",
     "Elm_A_bin1x1_ome_1.zarr",
@@ -47,7 +55,7 @@ sample_paths = [
 sample_paths = [os.path.join(base_path, f) for f in sample_paths]
 
 col_titles = [os.path.basename(p).split("_")[0] for p in sample_paths]
-row_titles = ["HR", "LR", "Registered"]
+row_titles = ["High resolution", "Downsampled", "Registered"]
 
 # -----------------------------
 # LOAD DATA
@@ -87,7 +95,18 @@ def extract_slice(vol, z, size, offset_y=0, offset_x=0):
 # CREATE MATPLOTLIB LAYOUT
 # -----------------------------
 
-fig = plt.figure(figsize=(cols * 2, rows * 2))
+fig = plt.figure(figsize=(cols * 2.0, rows * 2.0))
+
+fig.patch.set_facecolor("#f5f5f5")
+
+fig.subplots_adjust(
+    left=0.04,
+    right=0.96,
+    bottom=0.05,
+    top=0.95,
+    wspace=0.02,
+    hspace=0.02
+)
 
 gs = GridSpec(rows, cols, figure=fig)
 
@@ -117,54 +136,24 @@ for r in range(rows):
             vmax=255
         )
 
+        ax.set_title(col_titles[c], fontsize=12, y=1.01)
+
+        if r == 0:
+            ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
+        elif r == 1:
+            ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
+        else:
+            ax.set_ylabel(row_titles[r], fontsize=12, labelpad=10)
+
         row_axes.append(ax)
         row_imgs.append(img)
 
     axes.append(row_axes)
     images.append(row_imgs)
 
-fig.subplots_adjust(left=0.12, right=0.98, bottom=0.05, top=0.9,
-                    wspace=0.02, hspace=0.02)
-
-for c, title in enumerate(col_titles):
-
-    bbox = axes[0][c].get_position()
-
-    x = bbox.x0 + bbox.width / 2
-    y = bbox.y1 + 0.02
-
-    fig.text(
-        x,
-        y,
-        title,
-        ha="center",
-        va="bottom",
-        fontsize=14
-    )
-
-# row titles
-for r, title in enumerate(row_titles):
-
-    bbox = axes[r][0].get_position()
-
-    x = bbox.x0 - 0.03
-    y = bbox.y0 + bbox.height / 2
-
-    fig.text(
-        x,
-        y,
-        title,
-        ha="right",
-        va="center",
-        fontsize=14,
-        rotation=90
-    )
-
 # -----------------------------
 # VIDEO SETUP
 # -----------------------------
-
-fig.patch.set_facecolor("#f5f5f5")
 
 fig.canvas.draw()
 
