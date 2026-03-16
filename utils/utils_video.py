@@ -1,3 +1,4 @@
+import os
 import zarr
 import cv2
 import numpy as np
@@ -12,17 +13,22 @@ n_cols = 4
 slice_step = 1
 
 # Paths to datasets
-hr_paths = [...]
-lr_paths = [...]
-reg_paths = [...]
+base_path = "/work3/s173944/Python/venv_srgan/3D_datasets/datasets/VoDaSuRe/ome/train/"
+sample_paths = [
+    "Bamboo_A_bin1x1_ome_1.zarr",
+    "Cardboard_A_bin1x1_ome_1.zarr",
+    "Femur_15_80kV_ome.zarr",
+    "Vertebrae_A_80kV_ome.zarr",
+]
 
+sample_paths = [os.path.join(base_path, f) for f in sample_paths]
 # -----------------------------
 # LOAD ZARR DATASETS
 # -----------------------------
 
-hr_vols = [zarr.open(p, mode="r")["0"] for p in hr_paths]
-lr_vols = [zarr.open(p, mode="r")["0"] for p in lr_paths]
-reg_vols = [zarr.open(p, mode="r")["0"] for p in reg_paths]
+hr_vols = [zarr.open(p, mode="r")["HR/2"] for p in sample_paths]
+lr_vols = [zarr.open(p, mode="r")["HR/2"] for p in sample_paths]
+reg_vols = [zarr.open(p, mode="r")["REG/0"] for p in sample_paths]
 
 # Determine slice count
 num_slices = min(v.shape[0] for v in hr_vols)
