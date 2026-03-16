@@ -8,7 +8,7 @@ from tqdm import tqdm
 # PARAMETERS
 # -----------------------------
 
-fps = 12
+fps = 20
 
 cell_h = 192
 cell_w = 192
