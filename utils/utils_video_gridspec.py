@@ -10,7 +10,7 @@ from matplotlib.gridspec import GridSpec
 # PARAMETERS
 # -----------------------------
 
-fps = 12
+fps = 20
 slice_subsample = 4
 
 size_hr = 256
@@ -87,7 +87,7 @@ def extract_slice(vol, z, size, offset_y=0, offset_x=0):
 # CREATE MATPLOTLIB LAYOUT
 # -----------------------------
 
-fig = plt.figure(figsize=(cols * 2, rows * 2))
+fig = plt.figure(figsize=(cols * 2 + 4, rows * 2))
 gs = GridSpec(rows, cols, figure=fig)
 
 axes = []
