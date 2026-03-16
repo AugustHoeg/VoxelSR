@@ -21,8 +21,8 @@ offset_x = -200
 
 cell_size = 256  # display size
 
-pan_amp_x = 4
-pan_amp_y = 4
+pan_amp_x = 40
+pan_amp_y = 40
 
 # -----------------------------
 # FONT STYLE
