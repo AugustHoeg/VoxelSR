@@ -21,6 +21,9 @@ offset_x = -200
 
 cell_size = 256  # display size
 
+pan_amp_x = 4
+pan_amp_y = 4
+
 # -----------------------------
 # FONT STYLE
 # -----------------------------
@@ -97,7 +100,7 @@ def extract_slice(vol, z, size, offset_y=0, offset_x=0):
 
 fig = plt.figure(figsize=(cols * 2.0, rows * 2.0))
 
-fig.patch.set_facecolor("#f5f5f5")
+# fig.patch.set_facecolor("#f5f5f5")
 
 fig.subplots_adjust(
     left=0.04,
@@ -163,7 +166,7 @@ width, height = fig.canvas.get_width_height()
 fourcc = cv2.VideoWriter_fourcc(*"avc1")
 
 writer = cv2.VideoWriter(
-    "vodasure_flythrough.mp4",
+    "Vodasure_banner.mp4",
     fourcc,
     fps,
     (width, height)
@@ -175,6 +178,12 @@ writer = cv2.VideoWriter(
 
 for z_hr in tqdm(range(0, num_slices_lr, slice_subsample)):
 
+    pan_x = int(pan_amp_x)
+    pan_y = int(pan_amp_y)
+
+    current_offset_x = offset_x + pan_x
+    current_offset_y = offset_y + pan_y
+
     for r, dataset in enumerate(datasets):
 
         for c, vol in enumerate(dataset):
@@ -185,16 +194,16 @@ for z_hr in tqdm(range(0, num_slices_lr, slice_subsample)):
                     vol,
                     z_lr,
                     size_lr,
-                    offset_y // 4,
-                    offset_x // 4
+                    current_offset_y // 4,
+                    current_offset_x // 4
                 )
             else:
                 img = extract_slice(
                     vol,
                     z_hr,
                     size_hr,
-                    offset_y,
-                    offset_x
+                    current_offset_y,
+                    current_offset_x
                 )
 
             img = (img >> 8).astype(np.uint8)
