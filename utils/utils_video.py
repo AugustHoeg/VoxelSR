@@ -23,9 +23,9 @@ offset_y = -200
 offset_x = -200
 
 # pan parameters
-pan_amp_x = 120
-pan_amp_y = 120
-pan_period = 200  # slices per cycle
+pan_amp_x = 0
+pan_amp_y = 0
+pan_period = 800  # slices per cycle
 
 # layout margins
 top_margin = 60
