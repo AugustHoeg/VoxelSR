@@ -87,7 +87,8 @@ def extract_slice(vol, z, size, offset_y=0, offset_x=0):
 # CREATE MATPLOTLIB LAYOUT
 # -----------------------------
 
-fig = plt.figure(figsize=(cols * 2 + 4, rows * 2))
+fig = plt.figure(figsize=(cols * 2, rows * 2))
+
 gs = GridSpec(rows, cols, figure=fig)
 
 axes = []
@@ -101,7 +102,13 @@ for r in range(rows):
     for c in range(cols):
 
         ax = fig.add_subplot(gs[r, c])
-        ax.axis("off")
+
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_linewidth(0.5)
 
         img = ax.imshow(
             np.zeros((cell_size, cell_size)),
@@ -110,19 +117,43 @@ for r in range(rows):
             vmax=255
         )
 
-        if r == 0:
-            ax.set_title(col_titles[c], fontsize=14)
-
-        if c == 0:
-            ax.set_ylabel(row_titles[r], fontsize=14, rotation=90)
-
         row_axes.append(ax)
         row_imgs.append(img)
 
     axes.append(row_axes)
     images.append(row_imgs)
 
-plt.tight_layout()
+fig.subplots_adjust(left=0.12, right=0.98, bottom=0.05, top=0.9,
+                    wspace=0.02, hspace=0.02)
+
+# column titles
+for c, title in enumerate(col_titles):
+
+    x = (c + 0.5) / cols
+
+    fig.text(
+        x,
+        0.94,
+        title,
+        ha="center",
+        va="bottom",
+        fontsize=14
+    )
+
+# row titles
+for r, title in enumerate(row_titles):
+
+    y = 1 - (r + 0.5) / rows
+
+    fig.text(
+        0.04,
+        y,
+        title,
+        va="center",
+        ha="center",
+        fontsize=14,
+        rotation=90
+    )
 
 # -----------------------------
 # VIDEO SETUP
