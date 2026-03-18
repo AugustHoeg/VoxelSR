@@ -10,7 +10,7 @@ from matplotlib.gridspec import GridSpec
 # PARAMETERS
 # -----------------------------
 
-fps = 20
+fps = 15
 slice_subsample = 4
 
 size_hr = 256
