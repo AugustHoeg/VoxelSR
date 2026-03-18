@@ -283,6 +283,10 @@ def main(opt: DictConfig):
                     print("Skipping large bone sample.")
                     continue
 
+                if "Vertebrae_D_80kV_ome" in zarr_path:
+                    print("Skipping vertebrae sample.")
+                    continue
+
                 if inference_mode == 'zarr':
                     run_strided_inference_zarr(
                         model=model,
