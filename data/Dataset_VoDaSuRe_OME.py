@@ -10,9 +10,6 @@ class Dataset_VoDaSuRe_OME():
     def __init__(self, opt, dataset_path="../3D_datasets/datasets/"):
 
         self.synthetic = opt['dataset_opt']['synthetic']
-        if opt['rank'] == 0:
-            print(f"Using synthetically downsampled LR images: {self.synthetic}")
-            print(f"Using datasets: {opt['dataset_opt']['datasets']} on {opt['run_type']}")
 
         self.opt = opt
         self.patch_size_hr = opt['dataset_opt']['patch_size_hr']
