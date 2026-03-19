@@ -193,12 +193,29 @@ def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-1
 @hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
 
+    # Set dataset override options from command line arguments
+    datasets_flag = opt['dataset_opt']['dataset_override']
+    override_datasets = opt['dataset_opt']['datasets']
+    synthetic_flag = opt['dataset_opt']['synthetic_override']
+
     # Load options file from experiment ID
     experiment_id = opt['experiment_id']
     print("Experiment ID:", experiment_id)
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
     wandb_path = opt_path.rsplit("files", 1)[0]
+
+    # Override datasets if specified
+    if datasets_flag:
+        opt['dataset_opt']['datasets'] = override_datasets
+        print(f"Using datasets {override_datasets} from command line argument.")
+    else:
+        print(f"Using datasets {opt['dataset_opt']['datasets']} from config file.")
+
+    # Override synthetic flag if specified
+    if synthetic_flag:
+        opt['dataset_opt']['synthetic'] = synthetic_flag
+        print(f"Using synthetic flag: {synthetic_flag} from command line argument.")
 
     # Set input type to 3D if not specified
     if 'input_type' not in opt:

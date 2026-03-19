@@ -65,9 +65,30 @@ def finetuneid(ctx, model, dataset, experiment_id, pretrained_experiment_id):
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id} train_mode='finetune' path.pretrained_experiment_id={model}_{dataset}_{pretrained_experiment_id}")
 
 @task
-def testzarr(ctx, experiment_id):
+def testzarr(ctx, experiment_id, datasets=None, synthetic=False):
     """Run the testing script."""
-    ctx.run(f"python -u inference_zarr.py experiment_id={experiment_id}")
+
+    cmd = (
+        f"python -u inference_zarr.py "
+        f"experiment_id={experiment_id} "
+    )
+
+    # To make Hydra happy, datasets should be specified like this on command line: --datasets="[VoDaSuRe,CTSpine1K]"
+    if datasets:
+        cmd += f"dataset_opt.datasets={datasets} "
+        cmd += f"+dataset_opt.dataset_override=True "  # Use the provided datasets instead of the ones from the config
+    else:
+        cmd += f"+dataset_opt.dataset_override=False "  # Use the datasets from the config
+
+    # Synthetic should be specified like this on command line: --synthetic
+    if synthetic:
+        cmd += f"+dataset_opt.synthetic_override=True "
+    else:
+        cmd += f"+dataset_opt.synthetic_override=False "
+
+    ctx.run(cmd)
+    #ctx.run(f"python -u inference_zarr.py experiment_id={experiment_id}")
+
 
 def testzarrid(ctx, model, dataset, experiment_id, dataset_path=None):
     ctx.run(
