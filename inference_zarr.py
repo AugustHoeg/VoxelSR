@@ -197,6 +197,7 @@ def main(opt: DictConfig):
     datasets_flag = opt['dataset_opt']['dataset_override']
     override_datasets = opt['dataset_opt']['datasets']
     synthetic_flag = opt['dataset_opt']['synthetic_override']
+    override_synthetic = opt['dataset_opt']['synthetic']
 
     # Load options file from experiment ID
     experiment_id = opt['experiment_id']
@@ -214,8 +215,8 @@ def main(opt: DictConfig):
 
     # Override synthetic flag if specified
     if synthetic_flag:
-        opt['dataset_opt']['synthetic'] = synthetic_flag
-        print(f"Using synthetic flag: {synthetic_flag} from command line argument.")
+        opt['dataset_opt']['synthetic'] = override_synthetic
+        print(f"Using synthetic flag: {override_synthetic} from command line argument.")
 
     # Set input type to 3D if not specified
     if 'input_type' not in opt:

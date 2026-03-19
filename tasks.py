@@ -38,7 +38,7 @@ def train(ctx, model, dataset, dataset_path=None, synthetic=False):
     ctx.run(cmd)
 
 @task
-def trainid(ctx, model, dataset, experiment_id, dataset_path=None, synthetic=False):
+def trainid(ctx, model, dataset, experiment_id, dataset_path=None, mode=None):
 
     cmd = (
         f"python -u train.py "
@@ -48,8 +48,10 @@ def trainid(ctx, model, dataset, experiment_id, dataset_path=None, synthetic=Fal
         f"dataset_opt.dataset_path={dataset_path if dataset_path is not None else '../3D_datasets/datasets/'} "
     )
 
-    if synthetic:
+    if mode == "synthetic":
         cmd += f"dataset_opt.synthetic=True "
+    elif mode == "real":
+        cmd += f"dataset_opt.synthetic=False "
 
     ctx.run(cmd)
 
@@ -65,7 +67,7 @@ def finetuneid(ctx, model, dataset, experiment_id, pretrained_experiment_id):
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id} train_mode='finetune' path.pretrained_experiment_id={model}_{dataset}_{pretrained_experiment_id}")
 
 @task
-def testzarr(ctx, experiment_id, datasets=None, synthetic=False):
+def testzarr(ctx, experiment_id, datasets=None, mode=None):
     """Run the testing script."""
 
     cmd = (
@@ -80,8 +82,12 @@ def testzarr(ctx, experiment_id, datasets=None, synthetic=False):
     else:
         cmd += f"+dataset_opt.dataset_override=False "  # Use the datasets from the config
 
-    # Synthetic should be specified like this on command line: --synthetic
-    if synthetic:
+    # Synthetic should be specified like this on command line: --mode="synthetic" or --mode="real"
+    if mode == "synthetic":
+        cmd += f"dataset_opt.synthetic=True "
+        cmd += f"+dataset_opt.synthetic_override=True "
+    elif mode == "real":
+        cmd += f"dataset_opt.synthetic=False "
         cmd += f"+dataset_opt.synthetic_override=True "
     else:
         cmd += f"+dataset_opt.synthetic_override=False "
