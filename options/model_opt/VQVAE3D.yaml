@@ -1,8 +1,8 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
 model: vqvae
-model_architecture: VQVAE_3D
+model_architecture: VQVAE3D
 netG:
-  net_type: VQVAE_3D
+  net_type: VQVAE3D
   description: "3D Vector Quantized Variational Autoencoder (VQVAE)"
   in_channels: 1
   hidden_channels: 256

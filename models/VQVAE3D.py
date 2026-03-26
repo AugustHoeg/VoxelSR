@@ -107,9 +107,9 @@ class CodeBook(nn.Module):
 
         return z_q, vq_loss
 
-class VQVAE_3D(nn.Module):
+class VQVAE3D(nn.Module):
     def __init__(self, in_channels, hidden_channels=256, num_embeddings=512, use_checkpoint=False):
-        super(VQVAE_3D, self).__init__()
+        super(VQVAE3D, self).__init__()
 
         self.encoder = Encoder(in_channels, hidden_channels)
         self.decoder = Decoder(hidden_channels, out_channels=in_channels)
@@ -144,7 +144,7 @@ class VQVAE_3D(nn.Module):
 
 
 if __name__ == '__main__':
-    model = VQVAE_3D(in_channels=1, hidden_channels=256)
+    model = VQVAE3D(in_channels=1, hidden_channels=256)
     x = torch.randn(2, 1, 32, 32, 32)  # Example input
     z_e, z_q, vq_loss = model.encode(x)
     x_hat = model.decode(z_q)
