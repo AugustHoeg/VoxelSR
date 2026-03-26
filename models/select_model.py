@@ -16,8 +16,8 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'gan' or model == 'ragan':     # one input: L
         from models.model_gan import ModelGAN as M
 
-    elif model == 'wgan-gp':     # one input: L
-        from models.model_wgan_gp import ModelWGAN_GP as M
+    elif model == 'vqvae':     # one input: L
+        from models.model_vqvae import ModelVQVAE as M
 
     elif model == "implicit":
         from models.model_implicit import ModelImplicit as M

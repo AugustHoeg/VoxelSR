@@ -28,7 +28,14 @@ def define_G(opt, mode='train'):
     if model_arch == "DUMMY":
         netG = DummyNetwork()
 
-    if model_arch == "DegradeNet":  # DegradeNet
+    if model_arch == "VQVAE_3D":  # VQVAE_3D
+        from models.VQVAE_3D import VQVAE_3D as net
+        netG = net(in_channels=opt_net['in_channels'],
+                   hidden_channels=opt_net['hidden_channels'],
+                   num_embeddings=opt_net['num_embeddings'],
+                   use_checkpoint=opt_net['use_checkpoint'])
+
+    elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],
                    in_channels=opt_net['in_channels'],

@@ -224,7 +224,7 @@ if __name__ == '__main__':
             SR_crop, _ = crop_image_at_location(SR, red_box_size, red_box_coords)
 
             ax.imshow(SR_crop, cmap='gray', vmin=0, vmax=255)
-            text = r"RRDBNet3D ($\times 4$)"
+            text = r"RRDBNet3D ($4 \times$)"
             ax.text(0.5, -0.02, f"Downsampled w. shift \n {text}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
         elif j == 2:  # show crop region
@@ -232,7 +232,7 @@ if __name__ == '__main__':
             SR_no_shift_crop, _ = crop_image_at_location(SR_no_shift, red_box_size, red_box_coords)
 
             ax.imshow(SR_no_shift_crop, cmap='gray', vmin=0, vmax=255)
-            text = r"RRDBNet3D ($\times 4$)"
+            text = r"RRDBNet3D ($4 \times$)"
             ax.text(0.5, -0.02, f"Downsampled w.o shift \n {text}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
 
@@ -251,7 +251,7 @@ if __name__ == '__main__':
             SR_REG_crop, _ = crop_image_at_location(SR_REG, red_box_size, red_box_coords)
 
             ax.imshow(SR_REG_crop, cmap='gray', vmin=0, vmax=255)
-            text = r"RRDBNet3D ($\times 4$)"
+            text = r"RRDBNet3D ($4 \times$)"
             ax.text(0.5, -0.02, f"Registered w.o shift \n {text}", ha='center', va='top', fontsize=16,
                     transform=ax.transAxes)
 

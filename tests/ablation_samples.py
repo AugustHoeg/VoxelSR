@@ -109,7 +109,7 @@ if __name__ == '__main__':
                 #img_idx = 9 + 1
                 dataset = "WOOD"
                 group_dir = "HR1_REG0"  # Change for downsampled vs. registered data
-                LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+                LR_title = r"Registered LR ($\times 2$)"  # "Downsampled"
 
                 #large_img_size = 400
                 #large_img_location = (520, 600)
@@ -126,7 +126,7 @@ if __name__ == '__main__':
                 #img_idx = 9 * 2 + 1
                 dataset = "VoDaSuRe"
                 group_dir = "HR1_REG0"  # Change for downsampled vs. registered data
-                LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+                LR_title = r"Registered LR ($\times 2$)"  # "Downsampled"
 
                 #large_img_size = 1920
                 #large_img_location = (520 * 4, 600 * 4)
@@ -181,7 +181,7 @@ if __name__ == '__main__':
             #ax.text(0.5, -0.02, rf"{box_name} $(4\times)$", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
             # ax.text(0.5, -0.02, rf"{box_name}", ha='center', va='top', fontsize=16, transform=ax.transAxes)
-            ax.text(0.5, -0.02, rf"{box_name} $(4\times)$", ha='center', va='top', fontsize=16, transform=ax.transAxes)
+            ax.text(0.5, -0.02, rf"{box_name} $(2\times)$", ha='center', va='top', fontsize=16, transform=ax.transAxes)
 
             ax.set_xticks([])
             ax.set_yticks([])

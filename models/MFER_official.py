@@ -488,8 +488,8 @@ def test():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
-    patch_size = 64
-    up_factor = 1
+    patch_size = 32
+    up_factor = 4
     x = torch.randn((1, 1, patch_size, patch_size, patch_size)).to(device)
 
     print("Test MFER")

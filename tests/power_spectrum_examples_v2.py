@@ -78,13 +78,13 @@ if __name__ == '__main__':
     red_box_coords = (150, 150)
     red_box_size = 256
 
-    img_idx = 27
+    img_idx = 45
     large_img_location = (650, 650)
 
     panels = [
         ("VoDaSuRe_DOWN", "HR0_HR2", "RRDBNet3D", "H", r"HR reference"),
-        ("VoDaSuRe_DOWN", "HR0_HR2", "RRDBNet3D", "E", r"Downsampled LR ($\times 4$)"),
-        ("VoDaSuRe", "HR0_REG0", "RRDBNet3D", "E", r"Registered LR ($\times 4$)")
+        ("VoDaSuRe_DOWN", "HR0_HR2", "RRDBNet3D", "E", r"Downsampled LR ($4 \times$)"),
+        ("VoDaSuRe", "HR0_REG0", "RRDBNet3D", "E", r"Registered LR ($4 \times$)")
     ]
 
     radial_profiles = []

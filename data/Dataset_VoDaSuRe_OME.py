@@ -26,11 +26,11 @@ class Dataset_VoDaSuRe_OME():
                             "VoDaSuRe": 15.0}
 
         group_pairs = {}
-        group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-        group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-        group_pairs["LITS"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-        group_pairs["CTSpine1K"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
-        group_pairs["LIDC-IDRI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+        group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}], "1": [{"H": "HR/0", "L": "HR/0"}]}
+        group_pairs["IXI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}], "1": [{"H": "HR/0", "L": "HR/0"}]}
+        group_pairs["LITS"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}], "1": [{"H": "HR/0", "L": "HR/0"}]}
+        group_pairs["CTSpine1K"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}], "1": [{"H": "HR/0", "L": "HR/0"}]}
+        group_pairs["LIDC-IDRI"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}], "1": [{"H": "HR/0", "L": "HR/0"}]}
 
         store_type = {"HCP_1200": "LocalStore",
                       "IXI": "LocalStore",

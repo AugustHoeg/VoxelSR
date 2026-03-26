@@ -112,10 +112,10 @@ if __name__ == '__main__':
             large_img_location = (650, 650)
 
             if j == 0:
-                img_idx = 18 # 45 # 18
+                img_idx = 45 # 45 # 18
                 dataset = "VoDaSuRe_DOWN"
                 group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
-                LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
+                LR_title = r"Downsampled LR ($4 \times$)"  # "Downsampled"
 
                 large_img_size = 512
                 red_box_coords = (150, 150)
@@ -123,10 +123,10 @@ if __name__ == '__main__':
                 lpips_str = f"w.o LPIPS loss"
 
             elif j == 1:
-                img_idx = 18 # 45 #18
+                img_idx = 45 # 45 #18
                 dataset = "VoDaSuRe"
                 group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
-                LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+                LR_title = r"Registered LR ($4 \times$)"  # "Downsampled"
 
                 large_img_size = 512
                 red_box_coords = (150, 150)
@@ -135,10 +135,10 @@ if __name__ == '__main__':
 
             if j == 2:
 
-                img_idx = 18 # 36 # 9
+                img_idx = 36 # 36 # 9
                 dataset = "VoDaSuRe_LPIPS"
                 group_dir = "HR0_HR2"  # Change for downsampled vs. registered data
-                LR_title = r"Downsampled LR ($\times 4$)"  # "Downsampled"
+                LR_title = r"Downsampled LR ($4 \times$)"  # "Downsampled"
 
                 large_img_size = 512
                 red_box_coords = (150, 150)
@@ -146,10 +146,10 @@ if __name__ == '__main__':
                 lpips_str = f"w. LPIPS loss"
 
             elif j == 3:
-                img_idx = 9 # 36 # 9
+                img_idx = 36 # 36 # 9
                 dataset = "VoDaSuRe_LPIPS"
                 group_dir = "HR0_REG0"  # Change for downsampled vs. registered data
-                LR_title = r"Registered LR ($\times 4$)"  # "Downsampled"
+                LR_title = r"Registered LR ($4 \times$)"  # "Downsampled"
 
                 large_img_size = 512
                 red_box_coords = (150, 150)

@@ -24,6 +24,6 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))  # This is the Project Roo
 # "ConvNeXtSR"
 # ----------------------------------------
 
-MODEL_ARCHITECTURE = "mDCSRN_2x"  # Flag for selecting model architecture if configuration file is not provided
+MODEL_ARCHITECTURE = "VQVAE_3D"  # Flag for selecting model architecture if configuration file is not provided
 
 # ----------------------------------------
