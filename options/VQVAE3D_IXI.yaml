@@ -13,7 +13,7 @@ up_factor: 1  # upscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
@@ -36,12 +36,12 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 2000
-  validation_iterations: 100
-  checkpoint_test: 500
-  checkpoint_save: 500
-  checkpoint_print: 500
-  checkpoint_save_visuals: 500
+  iterations: 50000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 10000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
@@ -50,13 +50,13 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 64
+  patch_size: 128
 
-  datasets: [HCP_1200] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 16
+    num_load_workers: 32
     persist_workers: true
     pin_memory: false
 
