@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: VQVAE_3D                  # Default model config
+  - model_opt: VQVAE3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -36,7 +36,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 2000
+  iterations: 1000
   validation_iterations: 100
   checkpoint_test: 500
   checkpoint_save: 500
@@ -52,7 +52,7 @@ dataset_opt:
   synthetic: true
   patch_size: 64
 
-  datasets: [HCP_1200] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
     dataloader_batch_size: 4

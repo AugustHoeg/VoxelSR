@@ -417,8 +417,11 @@ class ModelVQVAE(ModelBase):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
-    def vq_forward(self):
+    def vq_forward(self):  # Returns reconstruction E and VQ loss given H, used for training
         self.E, self.vq_loss = self.netG(self.H)
+
+    def netG_forward(self):  # Returns reconstruction E given L, only used for inference testing
+        self.E, _ = self.netG(self.L)
 
     # ----------------------------------------
     # update parameters and get loss
