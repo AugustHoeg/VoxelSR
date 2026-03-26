@@ -92,8 +92,14 @@ class CodeBook(nn.Module):
         B, C, D, H, W = z_e.shape
         z_e_flat = z_e.view(B, C, -1).permute(0, 2, 1)  # (B, DHW, C)
 
-        # Compute distances to codebook embeddings
-        dists = torch.cdist(z_e_flat, self.embedding.weight)  # (B, DHW, num_embeddings)
+        embed = self.embedding.weight  # (K, C)
+
+        # Compute distances to codebook embeddings (a^2 + b^2 - 2ab)
+        dists = (z_e_flat.pow(2).sum(-1, keepdim=True)
+                + embed.pow(2).sum(1)
+                - 2 * torch.matmul(z_e_flat, embed.t()))
+
+        # dists = torch.cdist(z_e_flat, self.embedding.weight)  # (B, DHW, num_embeddings)
         q_indices = torch.argmin(dists, dim=-1)  # (B, DHW)
 
         z_q = self.embedding(q_indices)  # (B, DHW, embedding_dim)

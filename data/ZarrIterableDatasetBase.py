@@ -22,6 +22,7 @@ from time import perf_counter as time
 #from torch.multiprocessing import Process, Queue, Event
 #from threading import Thread
 
+
 def sample(volume, patch, center, patch_size):
     """
     volume: 3D numpy array of shape (D, H, W)
@@ -368,16 +369,16 @@ def test_plot(train_batch):
 def main():
 
     # Example usage
-    batch_size = 4
+    batch_size = 8
     up_factor = 2
     patch_shape = (32, 32, 32)
     patch_shape_hr = (64, 64, 64)
 
-    HCP_1200_train_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
-    HCP_1200_test_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
+    HCP_1200_train_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
+    HCP_1200_test_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
 
-    IXI_train_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/IXI/ome/train/*.zarr")
-    IXI_test_paths = glob.glob("../../Vedrana_master_project/3D_datasets/datasets/IXI/ome/test/*.zarr")
+    IXI_train_paths = glob.glob("../../3D_datasets/datasets/IXI/ome/train/*.zarr")
+    IXI_test_paths = glob.glob("../../3D_datasets/datasets/IXI/ome/test/*.zarr")
 
     dataset_dict = {
         "HCP_1200": {
@@ -408,6 +409,7 @@ def main():
     patch_transform = mt.Compose([
         mt.Identityd(keys=['H', 'L'], allow_missing_keys=True),
         mt.EnsureChannelFirstd(keys=['H', 'L'], channel_dim='no_channel'),
+        mt.CastToTyped(keys=['H', 'L'], dtype=np.float32),
         # mt.SignalFillEmptyd(keys=['H', 'L'], replacement=0),  # Remove any NaNs
         # mt.ScaleIntensityd(keys=ome_levels, minv=0.0, maxv=1.0),
         # #mt.Rand3DElasticd(keys=ome_levels, prob=0.5, sigma_range=(5, 10), magnitude_range=(0.1, 0.2), mode='bilinear'),
@@ -427,14 +429,15 @@ def main():
                                   print_metadata=False,
                                   slice_dim=None)
 
-    num_workers = 1
+    num_workers = 8
     persistent_workers = True if num_workers > 0 else False
     dataloader = torch.utils.data.DataLoader(dataset,
                                             batch_size=batch_size,
                                             shuffle=False,
                                             num_workers=num_workers,
                                             pin_memory=False,
-                                            persistent_workers=persistent_workers)
+                                            persistent_workers=persistent_workers,
+                                            prefetch_factor=32)
 
     no_epochs = 10
     plot_counter = 0
@@ -449,8 +452,8 @@ def main():
             # print("Loaded batch...")
             # for key in batch.keys():
             #     print(f"Key: {key}, Shape: {batch[key].shape}")
-            if plot_counter % plot_interval == 0:
-                test_plot(batch)
+            # if plot_counter % plot_interval == 0:
+            #     test_plot(batch)
             plot_counter += 1
 
 

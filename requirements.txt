@@ -4,6 +4,7 @@ torchvision
 torchaudio
 zarr
 ome-zarr
+numba
 cupy-cuda12x
 structure-tensor
 monai

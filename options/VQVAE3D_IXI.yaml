@@ -50,13 +50,13 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 128
+  patch_size: 64
 
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
     dataloader_batch_size: 16
-    num_load_workers: 32
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
