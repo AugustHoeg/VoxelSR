@@ -37,15 +37,19 @@ path:
 # Overwrite default training parameters
 train_opt:
   iterations: 1000
-  validation_iterations: 100
-  checkpoint_test: 500
-  checkpoint_save: 500
-  checkpoint_print: 500
-  checkpoint_save_visuals: 500
+  validation_iterations: 50
+  checkpoint_test: 200
+  checkpoint_save: 200
+  checkpoint_print: 200
+  checkpoint_save_visuals: 200
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+
+  G_loss_weights:
+    L1: 1.0
+    LPIPS: 0.01
 
 # Overwrite default dataset parameters
 dataset_opt:

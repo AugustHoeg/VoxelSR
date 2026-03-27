@@ -6,6 +6,7 @@ from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 from torch.optim import Adam, AdamW
@@ -13,6 +14,7 @@ from torch.optim import lr_scheduler
 from torch.nn.parallel import DistributedDataParallel
 
 import config
+from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D
 from models.model_base import ModelBase
 from models.select_network import define_G
 from utils import utils_3D_image
@@ -276,6 +278,26 @@ class ModelVQVAE(ModelBase):
     # ----------------------------------------
     def define_loss(self):
 
+        self.loss_fn_dict = {}
+        self.loss_val_dict = self.opt_train['G_loss_weights']
+
+        for key, value in self.loss_val_dict.items():
+            if key == "MSE" and value > 0:
+                self.loss_fn_dict["MSE"] = nn.MSELoss()
+            elif key == "L1" and value > 0:
+                self.loss_fn_dict["L1"] = nn.L1Loss()
+            elif key == "BCE_Logistic" and value > 0:
+                self.loss_fn_dict["BCE_Logistic"] = nn.BCEWithLogitsLoss()
+            elif key == "BCE" and value > 0:
+                self.loss_fn_dict["BCE"] = nn.BCELoss()
+            elif key == "LPIPS" and value > 0:
+                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
+                    net_type='alex',
+                    version='0.1',
+                    device=self.device,
+                    axes=(0, 1, 2)  # Axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis.
+                )
+
         # Define losses for VQVAE
         self.G_train_loss = 0.0
         self.G_valid_loss = 0.0
@@ -431,7 +453,8 @@ class ModelVQVAE(ModelBase):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()  # Reconstruct H and compute VQ loss
 
-            self.gen_loss = self.vq_loss + F.mse_loss(self.E, self.H)  # VQ loss + reconstruction loss
+            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
+            self.gen_loss = self.vq_loss + recon_loss  # VQ loss + reconstruction loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add VAE training loss to total loss
@@ -574,7 +597,8 @@ class ModelVQVAE(ModelBase):
 
         self.vq_forward()  # Reconstruct H and compute VQ loss
 
-        self.gen_loss = self.vq_loss + F.mse_loss(self.E, self.H)  # VQ loss + reconstruction loss
+        recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
+        self.gen_loss = self.vq_loss + recon_loss  # VQ loss + reconstruction loss
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
@@ -589,7 +613,8 @@ class ModelVQVAE(ModelBase):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()  # Reconstruct H and compute VQ loss
 
-            self.gen_loss = self.vq_loss + F.mse_loss(self.E, self.H)  # VQ loss + reconstruction loss
+            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
+            self.gen_loss = self.vq_loss + recon_loss  # VQ loss + reconstruction loss
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss

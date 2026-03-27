@@ -2,22 +2,37 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+class GroupNorm(nn.Module):
+    def __init__(self, channels, num_groups=32):
+        super(GroupNorm, self).__init__()
+        self.gn = nn.GroupNorm(num_groups=num_groups, num_channels=channels, eps=1e-6, affine=True)
+
+    def forward(self, x):
+        return self.gn(x)
+
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+
 class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels, num_groups=32):
         super(ResidualBlock, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.block = nn.Sequential(
+            nn.GroupNorm(out_channels, num_groups),
+            Swish(),
             nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm3d(out_channels),
-            nn.ReLU(),
+            nn.GroupNorm(out_channels, num_groups),
+            Swish(),
             nn.Conv3d(out_channels, out_channels, kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm3d(out_channels),
-            nn.ReLU(),
         )
 
         if in_channels != out_channels:
-            self.channel_up = nn.Conv3d(in_channels, out_channels, 1, 1, 0)
+            self.channel_up = nn.Conv3d(in_channels, out_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
         if self.in_channels != self.out_channels:
@@ -28,7 +43,7 @@ class ResidualBlock(nn.Module):
 class UpBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(UpBlock, self).__init__()
-        self.conv = nn.ConvTranspose3d(in_channels, out_channels, 6, 2, 2)
+        self.conv = nn.ConvTranspose3d(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
 
     def forward(self, x):
         return self.conv(x)
@@ -102,6 +117,9 @@ class CodeBook(nn.Module):
         # dists = torch.cdist(z_e_flat, self.embedding.weight)  # (B, DHW, num_embeddings)
         q_indices = torch.argmin(dists, dim=-1)  # (B, DHW)
 
+        # Count unique codes for monitoring
+        num_unique_codes = torch.unique(q_indices).numel()
+
         z_q = self.embedding(q_indices)  # (B, DHW, embedding_dim)
         z_q = z_q.permute(0, 2, 1).view(B, self.embedding_dim, D, H, W)  # (B, embedding_dim, H, W)
 
@@ -111,7 +129,7 @@ class CodeBook(nn.Module):
         # Copy the gradients of z_e to z_q, and use z_q values in forward pass
         z_q = z_e + (z_q - z_e).detach()  # Straight-through estimator
 
-        return z_q, vq_loss
+        return z_q, vq_loss, num_unique_codes
 
 class VQVAE3D(nn.Module):
     def __init__(self, in_channels, hidden_channels=256, num_embeddings=512, use_checkpoint=False):
@@ -124,7 +142,7 @@ class VQVAE3D(nn.Module):
 
     def encode(self, x):
         z_e = self.encoder(x)
-        z_q, vq_loss = self.codebook(z_e)
+        z_q, vq_loss, num_codes = self.codebook(z_e)
 
         return z_e, z_q, vq_loss
 
@@ -143,7 +161,7 @@ class VQVAE3D(nn.Module):
     def forward(self, x):
 
         z_e = self.encoder(x)
-        z_q, vq_loss = self.codebook(z_e)
+        z_q, vq_loss, num_codes = self.codebook(z_e)
         x_hat = self.decoder(z_q)
 
         return x_hat, vq_loss
