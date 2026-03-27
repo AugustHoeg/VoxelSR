@@ -41,7 +41,7 @@ class NonLocalBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16)):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16,)):
         super(Encoder, self).__init__()
         channels = [128, 128, 128, 256, 256, 512]
         layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
@@ -69,7 +69,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16)):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16,)):
         super(Decoder, self).__init__()
         channels = [512, 256, 256, 128, 128, 128]
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
@@ -110,12 +110,14 @@ class VQModel3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             resolution=resolution,
+            attn_resolutions=[resolution // 16]
         )
 
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
             resolution=resolution//16,  # Assuming 16x downsampling in encoder
+            attn_resolutions=[resolution // 16]
         )
 
         self.codebook = CodeBook(num_embeddings=num_embeddings, embedding_dim=latent_dim)
@@ -147,6 +149,20 @@ class VQModel3D(nn.Module):
 
         return x_hat, vq_loss
 
+
+class Discriminator3D(nn.Module):
+    def __init__(self, in_channels=1):
+        super().__init__()
+        self.model = nn.Sequential(
+            nn.Conv3d(in_channels, 64, 4, 2, 1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(64, 128, 4, 2, 1),
+            nn.LeakyReLU(0.2),
+            nn.Conv3d(128, 1, 3, 1, 1)
+        )
+
+    def forward(self, x):
+        return self.model(x)
 
 
 if __name__ == '__main__':

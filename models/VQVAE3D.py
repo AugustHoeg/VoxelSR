@@ -6,6 +6,7 @@ import torch.nn.functional as F
 class GroupNorm(nn.Module):
     def __init__(self, channels, num_groups=32):
         super(GroupNorm, self).__init__()
+        # print("Creating GroupNorm:", channels)
         self.gn = nn.GroupNorm(num_groups=num_groups, num_channels=channels, eps=1e-6, affine=True)
 
     def forward(self, x):
@@ -23,10 +24,10 @@ class ResidualBlock(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.block = nn.Sequential(
-            nn.GroupNorm(out_channels, num_groups),
+            GroupNorm(in_channels, num_groups),
             Swish(),
             nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1),
-            nn.GroupNorm(out_channels, num_groups),
+            GroupNorm(out_channels, num_groups),
             Swish(),
             nn.Conv3d(out_channels, out_channels, kernel_size=1, stride=1, padding=0),
         )
