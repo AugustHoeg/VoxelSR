@@ -19,13 +19,20 @@ api = HfApi()
 
 dataset_path = "/dtu/3d-imaging-center/projects/2025_DANFIX_163_VoDaSuRe/analysis/VoDaSuRe_dataset_p4/VoDaSuRe/"
 
-file_path = os.path.join(dataset_path, "extract_files.sh")
+#file_path = os.path.join(dataset_path, "extract_files.sh")
+#api.upload_file(
+#    path_or_fileobj=file_path,
+#    path_in_repo="extract_files.sh",
+#    repo_id="AugustHoeg/VoDaSuRe",
+#    repo_type="dataset",
+#)
+#print("Upload successful!")
 
-api.upload_file(
-    path_or_fileobj=file_path,
-    path_in_repo="extract_files.sh",
+folder_path = os.path.join(dataset_path, "ome")  # <-- the large folder
+api.upload_large_folder(
     repo_id="AugustHoeg/VoDaSuRe",
     repo_type="dataset",
+    folder_path=folder_path,
 )
 
-print("Upload successful!")
+print("Large upload initiated")
