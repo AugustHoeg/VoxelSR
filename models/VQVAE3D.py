@@ -110,7 +110,7 @@ class CodeBook(nn.Module):
 
         embed = self.embedding.weight  # (K, C)
 
-        # Compute distances to codebook embeddings (a^2 + b^2 - 2ab)
+        # Compute distances to codebook embeddings (a - b)^2 = a^2 + b^2 - 2ab
         dists = (z_e_flat.pow(2).sum(-1, keepdim=True)
                 + embed.pow(2).sum(1)
                 - 2 * torch.matmul(z_e_flat, embed.t()))
@@ -130,7 +130,7 @@ class CodeBook(nn.Module):
         # Copy the gradients of z_e to z_q, and use z_q values in forward pass
         z_q = z_e + (z_q - z_e).detach()  # Straight-through estimator
 
-        return z_q, vq_loss, num_unique_codes
+        return z_q, vq_loss, q_indices, num_unique_codes
 
 class VQVAE3D(nn.Module):
     def __init__(self, in_channels, hidden_channels=256, num_embeddings=512, use_checkpoint=False):
@@ -143,7 +143,7 @@ class VQVAE3D(nn.Module):
 
     def encode(self, x):
         z_e = self.encoder(x)
-        z_q, vq_loss, num_codes = self.codebook(z_e)
+        z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
 
         return z_e, z_q, vq_loss
 
@@ -162,7 +162,7 @@ class VQVAE3D(nn.Module):
     def forward(self, x):
 
         z_e = self.encoder(x)
-        z_q, vq_loss, num_codes = self.codebook(z_e)
+        z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
         x_hat = self.decoder(z_q)
 
         return x_hat, vq_loss

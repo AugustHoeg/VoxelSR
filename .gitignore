@@ -39,6 +39,9 @@ models/MTVNeXt_arch_no_cross.py
 models/xcit.py
 models/xcit3D.py
 
+# Huggingface
+# upload_huggingface.py
+
 # Datasets to ignore
 data/Dataset_2022_QIM_52_Bone.py
 data/Dataset_Binning_Bone.py
