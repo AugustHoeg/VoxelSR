@@ -1,14 +1,31 @@
 import os
-import glob
-from huggingface_hub import HfApi
+import argparse
+from huggingface_hub import HfApi, login
+
+# Add HR Token as a command-line argument
+parser = argparse.ArgumentParser(description="Upload files to Hugging Face Hub")
+parser.add_argument("--HF_TOKEN", type=str, help="Hugging Face API token")
+args = parser.parse_args()
+
+# Option 1: login using token (recommended for HPC)
+HF_TOKEN = args.HF_TOKEN
+
+if HF_TOKEN is None:
+    raise ValueError("Please set HF_TOKEN")
+
+login(token=HF_TOKEN)
 
 api = HfApi()
 
 dataset_path = "/dtu/3d-imaging-center/projects/2025_DANFIX_163_VoDaSuRe/analysis/VoDaSuRe_dataset_p4/VoDaSuRe/"
 
+file_path = os.path.join(dataset_path, "extract_files.sh")
+
 api.upload_file(
-    path_or_fileobj=os.path.join(dataset_path, "extract_files.sh"),
+    path_or_fileobj=file_path,
     path_in_repo="extract_files.sh",
     repo_id="AugustHoeg/VoDaSuRe",
     repo_type="dataset",
 )
+
+print("Upload successful!")
