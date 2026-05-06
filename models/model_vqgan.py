@@ -563,7 +563,7 @@ class ModelVQGAN(ModelBase):
             self.vq_forward()  # Reconstruct H and compute VQ loss for D loss calculation
             self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
             self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
-            dis_factor = self.loss_val_dict['ADV'] if current_step >= self.opt_train['D_start_iteration'] else 0.0
+            dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
             self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake))) * dis_factor
             self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
@@ -697,7 +697,7 @@ class ModelVQGAN(ModelBase):
         self.vq_forward()  # Reconstruct H and compute VQ loss for D loss calculation
         self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
         self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
-        dis_factor = self.loss_val_dict['ADV'] if current_step >= self.opt_train['D_start_iteration'] else 0.0
+        dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
         self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake))) * dis_factor
         self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
