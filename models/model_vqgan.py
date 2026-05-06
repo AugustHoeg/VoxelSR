@@ -563,8 +563,9 @@ class ModelVQGAN(ModelBase):
             self.vq_forward()  # Reconstruct H and compute VQ loss for D loss calculation
             self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
             self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
+            dis_factor = self.loss_val_dict['ADV'] if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
-            self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
+            self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake))) * dis_factor
             self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
 
         self.D_train_loss = self.dis_loss  # Add discriminator training loss to total loss
@@ -630,7 +631,7 @@ class ModelVQGAN(ModelBase):
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
             lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
-            self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * lambda_adv * adv_loss  # VQ + recon + adv loss
+            self.gen_loss = self.vq_loss + recon_loss + dis_factor * lambda_adv * adv_loss  # VQ + recon + adv loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -696,8 +697,9 @@ class ModelVQGAN(ModelBase):
         self.vq_forward()  # Reconstruct H and compute VQ loss for D loss calculation
         self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
         self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
+        dis_factor = self.loss_val_dict['ADV'] if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
-        self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
+        self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake))) * dis_factor
         self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
 
         self.D_train_loss = self.dis_loss  # Add discriminator training loss to total loss
@@ -760,7 +762,7 @@ class ModelVQGAN(ModelBase):
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
         lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
-        self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * lambda_adv * adv_loss  # VQ + recon + adv loss
+        self.gen_loss = self.vq_loss + recon_loss + dis_factor * lambda_adv * adv_loss  # VQ + recon + adv loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
