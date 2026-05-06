@@ -343,11 +343,6 @@ class ModelVQGAN(ModelBase):
                     device=self.device,
                     axes=(0, 1, 2)  # Axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis.
                 )
-            elif key == "ADV" and value > 0:
-                self.loss_fn_dict["ADV"] = AdvGenLoss(
-                    type="hinge",
-                    device=self.device
-                )
 
         # Define losses for VQGAN
         self.G_train_loss = 0.0
@@ -542,6 +537,16 @@ class ModelVQGAN(ModelBase):
     def netD_forward(self, input):
         return self.netD(input)
 
+    def calculate_lambda(self, recon_loss, adv_loss):
+        last_layer = self.netG.module.decoder.model[-1]  # unpack DDP to access decoder's last layer
+        last_layer_weight = last_layer.weight
+        recon_loss_grads = torch.autograd.grad(recon_loss, last_layer_weight, retain_graph=True)[0]
+        adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
+
+        lambda_adv = torch.norm(recon_loss_grads) / (torch.norm(adv_loss_grads) + 1e-4)
+        lambda_adv = torch.clamp(lambda_adv, 0, 1e4).detach()
+        return 0.8 * lambda_adv
+
     # ----------------------------------------
     # update parameters and get loss
     # ----------------------------------------
@@ -624,7 +629,8 @@ class ModelVQGAN(ModelBase):
             # Compute loss for G
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
-            self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
+            lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
+            self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * lambda_adv * adv_loss  # VQ + recon + adv loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -753,7 +759,8 @@ class ModelVQGAN(ModelBase):
         # Compute loss for G
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
-        self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
+        lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
+        self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * lambda_adv * adv_loss  # VQ + recon + adv loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
