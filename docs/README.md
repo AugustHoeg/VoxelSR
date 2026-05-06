@@ -4,7 +4,8 @@
 This repository contains tools and scripts for training of volumetric super-resolution methods on large-scale 3D datasets, as well as several baseline model implementations.
 
 ## Updates
-- ✅ 2026-03-17: Our dataset contribution VoDaSuRe has been accepted for CVPR 2026! See the [VoDaSuRe project page](https://augusthoeg.github.io/VoDaSuRe/) for more details.  
+- 🚀 2026-04-26: The VoDaSuRe dataset is now publicly available on Hugging Face ([Dataset link](https://huggingface.co/datasets/AugustHoeg/VoDaSuRe)).
+- 🎉 2026-03-17: Our VoDaSuRe paper has been accepted for CVPR 2026! See the [Project page](https://augusthoeg.github.io/VoDaSuRe/) for details.  
 - ✅ 2026-03-13: Added OME-Zarr data loading support for training and inference.
 
 ## Environment
