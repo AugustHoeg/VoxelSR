@@ -66,7 +66,6 @@ figures/plots/**
 
 *.log
 *.wandb
-*.ipynb
 *.ini
 
 logs/2022_QIM_52_Bone/**

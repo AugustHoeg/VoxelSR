@@ -260,8 +260,8 @@ class ZarrIterableDataset(IterableDataset):
                 if dataset['store_type'] == 'Numpy':
                     raise NotImplementedError("Numpy store not implemented yet for zarr v3.")
                     # TODO: fix NumPy method here.
-                    data = zarr.open(path, mode='r')
-                    z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
+                    # data = zarr.open(path, mode='r')
+                    # z = {self.group_name: {level: np.array(data[self.group_name][level]) for level in self.ome_levels}}
                 elif dataset['store_type'] == 'MemoryStore':
                     disk_store = LocalStore(path)
                     memory_store = MemoryStore()
@@ -269,9 +269,9 @@ class ZarrIterableDataset(IterableDataset):
                     z = zarr.open(memory_store, mode='r')
                 elif dataset['store_type'] == 'LRUStoreCache':
                     raise NotImplementedError("LRUStoreCache not implemented yet for zarr v3.")
-                    store_size = 2 ** 28  # 256 MB
-                    cached_store = LRUStoreCache(FSStore(path), max_size=store_size)
-                    z = zarr.open(store=cached_store, mode='r')
+                    # store_size = 2 ** 28  # 256 MB
+                    # cached_store = LRUStoreCache(FSStore(path), max_size=store_size)
+                    # z = zarr.open(store=cached_store, mode='r')
                 else:
                     z = zarr.open(path, mode='r')
 
