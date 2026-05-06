@@ -14,7 +14,8 @@ from torch.optim import lr_scheduler
 from torch.nn.parallel import DistributedDataParallel
 
 import config
-from loss_functions.loss_functions_simple import compute_generator_loss, bce_dis_loss, LPIPSLoss3D, FSCLoss3D
+import loss_functions.loss_functions_simple
+from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D
 from models.model_base import ModelBase
 from models.select_network import define_G, define_D
 from utils import utils_3D_image
@@ -23,10 +24,10 @@ from utils.utils_dist import get_rank, reduce_sum, reduce_max
 
 from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
-class ModelGAN(ModelBase):
+class ModelVQGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
     def __init__(self, opt, mode='train', data_parallel=True):
-        super(ModelGAN, self).__init__(opt)
+        super(ModelVQGAN, self).__init__(opt)
         # ------------------------------------
         # define network
         # ------------------------------------
@@ -342,27 +343,13 @@ class ModelGAN(ModelBase):
                     device=self.device,
                     axes=(0, 1, 2)  # Axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis.
                 )
-            elif key == "FSC" and value > 0:
-                self.loss_fn_dict["FSC"] = FSCLoss3D(
-                    size=self.opt['dataset_opt']['patch_size_hr'],
-                    delta=1,
-                    alpha=2.0,
-                    drop_DC=False,
+            elif key == "ADV" and value > 0:
+                self.loss_fn_dict["ADV"] = AdvGenLoss(
+                    type="hinge",
                     device=self.device
                 )
-            elif key == "CSC" and value > 0:
-                from loss_functions.loss_functions_simple import CSCLoss
-                self.loss_fn_dict["CSC"] = CSCLoss(
-                    model_id="FlashDegradeNet_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID011020",
-                    eval_mode=True,
-                    verbose=True,
-                    feat_dist_func='FSC',  # options: 'L1', 'L2', 'FSC'
-                    compare_input=False,
-                    device=self.device,
-                    size=self.opt['dataset_opt']['patch_size_hr']
-                )
 
-        # Define losses for G and D
+        # Define losses for VQGAN
         self.G_train_loss = 0.0
         self.G_valid_loss = 0.0
         self.G_train_grad_norm = 0.0
@@ -542,38 +529,18 @@ class ModelGAN(ModelBase):
     # ----------------------------------------
     # feed L/H data
     # ----------------------------------------
-    def feed_data(self, data, need_H=True, add_key=None):
-        if add_key is not None:
-            self.L = data['L'][add_key].as_tensor().to(self.device, non_blocking=True)
-            if need_H:
-                self.H = data['H'][add_key].as_tensor().to(self.device, non_blocking=True)
-        elif self.opt['dataset_opt']['dataset_type'] == 'MasterThesisDataset':
-            self.L = data[1].as_tensor().to(self.device, non_blocking=True)
-            if need_H:
-                self.H = data[0].as_tensor().to(self.device, non_blocking=True)
-        else:
-            self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
-            if need_H:
-                self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
+    def feed_data(self, data):
+        self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
+        self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
-    # ----------------------------------------
-    # feed L to netG and get E
-    # ----------------------------------------
-    def netG_forward(self):
-        if self.mixed_precision is not None:
-            # Evaluate using AMP
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                self.E = self.netG(self.L)  # self.L
-        else:  # Standard precision
-            self.E = self.netG(self.L)
+    def vq_forward(self):  # Returns reconstruction E and VQ loss given H, used for training
+        self.E, self.vq_loss = self.netG(self.H)
+
+    def netG_forward(self):  # Returns reconstruction E given L, only used for inference testing
+        self.E, _ = self.netG(self.L)
 
     def netD_forward(self, input):
-        if self.mixed_precision is not None:
-            # Evaluate using AMP
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                return self.netD(input)
-        else:  # Standard precision
-                return self.netD(input)
+        return self.netD(input)
 
     # ----------------------------------------
     # update parameters and get loss
@@ -586,12 +553,13 @@ class ModelGAN(ModelBase):
 
         # Enable gradients for D
         self.netD.requires_grad_(True)
-        self.netG_forward()  # Forward G to get E for D loss calculation
-        self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
-        self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.dis_loss = bce_dis_loss(self.prop_real, self.prop_fake)  # BCE loss for D
+            self.vq_forward()  # Reconstruct H and compute VQ loss for D loss calculation
+            self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
+            self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
+
+            self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
             self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
 
         self.D_train_loss = self.dis_loss  # Add discriminator training loss to total loss
@@ -649,12 +617,14 @@ class ModelGAN(ModelBase):
 
         # Disable gradients for D when optimizing G
         self.netD.requires_grad_(False)
-        self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake again, as the value was discarded by backward
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake again, as the value was discarded by backward
+
+            # Compute loss for G
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-            adv_loss = F.binary_cross_entropy_with_logits(self.prop_fake, torch.ones_like(self.prop_fake))
-            self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
+            adv_loss = -torch.mean(self.prop_fake)
+            self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -717,10 +687,11 @@ class ModelGAN(ModelBase):
         # Enable gradients for D
         self.netD.requires_grad_(True)
 
-        self.netG_forward()  # Forward G to get E for D loss calculation
-        self.prop_real = self.netD_forward(self.H)
-        self.prop_fake = self.netD_forward(self.E.detach())
-        self.dis_loss = bce_dis_loss(self.prop_real, self.prop_fake)  # BCE loss for D
+        self.vq_forward()  # Reconstruct H and compute VQ loss for D loss calculation
+        self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
+        self.prop_fake = self.netD_forward(self.E.detach())  # Compute prop_fake for D
+
+        self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
         self.dis_loss = self.dis_loss / self.num_accum_steps_D  # Scale loss by number of accumulation steps
 
         self.D_train_loss = self.dis_loss  # Add discriminator training loss to total loss
@@ -778,9 +749,11 @@ class ModelGAN(ModelBase):
         self.netD.requires_grad_(False)
 
         self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake again, as the value was discarded by backward
+
+        # Compute loss for G
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-        adv_loss = F.binary_cross_entropy_with_logits(self.prop_fake, torch.ones_like(self.prop_fake))
-        self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
+        adv_loss = -torch.mean(self.prop_fake)
+        self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
         self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
@@ -940,8 +913,7 @@ class ModelGAN(ModelBase):
 
     def validation(self):
 
-        # Forward G
-        self.netG_forward()
+        self.vq_forward()  # Reconstruct H and compute VQ loss
 
         # Forward D
         self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
@@ -949,11 +921,11 @@ class ModelGAN(ModelBase):
 
         # Compute loss for G
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-        adv_loss = F.binary_cross_entropy_with_logits(self.prop_fake, torch.ones_like(self.prop_fake))
-        self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
+        adv_loss = -torch.mean(self.prop_fake)
+        self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
 
         # Compute loss for D
-        self.dis_loss = bce_dis_loss(self.prop_real, self.prop_fake)  # BCE loss for D
+        self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
@@ -966,22 +938,20 @@ class ModelGAN(ModelBase):
 
     def validation_amp(self):
 
-        # Forward G
-        self.netG_forward()
-
-        # Forward D
-        self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
-        self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake for D
-
-        # Compute loss for G
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.vq_forward()  # Reconstruct H and compute VQ loss
+
+            # Forward D
+            self.prop_real = self.netD_forward(self.H)  # Compute prop_real for D
+            self.prop_fake = self.netD_forward(self.E)  # Compute prop_fake for D
+
+            # Compute loss for G
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-            adv_loss = F.binary_cross_entropy_with_logits(self.prop_fake, torch.ones_like(self.prop_fake))
-            self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
+            adv_loss = -torch.mean(self.prop_fake)
+            self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss  # VQ + recon + adv loss
 
-        # Compute loss for D
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.dis_loss = bce_dis_loss(self.prop_real, self.prop_fake)  # BCE loss for D
+            # Compute loss for D
+            self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss

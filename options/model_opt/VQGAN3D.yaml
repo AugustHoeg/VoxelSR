@@ -1,0 +1,24 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: vqgan
+model_architecture: VQGAN3D
+netG:
+  net_type: VQGAN3D
+  description: "3D Vector Quantized GAN (VQGAN3D)"
+  in_channels: 1
+  latent_dim: 256
+  num_embeddings: 512
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.2
+
+netD:
+  net_type: PatchGAN3D
+  description: "3D PatchGAN Discriminator for VQGAN"
+  in_channels: 1
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.1

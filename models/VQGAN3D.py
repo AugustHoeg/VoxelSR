@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from VQVAE3D import ResidualBlock, GroupNorm, Swish, UpBlock, DownBlock, CodeBook
+from models.VQVAE3D import ResidualBlock, GroupNorm, Swish, UpBlock, DownBlock, CodeBook
 
 
 class NonLocalBlock(nn.Module):
@@ -125,7 +125,7 @@ class VQModel3D(nn.Module):
 
     def encode(self, x):
         z_e = self.encoder(x)
-        z_q, vq_loss, num_codes = self.codebook(z_e)
+        z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
 
         return z_e, z_q, vq_loss
 
@@ -144,13 +144,13 @@ class VQModel3D(nn.Module):
     def forward(self, x):
 
         z_e = self.encoder(x)
-        z_q, vq_loss, num_codes = self.codebook(z_e)
+        z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
         x_hat = self.decoder(z_q)
 
         return x_hat, vq_loss
 
 
-class Discriminator3D(nn.Module):
+class PatchGAN3D(nn.Module):
     def __init__(self, in_channels=1):
         super().__init__()
         self.model = nn.Sequential(

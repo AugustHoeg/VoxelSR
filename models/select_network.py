@@ -35,6 +35,14 @@ def define_G(opt, mode='train'):
                    num_embeddings=opt_net['num_embeddings'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
+    elif model_arch == "VQGAN3D":  # VQGAN_3D
+        from models.VQGAN3D import VQModel3D as net
+        netG = net(in_channels=opt_net['in_channels'],
+                   latent_dim=opt_net['latent_dim'],
+                   num_embeddings=opt_net['num_embeddings'],
+                   resolution=opt['dataset_opt']['patch_size'],
+                   use_checkpoint=opt_net['use_checkpoint'])
+
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],
@@ -369,8 +377,13 @@ def define_D(opt, mode='train'):
                    n_dense=opt_net['n_dense'],
                    k_size=opt_net['k_size'],
                    use_checkpoint=opt_net['use_checkpoint'])
+
+    elif model_arch == "PatchGAN3D":  # PatchGAN Discriminator
+        from models.VQGAN3D import PatchGAN3D as net
+        netD = net(in_channels=opt_net['in_channels'])
+
     else:
-        raise NotImplementedError('netG [{:s}] is not found.'.format(model_arch))
+        raise NotImplementedError('netD [{:s}] is not found.'.format(model_arch))
 
     # ----------------------------------------
     # initialize weights

@@ -11,9 +11,10 @@ from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_
 from utils.load_options import load_options_from_experiment_id
 from models.select_model import define_Model
 
-def compute_discriminator_loss(prop_real, prop_fake):
+def bce_dis_loss(prop_real, prop_fake):
     dis_loss_fake = F.binary_cross_entropy_with_logits(prop_fake, torch.zeros_like(prop_fake))
     dis_loss_real = F.binary_cross_entropy_with_logits(prop_real, torch.ones_like(prop_real) - 0.1 * torch.ones_like(prop_real))
+
     # Formulate Discriminator loss: Max log(D(I_HR)) + log(1 - D(G(I_LR)))
     dis_loss = dis_loss_real + dis_loss_fake
 
@@ -39,16 +40,14 @@ def compute_critic_loss(critic_real, critic_fake, scaled_gradient_penalty):
     loss_critic = -(torch.mean(critic_real.reshape(-1)) - torch.mean(critic_fake.reshape(-1))) + scaled_gradient_penalty
     return loss_critic
 
-def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, prop_real=None, prop_fake=None, device="cuda"):
+def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, device="cuda"):
 
     gen_loss = torch.tensor(0.0).to(device)
     aux_loss = torch.tensor(0.0).to(device)
 
     for key, value in loss_val_dict.items():
-        if value > 0 and key != 'ADV':
+        if value > 0:
             aux_loss += value*loss_fn_dict[key](real_hi_res, fake_hi_res)
-        elif key == 'ADV' and value > 0:
-            aux_loss += value*F.binary_cross_entropy_with_logits(prop_fake, torch.ones_like(prop_fake))
 
     gen_loss += aux_loss
 
