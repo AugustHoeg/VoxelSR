@@ -798,12 +798,12 @@ class ModelGAN(ModelBase):
         if not self.G_update:
             if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
                 with self.netG.no_sync():  # avoid expensive all-reduce
-                    self.gen_scaler.scale(self.gen_loss).backward()
+                    self.gen_loss.backward()
             else:
-                self.gen_scaler.scale(self.gen_loss).backward()
+                self.gen_loss.backward()
         else:
             # sync gradients
-            self.gen_scaler.scale(self.gen_loss).backward()
+            self.gen_loss.backward()
 
         # ------------------------------------
         # Optimizer step
