@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
-  - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: AESOP3D                  # Default model config
+  - dataset_opt: VoDaSuRe_OME       # Default dataset config
+  - model_opt: AESOP3D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -13,11 +13,11 @@ up_factor: 4  # upscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_REG_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -36,36 +36,37 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 1000
-  validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  iterations: 100000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 10
+  G_optimizer_clipgrad: 2
+  G_warmup_steps: 0  # new
 
   G_loss_weights:
-    L1: 1.0
+    L1: 1.0  # Pretraining Autoencoder w. L1 loss only
 
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: true
+  synthetic: false
   patch_size: 32
 
-  datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 8
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 1
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 
