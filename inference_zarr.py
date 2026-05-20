@@ -253,6 +253,10 @@ def main(opt: DictConfig):
         center_size = opt['model_opt']['netG']['context_sizes'][-1]  # New
         context_width = (patch_size - center_size) // 2
         patch_size_hr = center_size * opt['up_factor']
+    elif opt['model_opt']['netG']['net_type'] == "AESOP3D":
+        opt['up_factor'] = 1  # Force up_factor of 1 for AutoEncoder
+        context_width = 0
+        patch_size_hr = opt['dataset_opt']['patch_size']
     else:
         patch_size = opt['dataset_opt']['patch_size']
         context_width = 0
