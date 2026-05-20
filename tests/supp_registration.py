@@ -83,9 +83,10 @@ if __name__ == '__main__':
     show_HR_as_large_img = False
 
     red_box_size = 512
-    #red_box_coords = (1920//2 - red_box_size//2, 1920//2 - red_box_size//2)
-    red_box_coords = (1920 // 2 - red_box_size // 2 +300, 1920 // 2 - red_box_size // 2 -350)
+    red_box_coords = (1920//2 - red_box_size//2 - 150, 1920//2 - red_box_size//2 - 125)
+    #red_box_coords = (1920 // 2 - red_box_size // 2 -550, 1920 // 2 - red_box_size // 2 -350)
     #red_box_coords = (1600 // 2 - red_box_size // 2 + 250, 1440 // 2 - red_box_size // 2 +290)
+    #red_box_coords = (1600 // 2 - red_box_size // 2 -500, 1440 // 2 - red_box_size // 2 - 250)
 
     large_image_string = r"VoDaSuRe ($\times 4$)"
     use_other_string = True
@@ -164,6 +165,6 @@ if __name__ == '__main__':
 
     datetime = np.datetime64('now')
     time = str(datetime).replace(":", "-").replace(" ", "_")
-    save_path = f"../figures/supplementary_registration_{img_idx}.pdf"
-    fig.savefig(save_path, format="pdf")
+    save_path = f"../figures/supplementary_registration_{img_idx}.jpg"
+    fig.savefig(save_path, format="jpg", dpi=300)
     plt.show()

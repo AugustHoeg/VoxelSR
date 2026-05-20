@@ -9,12 +9,11 @@ from models.models_3D import SRBlock3D
 from utils.utils_3D_image import ICNR, numel
 
 
-def make_layer(block, n_layers):
+def make_layer(block, n_layers, **kwargs):
     layers = []
     for _ in range(n_layers):
-        layers.append(block())
-    #return nn.Sequential(*layers)
-    return nn.ModuleList(layers)
+        layers.append(block(**kwargs))
+    return nn.Sequential(*layers)
 
 
 class ResidualDenseBlock_5C(nn.Module):

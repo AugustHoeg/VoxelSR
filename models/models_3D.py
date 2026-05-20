@@ -448,67 +448,57 @@ class SRBlock3D(nn.Module):
 
         return out
 
-# class SRBlock3D(nn.Module):
-#     def __init__(self, in_channels, out_channels, k_size=6, pad=2, upsample_method="deconv_nn_resize", upscale_factor=2):
-#         super().__init__()
-#         self.upsample_method = upsample_method
-#
-#         if self.upsample_method == 'deconv_nn_resize':
-#             self.deconv0 = nn.ConvTranspose3d(in_channels, out_channels, kernel_size=k_size, stride=2, padding=pad)
-#             self.act0 = nn.PReLU(num_parameters=out_channels)
-#             weight = ICNR(self.deconv0.weight, initializer=nn.init.normal_, upscale_factor=2, mean=0.0, std=0.02)
-#             self.deconv0.weight.data.copy_(weight)
-#
-#         elif self.upsample_method == 'pixelshuffle3D':
-#             self.upscale_factor = upscale_factor
-#             self.pre_conv = nn.Conv3d(in_channels, in_channels*(upscale_factor**3), kernel_size=3, stride=1, padding=1)
-#             weight = ICNR(self.pre_conv.weight, initializer=nn.init.normal_, upscale_factor=upscale_factor, mean=0.0, std=0.02)
-#             self.pre_conv.weight.data.copy_(weight)
-#             self.act0 = nn.PReLU(num_parameters=out_channels)
-#
-#         elif self.upsample_method == "Monaipixelshuffle":
-#             self.sr_block = monai.networks.blocks.UpSample(3,
-#                                                            in_channels=in_channels,
-#                                                            out_channels=None,
-#                                                            scale_factor=upscale_factor,
-#                                                            kernel_size=None,
-#                                                            size=None,
-#                                                            mode="pixelshuffle",
-#                                                            pre_conv='default',
-#                                                            interp_mode="linear",
-#                                                            align_corners=True,
-#                                                            bias=True,
-#                                                            apply_pad_pool=True)
-#
-#         else:
-#             self.interp = nn.Upsample(scale_factor=upscale_factor, mode=upsample_method)
-#             self.post_conv = nn.Conv3d(in_channels, out_channels, kernel_size=3, stride=1, padding=1, bias=True)
-#             self.act = nn.LeakyReLU(0.2, inplace=True)
-#
-#     def forward(self, x):
-#         if self.upsample_method == 'deconv_nn_resize':
-#             x = self.deconv0(x)
-#             out = self.act0(x)
-#
-#         elif self.upsample_method == 'pixelshuffle3D':
-#             x = self.pre_conv(x)
-#             batch_size, channels, in_depth, in_height, in_width = x.size()
-#             n_out = channels // self.upscale_factor ** 3
-#             out_depth = in_depth * self.upscale_factor
-#             out_height = in_height * self.upscale_factor
-#             out_width = in_width * self.upscale_factor
-#             x = x.contiguous().view(batch_size, n_out, self.upscale_factor, self.upscale_factor, self.upscale_factor, in_depth, in_height, in_width)
-#             x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()
-#             x = x.view(batch_size, n_out, out_depth, out_height, out_width)
-#             out = self.act0(x)
-#
-#         elif self.upsample_method == 'Monaipixelshuffle':
-#             out = self.sr_block(x)
-#
-#         else:
-#             out = self.act(self.post_conv(self.interp(x)))
-#
-#         return out
+
+class PixelUnshuffle3D(nn.Module):
+    def __init__(self, downscale_factor):
+        super(PixelUnshuffle3D, self).__init__()
+        self.downscale_factor = downscale_factor
+
+    def forward(self, x):
+        """
+        Args:
+            x: Tensor of shape (B, C, D, H, W)
+
+        Returns:
+            Tensor of shape
+            (B, C * r^3, D/r, H/r, W/r)
+        """
+        r = self.downscale_factor
+
+        batch_size, channels, in_depth, in_height, in_width = x.size()
+
+        assert in_depth % r == 0, "Depth must be divisible by downscale factor"
+        assert in_height % r == 0, "Height must be divisible by downscale factor"
+        assert in_width % r == 0, "Width must be divisible by downscale factor"
+
+        out_depth = in_depth // r
+        out_height = in_height // r
+        out_width = in_width // r
+
+        # Rearrange spatial blocks into channel dimension
+        x = x.contiguous().view(
+            batch_size,
+            channels,
+            out_depth, r,
+            out_height, r,
+            out_width, r
+        )
+
+        x = x.permute(
+            0, 1,
+            3, 5, 7,
+            2, 4, 6
+        ).contiguous()
+
+        x = x.view(
+            batch_size,
+            channels * (r ** 3),
+            out_depth,
+            out_height,
+            out_width
+        )
+
+        return x
 
 
 class LRconvBlock3D(nn.Module):

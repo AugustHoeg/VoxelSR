@@ -19,6 +19,11 @@ G_loss_weights:
   CSC: 0
   ADV: 0
 
+# Paths to pretrained models for loss calculation (e.g., LPIPS, AESOP3D)
+pretrained_G_loss_IDs:
+  CSC: null
+  AESOP3D: null
+
 # G optimizer parameters
 num_accum_steps_G: 1
 G_optimizer_type: adam

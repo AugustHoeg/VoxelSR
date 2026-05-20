@@ -23,10 +23,10 @@ from utils.utils_dist import get_rank, reduce_sum, reduce_max
 
 from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
-class ModelVQVAE(ModelBase):
+class ModelAESOP(ModelBase):
     """Train with pixel-VGG-GAN loss"""
     def __init__(self, opt, mode='train', data_parallel=True):
-        super(ModelVQVAE, self).__init__(opt)
+        super(ModelAESOP, self).__init__(opt)
         # ------------------------------------
         # define network
         # ------------------------------------
@@ -298,7 +298,7 @@ class ModelVQVAE(ModelBase):
                     axes=(0, 1, 2)  # Axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis.
                 )
 
-        # Define losses for VQVAE
+        # Define losses for AE
         self.G_train_loss = 0.0
         self.G_valid_loss = 0.0
         self.G_train_grad_norm = 0.0
@@ -439,8 +439,8 @@ class ModelVQVAE(ModelBase):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
-    def vq_forward(self):  # Returns reconstruction E and VQ loss given H, used for training
-        self.E, self.vq_loss = self.netG(self.H)
+    def ae_forward(self):  # Returns reconstruction E and L_hat, used for training
+        self.E, self.L_hat = self.netG(self.H)
 
     def netG_forward(self):  # Returns reconstruction E given L, only used for inference testing
         self.E, _ = self.netG(self.L)
@@ -451,13 +451,13 @@ class ModelVQVAE(ModelBase):
     def optimize_parameters_amp(self, current_step, update=False):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.vq_forward()  # Reconstruct H and compute VQ loss
+            self.ae_forward()  # Reconstruct H and latents
 
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
-            self.gen_loss = self.vq_loss + recon_loss  # VQ loss + reconstruction loss
+            self.gen_loss = F.l1_loss(self.L, self.L_hat) + recon_loss  # LR loss + reconstruction loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
 
-        self.G_train_loss = self.gen_loss  # Add VAE training loss to total loss
+        self.G_train_loss = self.gen_loss  # Add training loss to total loss
 
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
@@ -595,10 +595,10 @@ class ModelVQVAE(ModelBase):
 
     def validation(self):
 
-        self.vq_forward()  # Reconstruct H and compute VQ loss
+        self.ae_forward()  # Reconstruct H and latents
 
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
-        self.gen_loss = self.vq_loss + recon_loss  # VQ loss + reconstruction loss
+        self.gen_loss = F.l1_loss(self.L, self.L_hat) + recon_loss  # LR loss + reconstruction loss
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
@@ -611,10 +611,10 @@ class ModelVQVAE(ModelBase):
     def validation_amp(self):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.vq_forward()  # Reconstruct H and compute VQ loss
+            self.ae_forward()  # Reconstruct H and latents
 
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
-            self.gen_loss = self.vq_loss + recon_loss  # VQ loss + reconstruction loss
+            self.gen_loss =  F.l1_loss(self.L, self.L_hat) + recon_loss  # LR loss + reconstruction loss
 
         # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss

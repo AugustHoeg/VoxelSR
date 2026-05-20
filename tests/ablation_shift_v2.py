@@ -260,6 +260,6 @@ if __name__ == '__main__':
 
     datetime = np.datetime64('now')
     time = str(datetime).replace(":", "-").replace(" ", "_")
-    save_path = f"../figures/rebuttal_registration_{img_idx}.pdf"
-    fig.savefig(save_path, format="pdf", bbox_inches="tight")
+    save_path = f"../figures/rebuttal_registration_{img_idx}.png"
+    fig.savefig(save_path, format="png", bbox_inches="tight", dpi=300, transparent=True)
     plt.show()

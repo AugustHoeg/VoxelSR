@@ -205,6 +205,6 @@ if __name__ == "__main__":
         ax.set_yticks([])
 
     #plt.tight_layout()
-    save_path = f"../figures/supplementary_matching_{100}.pdf"
-    fig.savefig(save_path, format="pdf")
+    save_path = f"../figures/supplementary_matching_{100}.png"
+    fig.savefig(save_path, format="png", dpi=300)
     plt.show()

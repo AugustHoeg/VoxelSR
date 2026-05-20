@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: mDCSRN                  # Default model config
+  - model_opt: AESOP3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -48,12 +48,7 @@ train_opt:
   G_optimizer_clipgrad: 10
 
   G_loss_weights:
-    L1: 0.0  # Disabled inplace of AESOP3D loss
-    AESOP3D: 1.0  # Enabled AESOP3D loss with weight 1.0
-    LPIPS: 0.01
-
-  pretrained_G_loss_IDs:
-    AESOP3D: "AESOP3D_VoDaSuRe_OME_ID000000"
+    L1: 1.0
 
 # Overwrite default dataset parameters
 dataset_opt:

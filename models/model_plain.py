@@ -313,13 +313,20 @@ class ModelPlain(ModelBase):
             elif key == "CSC" and value > 0:
                 from loss_functions.loss_functions_simple import CSCLoss
                 self.loss_fn_dict["CSC"] = CSCLoss(
-                    model_id="FlashDegradeNet_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID011020",
                     eval_mode=True,
                     verbose=True,
                     feat_dist_func='FSC',  # options: 'L1', 'L2', 'FSC'
                     compare_input=False,
                     device=self.device,
-                    size=self.opt['dataset_opt']['patch_size_hr']
+                    size=self.opt['dataset_opt']['patch_size_hr'],
+                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['CSC']
+                )
+            elif key == "AESOP3D" and value > 0:
+                from loss_functions.loss_functions_simple import AESOPLoss3D
+                self.loss_fn_dict["AESOP3D"] = AESOPLoss3D(
+                    ae_criterion_type='L1',
+                    ae_weight=1.0,
+                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['AESOP3D'],
                 )
 
         # Define losses for G and D
@@ -510,7 +517,7 @@ class ModelPlain(ModelBase):
         # DDP optimization: skip gradient sync during accumulation
         # -------------------------------------------------
         if not self.update:
-            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
                 with self.netG.no_sync():  # avoid expensive all-reduce
                     self.gen_scaler.scale(self.gen_loss).backward()
             else:
@@ -570,7 +577,7 @@ class ModelPlain(ModelBase):
         # DDP optimization: skip gradient sync during accumulation
         # -------------------------------------------------
         if not self.update:
-            if isinstance(self.netD, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
+            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
                 with self.netG.no_sync():  # avoid expensive all-reduce
                     self.gen_loss.backward()
             else:

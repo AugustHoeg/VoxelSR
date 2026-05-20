@@ -78,8 +78,8 @@ if __name__ == '__main__':
     red_box_coords = (150, 150)
     red_box_size = 256
 
-    img_idx = 45
-    large_img_location = (650, 650)
+    img_idx = 45 # 45
+    large_img_location = (250, 650) # (650, 650)
 
     panels = [
         ("VoDaSuRe_DOWN", "HR0_HR2", "RRDBNet3D", "H", r"HR reference"),
@@ -189,8 +189,8 @@ if __name__ == '__main__':
     # Move label slightly up and left
     cbar.ax.xaxis.set_label_coords(0.50, -1.8)
 
-    save_path = f"../figures/power_spectrum_{img_idx}_{red_box_size}.pdf"
+    save_path = f"../figures/power_spectrum_{img_idx}_{red_box_size}_pos_{large_img_location[0]}_{large_img_location[1]}.png"
 
-    fig.savefig(save_path, format="pdf", bbox_inches="tight")
+    fig.savefig(save_path, format="png", bbox_inches="tight", dpi=600)
 
     plt.show()

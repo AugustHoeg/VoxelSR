@@ -144,11 +144,11 @@ class FSCLoss3DF(torch.nn.Module):
 
 class CSCLoss(nn.Module):
 
-    def __init__(self, model_id, eval_mode=True, verbose=True, feat_dist_func='L1', compare_input=True, device='cuda', **kwargs):
+    def __init__(self, experiment_id, eval_mode=True, verbose=True, feat_dist_func='L1', compare_input=True, device='cuda', **kwargs):
 
         """
         Cross-Scale Consistency Loss (CSCLoss)
-        :param model_id: ID of the pre-trained model to use for feature extraction (should be a model trained on the same data/task)
+        :param experiment_id: ID of the pre-trained model to use for feature extraction (should be a model trained on the same data/task)
         :param eval_mode: Whether to set the model to eval mode (recommended for feature extraction)
         :param verbose: Whether to print verbose information about the setup
         :param feat_dist_func: Distance function to use for comparing intermediate features (options: 'L1', 'L2', 'FSC')
@@ -173,12 +173,12 @@ class CSCLoss(nn.Module):
 
         self.compare_input = compare_input
 
-        opt_path = load_options_from_experiment_id(model_id, root_dir="", file_type="yaml")
+        opt_path = load_options_from_experiment_id(experiment_id, root_dir="", file_type="yaml")
         opt_csc = OmegaConf.load(opt_path)
         opt_csc['dist'] = False  # ensure distributed is False for loss computation
 
         net = define_Model(opt_csc, mode='test', data_parallel=False)
-        net.load(model_id, mode='test')  # load model
+        net.load(experiment_id, mode='test')  # load model
         self.model = net.get_bare_model(net.netG)
 
         self.L = len(self.model.output_names)  # number of layers to compare
@@ -191,7 +191,7 @@ class CSCLoss(nn.Module):
 
         if (verbose):
             print(f'Setting up CSC loss with features distance function: {feat_dist_func}')
-            print(f'Using Degradation architecture {self.model.__class__.__name__} with ID: {model_id}')
+            print(f'Using Degradation architecture {self.model.__class__.__name__} with ID: {experiment_id}')
 
     def plot_features(self, in0, in1, outs0, outs1):
 
@@ -255,6 +255,44 @@ class CSCLoss(nn.Module):
 
         return loss
 
+
+class AESOPLoss3D(nn.Module):
+    """AESOP loss."""
+    def __init__(self, ae_criterion_type='L1', ae_weight=1.0, experiment_id=None):
+
+        super(AESOPLoss3D, self).__init__()
+
+        self.ae_loss_weight = ae_weight
+
+        # build and load autoencoder
+        if experiment_id is None:
+            raise ValueError("Experiment ID must be provided to load the autoencoder model for AESOP loss.")
+        opt_path = load_options_from_experiment_id(experiment_id, root_dir="", file_type="yaml")
+        opt_pretrain = OmegaConf.load(opt_path)
+        opt_pretrain['dist'] = False  # ensure distributed is False for loss computation
+        net = define_Model(opt_pretrain, mode='test', data_parallel=False)
+        net.load(experiment_id, mode='test')  # load model
+        self.ae_net = net.get_bare_model(net.netG)
+
+        # freeze ae_net
+        for param in self.ae_net.parameters():
+            param.requires_grad = False
+
+        self.ae_criterion_type = ae_criterion_type
+
+        if self.ae_criterion_type == 'L1':
+            self.ae_criterion = nn.L1Loss()
+        elif self.ae_criterion_type == 'L2' or self.ae_criterion_type == "MSE":
+            self.ae_criterion = nn.MSELoss()
+        else:
+            raise NotImplementedError(f'{ae_criterion_type} AE criterion has not been supported.')
+
+    def forward(self, gt, x):
+        with torch.no_grad():
+            gt_ae = self.ae_net(gt.detach(), return_bottleneck=False)
+        x_ae = self.ae_net(x, return_bottleneck=False)
+
+        return self.ae_loss_weight * self.ae_criterion(x_ae, gt_ae)
 
 
 if __name__ == "__main__":

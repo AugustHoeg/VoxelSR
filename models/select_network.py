@@ -28,7 +28,13 @@ def define_G(opt, mode='train'):
     if model_arch == "DUMMY":
         netG = DummyNetwork()
 
-    if model_arch == "VQVAE3D":  # VQVAE_3D
+    elif model_arch == "AESOP3D":
+        from models.AESOP3D import AESOP3D as net
+        netG = net(up_factor=opt['up_factor'],
+                   enc_opt=opt_net['enc_opt'],
+                   dec_opt=opt_net['dec_opt'])
+
+    elif model_arch == "VQVAE3D":  # VQVAE_3D
         from models.VQVAE3D import VQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],
                    hidden_channels=opt_net['hidden_channels'],
