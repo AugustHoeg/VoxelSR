@@ -1,8 +1,6 @@
 import os
-from collections import OrderedDict
 
 import torch
-import torch.nn as nn
 import wandb
 from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
@@ -254,17 +252,3 @@ class ModelPlain(ModelBase):
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-
-    def current_visuals(self, need_H=True):
-        out_dict = OrderedDict()
-
-        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
-        if self.opt['dataset_opt']['patch_size'] > roi:
-            out_dict['L'] = utils_3D_image.crop_center(self.L, center_size=roi).detach()[0].float().cpu()
-        else:
-            out_dict['L'] = self.L.detach()[0].float().cpu()
-
-        out_dict['E'] = self.E.detach()[0].float().cpu()
-        if need_H:
-            out_dict['H'] = self.H.detach()[0].float().cpu()
-        return out_dict

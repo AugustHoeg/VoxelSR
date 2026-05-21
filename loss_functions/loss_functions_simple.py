@@ -1,15 +1,15 @@
+import lpips
+import matplotlib.pyplot as plt
 import torch
+import torch.cuda.amp
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.cuda.amp
-import lpips
 from omegaconf import OmegaConf
 
-import matplotlib.pyplot as plt
-
+from models.select_model import define_Model
 from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_masks_3d
 from utils.load_options import load_options_from_experiment_id
-from models.select_model import define_Model
+
 
 def bce_dis_loss(prop_real, prop_fake):
     dis_loss_fake = F.binary_cross_entropy_with_logits(prop_fake, torch.zeros_like(prop_fake))

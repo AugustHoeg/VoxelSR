@@ -4,7 +4,6 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import wandb
 from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
@@ -305,7 +304,7 @@ class ModelDegradation(ModelBase):
     def current_log(self):
         return self.log_dict
 
-    def current_visuals(self, need_H=True):
+    def current_visuals(self):
         out_dict = OrderedDict()
 
         roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['down_factor'])
@@ -315,8 +314,7 @@ class ModelDegradation(ModelBase):
             out_dict['L'] = self.L.detach()[0].float().cpu()
 
         out_dict['E'] = self.E.detach()[0].float().cpu()
-        if need_H:
-            out_dict['H'] = self.H.detach()[0].float().cpu()
+        out_dict['H'] = self.H.detach()[0].float().cpu()
         return out_dict
 
     def log_comparison_image(self, img_dict, current_step):

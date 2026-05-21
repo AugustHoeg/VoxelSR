@@ -1,6 +1,7 @@
 import glob
 import os
 import platform
+from collections import OrderedDict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -12,11 +13,10 @@ from torch.optim import lr_scheduler
 
 import config
 from performance_metrics.performance_metrics import NRMSE_2D, NRMSE_3D, PSNR_2D, PSNR_3D, SSIM_2D, SSIM_3D
+from utils.utils_3D_image import crop_center
 from utils.utils_bnorm import merge_bn, tidy_sequential
 from utils.utils_dist import get_rank, reduce_max, reduce_sum
 
-# This is an older version of model_base form SuperFormer, but another version can be found here:
-# https://github.com/cszn/KAIR/blob/master/models/model_base.py#L129
 
 class ModelBase():
 
@@ -294,7 +294,17 @@ class ModelBase():
         pass
 
     def current_visuals(self):
-        pass
+        out_dict = OrderedDict()
+
+        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
+        if self.opt['dataset_opt']['patch_size'] > roi:
+            out_dict['L'] = crop_center(self.L, center_size=roi).detach()[0].float().cpu()
+        else:
+            out_dict['L'] = self.L.detach()[0].float().cpu()
+
+        out_dict['E'] = self.E.detach()[0].float().cpu()
+        out_dict['H'] = self.H.detach()[0].float().cpu()
+        return out_dict
 
     def current_losses(self):
         pass

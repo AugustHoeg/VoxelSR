@@ -1,8 +1,6 @@
 import os
-from collections import OrderedDict
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import wandb
 from omegaconf import OmegaConf
@@ -250,17 +248,3 @@ class ModelAESOP(ModelBase):
 
     def current_log(self):
         return self.log_dict
-
-    def current_visuals(self, need_H=True):
-        out_dict = OrderedDict()
-
-        roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
-        if self.opt['dataset_opt']['patch_size'] > roi:
-            out_dict['L'] = utils_3D_image.crop_center(self.L, center_size=roi).detach()[0].float().cpu()
-        else:
-            out_dict['L'] = self.L.detach()[0].float().cpu()
-
-        out_dict['E'] = self.E.detach()[0].float().cpu()
-        if need_H:
-            out_dict['H'] = self.H.detach()[0].float().cpu()
-        return out_dict

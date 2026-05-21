@@ -3,8 +3,10 @@ import kornia as korn
 import torch
 import torch.nn as nn
 import torchio as tio
-from monai.metrics.regression import SSIMMetric, PSNRMetric, RMSEMetric
-from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nrmse_2D
+from monai.metrics.regression import PSNRMetric, RMSEMetric, SSIMMetric
+
+from utils.utils_image import calculate_nrmse_2D, calculate_psnr_2D, calculate_ssim_2D
+
 
 def calculate_metric_2D(img_H, img_E, border=0, metric_fn=None):
     metric = 0
