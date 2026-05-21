@@ -125,6 +125,64 @@ class ModelBase():
             print(f"Loading G gradscaler [{self._short_path(path)}] ...")
         self.load_gradscaler(path, self.gen_scaler)
 
+    # ----------------------------------------
+    # Loss function construction
+    # ----------------------------------------
+
+    def build_loss_fn_dict(self):
+        """Build loss_fn_dict and loss_val_dict from G_loss_weights config.
+        All loss-specific imports are lazy so heavy libraries are only loaded when needed.
+        """
+        self.loss_fn_dict = {}
+        self.loss_val_dict = self.opt_train['G_loss_weights']
+
+        for key, value in self.loss_val_dict.items():
+            if key == "MSE" and value > 0:
+                self.loss_fn_dict["MSE"] = nn.MSELoss()
+            elif key == "L1" and value > 0:
+                self.loss_fn_dict["L1"] = nn.L1Loss()
+            elif key == "BCE_Logistic" and value > 0:
+                self.loss_fn_dict["BCE_Logistic"] = nn.BCEWithLogitsLoss()
+            elif key == "BCE" and value > 0:
+                self.loss_fn_dict["BCE"] = nn.BCELoss()
+            elif key == "LPIPS" and value > 0:
+                from loss_functions.loss_functions_simple import LPIPSLoss3D
+                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
+                    net_type='alex', version='0.1', device=self.device, axes=(0, 1, 2)
+                )
+            elif key == "FSC" and value > 0:
+                from loss_functions.loss_functions_simple import FSCLoss3D
+                self.loss_fn_dict["FSC"] = FSCLoss3D(
+                    size=self.opt['dataset_opt']['patch_size_hr'], delta=1, alpha=2.0,
+                    drop_DC=False, device=self.device
+                )
+            elif key == "CSC" and value > 0:
+                from loss_functions.loss_functions_simple import CSCLoss
+                self.loss_fn_dict["CSC"] = CSCLoss(
+                    eval_mode=True, verbose=True, feat_dist_func='FSC',
+                    compare_input=False, device=self.device,
+                    size=self.opt['dataset_opt']['patch_size_hr'],
+                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['CSC']
+                )
+            elif key == "AESOP3D" and value > 0:
+                from loss_functions.loss_functions_simple import AESOPLoss3D
+                self.loss_fn_dict["AESOP3D"] = AESOPLoss3D(
+                    ae_criterion_type='L1', ae_weight=1.0,
+                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['AESOP3D'],
+                )
+
+    def init_G_loss_trackers(self):
+        self.G_train_loss = 0.0
+        self.G_valid_loss = 0.0
+        self.G_train_grad_norm = 0.0
+        self.G_valid_grad_norm = 0.0
+
+    def init_D_loss_trackers(self):
+        self.D_train_loss = 0.0
+        self.D_valid_loss = 0.0
+        self.D_train_grad_norm = 0.0
+        self.D_valid_grad_norm = 0.0
+
     def define_loss(self):
         pass
 

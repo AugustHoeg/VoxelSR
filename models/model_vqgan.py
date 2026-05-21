@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
 from torch.optim import Adam, AdamW
 
-from loss_functions.loss_functions_simple import FSCLoss3D, LPIPSLoss3D, compute_generator_loss
+from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
 from models.select_network import define_D, define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
@@ -209,52 +209,9 @@ class ModelVQGAN(ModelBase):
         )
 
     def define_loss(self):
-
-        self.loss_fn_dict = {}
-        self.loss_val_dict = self.opt_train['G_loss_weights']
-
-        for key, value in self.loss_val_dict.items():
-            if key == "MSE" and value > 0:
-                self.loss_fn_dict["MSE"] = nn.MSELoss()
-            elif key == "L1" and value > 0:
-                self.loss_fn_dict["L1"] = nn.L1Loss()
-            elif key == "BCE_Logistic" and value > 0:
-                self.loss_fn_dict["BCE_Logistic"] = nn.BCEWithLogitsLoss()
-            elif key == "BCE" and value > 0:
-                self.loss_fn_dict["BCE"] = nn.BCELoss()
-            elif key == "LPIPS" and value > 0:
-                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
-                    net_type='alex', version='0.1', device=self.device, axes=(0, 1, 2)
-                )
-            elif key == "FSC" and value > 0:
-                self.loss_fn_dict["FSC"] = FSCLoss3D(
-                    size=self.opt['dataset_opt']['patch_size_hr'], delta=1, alpha=2.0,
-                    drop_DC=False, device=self.device
-                )
-            elif key == "CSC" and value > 0:
-                from loss_functions.loss_functions_simple import CSCLoss
-                self.loss_fn_dict["CSC"] = CSCLoss(
-                    eval_mode=True, verbose=True, feat_dist_func='FSC',
-                    compare_input=False, device=self.device,
-                    size=self.opt['dataset_opt']['patch_size_hr'],
-                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['CSC']
-                )
-            elif key == "AESOP3D" and value > 0:
-                from loss_functions.loss_functions_simple import AESOPLoss3D
-                self.loss_fn_dict["AESOP3D"] = AESOPLoss3D(
-                    ae_criterion_type='L1', ae_weight=1.0,
-                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['AESOP3D'],
-                )
-
-        self.G_train_loss = 0.0
-        self.G_valid_loss = 0.0
-        self.G_train_grad_norm = 0.0
-        self.G_valid_grad_norm = 0.0
-
-        self.D_train_loss = 0.0
-        self.D_valid_loss = 0.0
-        self.D_train_grad_norm = 0.0
-        self.D_valid_grad_norm = 0.0
+        self.build_loss_fn_dict()
+        self.init_G_loss_trackers()
+        self.init_D_loss_trackers()
 
     def define_optimizer(self):
 
