@@ -53,6 +53,10 @@ train_opt:
     AESOP3D: 1.0  # Enabled AESOP3D loss with weight 1.0
     LPIPS: 0.01
 
+  pretrained_G_loss_IDs:
+    AESOP3D: "AESOP3D_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID000001"
+
+
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
