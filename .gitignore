@@ -38,6 +38,7 @@ models/MTVNeXt_arch_crop_merge.py
 models/MTVNeXt_arch_no_cross.py
 models/xcit.py
 models/xcit3D.py
+models/model_implicit.py
 
 # Huggingface
 # upload_huggingface.py
