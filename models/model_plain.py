@@ -174,19 +174,9 @@ class ModelPlain(ModelBase):
         else:
             raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['G_optimizer_type']))
 
-    def feed_data(self, data, need_H=True, add_key=None):
-        if add_key is not None:
-            self.L = data['L'][add_key].as_tensor().to(self.device, non_blocking=True)
-            if need_H:
-                self.H = data['H'][add_key].as_tensor().to(self.device, non_blocking=True)
-        elif self.opt['dataset_opt']['dataset_type'] == 'MasterThesisDataset':
-            self.L = data[1].as_tensor().to(self.device, non_blocking=True)
-            if need_H:
-                self.H = data[0].as_tensor().to(self.device, non_blocking=True)
-        else:
-            self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
-            if need_H:
-                self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
+    def feed_data(self, data):
+        self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
+        self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
     def netG_forward(self):
         if self.mixed_precision is not None:
