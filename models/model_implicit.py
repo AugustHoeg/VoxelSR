@@ -1,34 +1,24 @@
 import glob
 import os
 from collections import OrderedDict
-import numpy as np
-import torch
-import torch.nn as nn
-import wandb
-from torch.optim import lr_scheduler
-from torch.optim import Adam
-from torchvision.utils import make_grid
-
-import config
-from models.select_network import define_G
-from models.model_base import ModelBase
-
-from loss_functions.loss_functions_simple import compute_generator_loss
-
-from performance_metrics.performance_metrics import PSNR_3D, SSIM_3D, NRMSE_3D, compute_performance_metrics
-
-from utils import utils_image
-from utils import utils_3D_image
 
 #from ..loss_functions import loss_functions
 #from loss import GANLoss, PerceptualLoss
 #from loss_ssim import SSIMLoss
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn as nn
+import wandb
+from torch.optim import Adam, lr_scheduler
+from torchvision.utils import make_grid
 
-
-def coords_to_image(H, patch_size):
-    B, N, C = H.shape
-    return H.permute(0, 2, 1).contiguous().view(B, C, patch_size, patch_size, patch_size)
+import config
+from loss_functions.loss_functions_simple import compute_generator_loss
+from models.model_base import ModelBase
+from models.select_network import define_G
+from performance_metrics.performance_metrics import NRMSE_3D, PSNR_3D, SSIM_3D, compute_performance_metrics
+from utils import utils_3D_image, utils_image
 
 
 class ModelImplicit(ModelBase):
@@ -62,12 +52,6 @@ class ModelImplicit(ModelBase):
     # Save model during training
     # ----------------------------------------
     """
-
-    def set_eval_mode(self):
-        self.netG.eval()
-
-    def set_train_mode(self):
-        self.netG.train()
 
     def init_test(self, experiment_id):
         # Loads model based on the ID specified.
@@ -340,7 +324,7 @@ class ModelImplicit(ModelBase):
     # define gradient scaler for G and D
     # ----------------------------------------
     def define_gradscaler(self):
-        self.gen_scaler = torch.cuda.amp.GradScaler()
+        self.gen_scaler = torch.amp.GradScaler("cuda")
 
     # ----------------------------------------
     # Set working precision for use with PyTorch AMP
@@ -414,7 +398,7 @@ class ModelImplicit(ModelBase):
     def netG_forward(self):
         if self.opt_train['mixed_precision'] is not None:
             # Evaluate using AMP
-            with torch.cuda.amp.autocast(dtype=self.mixed_precision):
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
                 self.E = self.netG(self.L, self.H_xyz)  # self.L
         else:  # Standard precision
             self.E = self.netG(self.L, self.H_xyz)
@@ -428,7 +412,7 @@ class ModelImplicit(ModelBase):
         # optimize G
         # ------------------------------------
 
-        with torch.cuda.amp.autocast(dtype=self.mixed_precision):
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             # Forward G
             self.netG_forward()
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict,None, self.device)
@@ -467,7 +451,7 @@ class ModelImplicit(ModelBase):
         #
         # # Compute generator loss with/without AMP
         # if self.mixed_precision is not None:
-        #     with torch.cuda.amp.autocast(dtype=self.mixed_precision):
+        #     with torch.amp.autocast("cuda", dtype=self.mixed_precision):
         #         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
         #         self.gen_scaler.scale(self.gen_loss).backward()
         # else:
@@ -624,7 +608,7 @@ class ModelImplicit(ModelBase):
     def validation_amp(self):
 
         # Forward G
-        with torch.cuda.amp.autocast(dtype=self.mixed_precision):
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.netG_forward()
 
             # Compute loss for G
@@ -651,7 +635,7 @@ class ModelImplicit(ModelBase):
         #
         #     # Compute generator validation loss with/without AMP
         #     if self.mixed_precision is not None:
-        #         with torch.cuda.amp.autocast(dtype=self.mixed_precision):
+        #         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
         #             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
         #     else:
         #         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, None, self.device)
@@ -743,36 +727,3 @@ class ModelImplicit(ModelBase):
 
         wandb.log({"Comparisons training": wandb.Image(grid_image, caption=figure_string, mode="RGB")})  # WandB assumes channel last
 
-    """
-    # ----------------------------------------
-    # Information of netG
-    # ----------------------------------------
-    """
-
-    # ----------------------------------------
-    # print network
-    # ----------------------------------------
-    def print_network(self):
-        msg = self.describe_network(self.netG)
-        print(msg)
-
-    # ----------------------------------------
-    # print params
-    # ----------------------------------------
-    def print_params(self):
-        msg = self.describe_params(self.netG)
-        print(msg)
-
-    # ----------------------------------------
-    # network information
-    # ----------------------------------------
-    def info_network(self):
-        msg = self.describe_network(self.netG)
-        return msg
-
-    # ----------------------------------------
-    # params information
-    # ----------------------------------------
-    def info_params(self):
-        msg = self.describe_params(self.netG)
-        return msg

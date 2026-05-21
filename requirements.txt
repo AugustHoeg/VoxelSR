@@ -40,3 +40,4 @@ basicsr
 einops
 lpips
 triton
+omegaconf

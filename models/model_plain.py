@@ -1,36 +1,25 @@
-import glob
 import os
 from collections import OrderedDict
-from omegaconf import OmegaConf
 
-import matplotlib.pyplot as plt
-import numpy as np
 import torch
 import torch.nn as nn
 import wandb
-from torch.optim import Adam, AdamW
-from torch.optim import lr_scheduler
+from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
+from torch.optim import Adam, AdamW
 
-import config
-from loss_functions.loss_functions_simple import compute_generator_loss, LPIPSLoss3D, FSCLoss3D
+from loss_functions.loss_functions_simple import FSCLoss3D, LPIPSLoss3D, compute_generator_loss
 from models.model_base import ModelBase
 from models.select_network import define_G
+from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 
-from utils.utils_dist import get_rank, reduce_sum, reduce_max
-
-from performance_metrics.performance_metrics import compute_performance_metrics, PSNR_3D, SSIM_3D, NRMSE_3D, PSNR_2D, SSIM_2D, NRMSE_2D
 
 class ModelPlain(ModelBase):
     """Train with pixel-VGG-GAN loss"""
     def __init__(self, opt, mode='train', data_parallel=True):
         super(ModelPlain, self).__init__(opt)
-        # ------------------------------------
-        # define network
-        # ------------------------------------
-        self.last_iteration = 0  # last iteration
-        self.opt_train = self.opt['train_opt']    # training option
+        self.last_iteration = 0
         self.netG = define_G(opt, mode=mode)
         self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
         if self.opt_train['E_decay'] > 0:
@@ -39,219 +28,68 @@ class ModelPlain(ModelBase):
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
 
-        self.update = False  # Flag for gradient accumulation
+        self.update = False
 
-        # ------------------------------------
-        # define early stopping parameters
-        # ------------------------------------
         self.early_stop = False
         self.min_validation_loss = float('inf')
         self.patience = self.opt_train['early_stop_patience']
         self.patience_counter = 0
         self.min_delta = 0
 
-    """
-    # ----------------------------------------
-    # Preparation before training with data
-    # Save model during training
-    # ----------------------------------------
-    """
-    def set_eval_mode(self):
+    def init_test(self, experiment_id):
+        self.load(experiment_id, mode='test')
         self.netG.eval()
+        self.define_metrics()
+        self.define_mixed_precision()
+        self.define_visual_eval()
 
-    def set_train_mode(self):
+    def init_train(self):
+        self.load()
         self.netG.train()
 
-    def init_test(self, experiment_id):
-        # Loads model based on the ID specified.
-        # If there exists several logs using the same ID, will load latest one.
-        self.load(experiment_id, mode='test')  # load model
-        self.netG.eval()  # set eval mode
-        self.define_metrics()  # define metrics
-        self.define_mixed_precision()  # enable automatic mixed precision
-        self.define_visual_eval()
-        # self.log_dict = OrderedDict()          # log
+        self.define_loss()
+        self.define_metrics()
 
-    # ----------------------------------------
-    # initialize training
-    # -----------------------------
-    def init_train(self):
-        self.load()                             # load model
-        self.netG.train()                       # set training mode,for BN
+        self.define_optimizer()
+        self.load_optimizers()
 
-        self.define_loss()                      # define loss
-        self.define_metrics()                   # define metrics
+        self.define_mixed_precision()
+        self.load_gradscalers()
 
-        self.define_optimizer()                 # define optimizer
-        self.load_optimizers()                  # load optimizer
-
-        self.define_mixed_precision()           # define mixed precision
-        self.load_gradscalers()                 # load gradscaler
-
-        self.define_scheduler()                 # define scheduler
-        self.load_schedulers()                  # load scheduler
+        self.define_scheduler()
+        self.load_schedulers()
 
         self.define_visual_eval()
-        #self.log_dict = OrderedDict()          # log
 
-    # ----------------------------------------
-    # load pre-trained G and D model
-    # ----------------------------------------
     def load(self, experiment_id=None, mode='train'):
-        """
-        Navigate to appropriate directory using dataset -> wandb -> run ID -> latest
-        :param experiment_id: ID of the experiment to load, takes precedence over "pretrained_experiment_id" in config
-        :return: None
-        """
-        pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
 
         if mode == 'train':
             if self.opt['train_mode'] == 'scratch':
-                pretrained_experiment_id_G = None
-            elif self.opt['train_mode'] == 'finetune' or self.opt['train_mode'] == 'resume':
-                assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
-        elif mode == 'test':
-            assert experiment_id is not None, f"Experiment ID must be specified for loading in test mode."
+                return
+            assert eid is not None, f"Pretrained experiment ID required for train_mode='{self.opt['train_mode']}'."
+        else:
+            assert eid is not None, "Experiment ID required for test mode."
 
-        if pretrained_experiment_id_G is not None:
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_models/*G.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
-            try:
-                G_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
-            except:
-                print("An exception occurred: No G file found, skipping loading of model...")
-            else:
-                if self.opt['rank'] == 0:
-                    print('Loading pretrained model for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_file).split(os.sep)[-4:])))
-                self.load_network(G_file, self.netG, strict=self.opt_train['G_param_strict'])
-                self.last_iteration = int(os.path.basename(G_file).split('_')[0])
-
-    # ----------------------------------------
-    # load optimizerG and optimizerD
-    # ----------------------------------------
-    def load_optimizers(self, experiment_id=None):
-
-        pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
-
-        if self.opt['train_mode'] == 'scratch':
-            pretrained_experiment_id_G = None  # Do not load optimizer for training mode: 'scratch'
-
-        elif self.opt['train_mode'] == 'finetune':
-            pretrained_experiment_id_G = None  # Do not load optimizer for training mode: 'finetune'
-            # if self.opt['train_opt']['G_optimizer_reuse']:
-            #     assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']} when reusing optimizer states."
-            #     if self.model_param_mismatch:
-            #         print("Warning: Model parameter mismatch detected, skipping loading of optimizer states...")
-            #         pretrained_experiment_id_G = None  # Do not load optimizer if model parameters do not match
-
-        elif self.opt['train_mode'] == 'resume':
-            assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
-            self.opt['train_opt']['G_optimizer_reuse'] = True  # Always load optimizer for training mode: 'resume'
-
-        if pretrained_experiment_id_G is not None and self.opt['train_opt']['G_optimizer_reuse']:
-
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_optimizers/*optimizerG.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
-            try:
-                G_opt_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
-            except:
-                print("An exception occurred: No G optimizer found, skipping loading of optimizer...")
-            else:
-                if self.opt['rank'] == 0:
-                    print('Loading optimizer states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_opt_file).split(os.sep)[-4:])))
-                self.load_optimizer(G_opt_file, self.G_optimizer)
-
-    # ----------------------------------------
-    # load schedulerG and schedulerD
-    # ----------------------------------------
-    def load_schedulers(self, experiment_id=None):
-
-        pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
-
-        if self.opt['train_mode'] == 'scratch':
-            pretrained_experiment_id_G = None
-
-        elif self.opt['train_mode'] == 'finetune':
-            pretrained_experiment_id_G = None
-
-        elif self.opt['train_mode'] == 'resume':
-            assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
-
-        if pretrained_experiment_id_G is not None:
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_schedulers/*schedulerG.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
-            try:
-                G_scheduler_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
-            except:
-                print("An exception occurred: No G schedulers found, skipping loading of schedulers...")
-            else:
-                if self.opt['rank'] == 0:
-                    print('Loading scheduler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_scheduler_file).split(os.sep)[-4:])))
-                self.load_scheduler(G_scheduler_file, self.schedulers[0])
-
-    def load_gradscalers(self, experiment_id=None):
-
-        pretrained_experiment_id_G = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
-
-        if self.opt['train_mode'] == 'scratch':
-            pretrained_experiment_id_G = None
-
-        elif self.opt['train_mode'] == 'finetune':
-            pretrained_experiment_id_G = None
-
-        elif self.opt['train_mode'] == 'resume':
-            assert pretrained_experiment_id_G is not None, f"Pretrained experiment ID must be specified for training mode: {self.opt['train_mode']}."
-
-        if pretrained_experiment_id_G is not None:
-            opt_files = glob.glob(os.path.join(config.ROOT_DIR, "logs/", "*/", "wandb/", "*" + pretrained_experiment_id_G, "files/saved_gradscalers/*gradscalerG.h5"))
-            opt_files.sort(key=os.path.getmtime, reverse=True)
-            try:
-                G_gradscaler_file = opt_files[0]  # Get latest modified directory with the specified experiment_id
-            except:
-                print("An exception occurred: No G gradscaler found, skipping loading of gradscalers...")
-            else:
-                if self.opt['rank'] == 0:
-                    print('Loading gradscaler states for G [{:s}] ...'.format(os.sep.join(os.path.normpath(G_gradscaler_file).split(os.sep)[-4:])))
-                self.load_scheduler(G_gradscaler_file, self.gen_scaler)
-
-
-    # ----------------------------------------
-    # save model / optimizer (optional)
-    # ----------------------------------------
-    def save(self, iter_label):
-        # WandB save directory
-        model_save_dir = os.path.join(self.run.dir, "saved_models")
-        self.save_network(model_save_dir, self.netG, 'G', iter_label)
-
-        opt_save_dir = os.path.join(self.run.dir, "saved_optimizers")
-        self.save_optimizer(opt_save_dir, self.G_optimizer, 'optimizerG', iter_label)
-
-        scheduler_save_dir = os.path.join(self.run.dir, "saved_schedulers")
-        self.save_scheduler(scheduler_save_dir, self.schedulers[0], 'schedulerG', iter_label)
-
-        if self.mixed_precision is not None:
-            gradscaler_save_dir = os.path.join(self.run.dir, "saved_gradscalers")
-            self.save_gradscaler(gradscaler_save_dir, self.gen_scaler, 'gradscalerG', iter_label)
-
-        if self.opt_train['E_decay'] > 0:
-            self.save_network(model_save_dir, self.netE, 'E', iter_label)
-
+        path = self._find_latest_checkpoint(eid, "saved_models", "*G.h5")
+        if path is None:
+            print("No G checkpoint found, skipping loading...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading G [{self._short_path(path)}] ...")
+        self.load_network(path, self.netG, strict=self.opt_train['G_param_strict'])
+        self.last_iteration = int(os.path.basename(path).split('_')[0])
 
     def define_wandb_run(self):
 
-        ######### INITIALIZE WEIGHTS AND BIASES RUN #########
-
         self.run = wandb.init(
             mode=self.opt["wandb_mode"],
-            # set the wandb project where this run will be logged
             entity=self.opt['wandb_entity'],
             project=self.opt['wandb_project'],
             name=self.opt['run_name'],
             id=self.opt['experiment_id'],
             notes=self.opt['note'],
             dir="logs/" + self.opt['dataset_opt']['name'],
-
-            # track hyperparameters and run metadata
             config={
                 "iterations": self.opt['train_opt']['iterations'],
                 "G_learning_rate": self.opt['train_opt']['G_optimizer_lr'],
@@ -261,15 +99,11 @@ class ModelPlain(ModelBase):
                 "architecture": self.opt['model_opt']['model_architecture'],
             })
 
-        ######### CREATE DIRECTORY FOR SAVED MODELS, OPTIMIZERS, ECT. #########
         os.mkdir(os.path.join(wandb.run.dir, "saved_models"))
         os.mkdir(os.path.join(wandb.run.dir, "saved_optimizers"))
         os.mkdir(os.path.join(wandb.run.dir, "saved_schedulers"))
         os.mkdir(os.path.join(wandb.run.dir, "saved_gradscalers"))
 
-        # Create model artifacts for logging of files
-        # Look at this link for how to construct an artifact with a more neat file structure:
-        # https://docs.wandb.ai/guides/artifacts/construct-an-artifact
         self.wandb_config = wandb.config
 
         self.model_artifact_G = wandb.Artifact(
@@ -278,9 +112,6 @@ class ModelPlain(ModelBase):
             metadata=OmegaConf.to_container(self.opt['model_opt']['netG'], resolve=True)
         )
 
-    # ----------------------------------------
-    # define loss
-    # ----------------------------------------
     def define_loss(self):
 
         self.loss_fn_dict = {}
@@ -297,71 +128,35 @@ class ModelPlain(ModelBase):
                 self.loss_fn_dict["BCE"] = nn.BCELoss()
             elif key == "LPIPS" and value > 0:
                 self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
-                    net_type='alex',
-                    version='0.1',
-                    device=self.device,
-                    axes=(0, 1, 2)  # Axes to apply LPIPS along, e.g., [0] for D axis, [1] for H axis, [2] for W axis.
+                    net_type='alex', version='0.1', device=self.device, axes=(0, 1, 2)
                 )
             elif key == "FSC" and value > 0:
                 self.loss_fn_dict["FSC"] = FSCLoss3D(
-                    size=self.opt['dataset_opt']['patch_size_hr'],
-                    delta=1,
-                    alpha=2.0,
-                    drop_DC=False,
-                    device=self.device
+                    size=self.opt['dataset_opt']['patch_size_hr'], delta=1, alpha=2.0,
+                    drop_DC=False, device=self.device
                 )
             elif key == "CSC" and value > 0:
                 from loss_functions.loss_functions_simple import CSCLoss
                 self.loss_fn_dict["CSC"] = CSCLoss(
-                    eval_mode=True,
-                    verbose=True,
-                    feat_dist_func='FSC',  # options: 'L1', 'L2', 'FSC'
-                    compare_input=False,
-                    device=self.device,
+                    eval_mode=True, verbose=True, feat_dist_func='FSC',
+                    compare_input=False, device=self.device,
                     size=self.opt['dataset_opt']['patch_size_hr'],
                     experiment_id=self.opt_train['pretrained_G_loss_IDs']['CSC']
                 )
             elif key == "AESOP3D" and value > 0:
                 from loss_functions.loss_functions_simple import AESOPLoss3D
                 self.loss_fn_dict["AESOP3D"] = AESOPLoss3D(
-                    ae_criterion_type='L1',
-                    ae_weight=1.0,
+                    ae_criterion_type='L1', ae_weight=1.0,
                     experiment_id=self.opt_train['pretrained_G_loss_IDs']['AESOP3D'],
                 )
 
-        # Define losses for G and D
         self.G_train_loss = 0.0
         self.G_valid_loss = 0.0
         self.G_train_grad_norm = 0.0
         self.G_valid_grad_norm = 0.0
 
-
-    # ----------------------------------------
-    # define metrics
-    # ----------------------------------------
-    def define_metrics(self):
-
-        # Define losses for G and D
-        self.metric_fn_dict = {}
-        self.metric_val_dict = {}
-
-        if "psnr" in self.opt_train['performance_metrics']:
-            self.metric_val_dict["psnr"] = 0.0
-            self.metric_fn_dict["psnr"] = PSNR_3D() if self.opt['input_type'] == '3D' else PSNR_2D()
-        if "ssim" in self.opt_train['performance_metrics']:
-            self.metric_val_dict["ssim"] = 0.0
-            self.metric_fn_dict["ssim"] = SSIM_3D() if self.opt['input_type'] == '3D' else SSIM_2D()
-        if "nrmse" in self.opt_train['performance_metrics']:
-            self.metric_val_dict["nrmse"] = 0.0
-            self.metric_fn_dict["nrmse"] = NRMSE_3D() if self.opt['input_type'] == '3D' else NRMSE_2D()
-
-
-    # ----------------------------------------
-    # define optimizer, G and D
-    # ----------------------------------------
     def define_optimizer(self):
 
-        # Testing gradient accumulation
         self.G_accum_count = 0
         self.num_accum_steps_G = self.opt_train['num_accum_steps_G']
 
@@ -379,93 +174,6 @@ class ModelPlain(ModelBase):
         else:
             raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['G_optimizer_type']))
 
-    # ----------------------------------------
-    # define gradient scaler for G and D
-    # ----------------------------------------
-    def define_gradscaler(self):
-        self.gen_scaler = torch.amp.GradScaler("cuda")
-
-    # ----------------------------------------
-    # Set working precision for use with PyTorch AMP
-    # ----------------------------------------
-    def define_mixed_precision(self):
-        if self.opt_train['mixed_precision'] == "FP16":
-            self.mixed_precision = torch.float16
-            self.define_gradscaler()
-
-        elif self.opt_train['mixed_precision'] == "FP32":
-            self.mixed_precision = torch.float32
-            self.define_gradscaler()
-
-        elif self.opt_train['mixed_precision'] == "BF16":
-            self.mixed_precision = torch.bfloat16
-            self.define_gradscaler()
-
-        else:
-            self.mixed_precision = None
-
-    # ----------------------------------------
-    # define scheduler, only "MultiStepLR"
-    # ----------------------------------------
-    #def define_scheduler(self):
-    #    self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-    #                                                    self.opt_train['G_scheduler_milestones'],
-    #                                                    self.opt_train['G_scheduler_gamma']
-    #                                                    ))
-
-    def define_scheduler(self):
-        # MultiStep scheduler
-        multistep_scheduler = lr_scheduler.MultiStepLR(
-            self.G_optimizer,
-            milestones=self.opt_train['G_scheduler_milestones'],
-            gamma=self.opt_train['G_scheduler_gamma']
-        )
-
-        if self.opt_train.get('G_warmup_steps', 0) > 0:
-            # Linear warmup scheduler
-            warmup_scheduler = lr_scheduler.LinearLR(
-                self.G_optimizer,
-                start_factor=1e-8,  # or 0.0 if you want to start from 0
-                end_factor=1.0,
-                total_iters=self.opt_train['G_warmup_steps']
-            )
-
-            # Combine them with SequentialLR
-            scheduler = lr_scheduler.SequentialLR(
-                self.G_optimizer,
-                schedulers=[warmup_scheduler, multistep_scheduler],
-                milestones=[self.opt_train['G_warmup_steps']]  # when to switch
-            )
-        else:
-            # Fallback to MultiStepLR only
-            scheduler = multistep_scheduler
-
-        self.schedulers.append(scheduler)
-
-    def define_visual_eval(self):
-
-        if self.opt['input_type'] == '2D':
-            from utils.utils_2D_image import ImageComparisonTool2D as comparison_tool
-
-        elif self.opt['input_type'] == '3D':
-            from utils.utils_3D_image import ImageComparisonTool3D as comparison_tool
-
-        self.comparison_tool = comparison_tool(patch_size_hr=self.opt['dataset_opt']['patch_size_hr'],
-                                               upscaling_methods=["tio_nearest", "tio_linear"],
-                                               unnorm=self.opt['dataset_opt']['norm_type'] == 'znormalization',
-                                               div_max=self.opt['dataset_opt']['norm_type'] == 'znormalization',
-                                               out_dtype=np.uint8)
-
-    """
-    # ----------------------------------------
-    # Optimization during training with data
-    # Testing/evaluation
-    # ----------------------------------------
-    """
-
-    # ----------------------------------------
-    # feed L/H data
-    # ----------------------------------------
     def feed_data(self, data, need_H=True, add_key=None):
         if add_key is not None:
             self.L = data['L'][add_key].as_tensor().to(self.device, non_blocking=True)
@@ -480,139 +188,83 @@ class ModelPlain(ModelBase):
             if need_H:
                 self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
-    # ----------------------------------------
-    # feed L to netG and get E
-    # ----------------------------------------
     def netG_forward(self):
         if self.mixed_precision is not None:
-            # Evaluate using AMP
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                self.E = self.netG(self.L)  # self.L
-        else:  # Standard precision
+                self.E = self.netG(self.L)
+        else:
             self.E = self.netG(self.L)
 
-    # ----------------------------------------
-    # update parameters and get loss
-    # ----------------------------------------
     def optimize_parameters_amp(self, current_step, update=False):
 
-        # ------------------------------------
-        # optimize G
-        # ------------------------------------
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.netG_forward()  # Forward G
+            self.netG_forward()
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
-            self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
+            self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
-        self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
+        self.G_train_loss = self.gen_loss
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
 
-        # -------------------------------------------------
-        # update logic for gradient accumulation
-        # -------------------------------------------------
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
 
-        # -------------------------------------------------
-        # DDP optimization: skip gradient sync during accumulation
-        # -------------------------------------------------
         if not self.update:
-            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
-                with self.netG.no_sync():  # avoid expensive all-reduce
+            if isinstance(self.netG, DistributedDataParallel):
+                with self.netG.no_sync():
                     self.gen_scaler.scale(self.gen_loss).backward()
             else:
                 self.gen_scaler.scale(self.gen_loss).backward()
         else:
-            # sync gradients
             self.gen_scaler.scale(self.gen_loss).backward()
 
-        # ------------------------------------
-        # Optimizer step
-        # ------------------------------------
-        if self.update:  # Gradient acculumation
-            # ------------------------------------
-            # clip_grad on G
-            # ------------------------------------
+        if self.update:
             G_clipgrad_max = self.opt_train['G_optimizer_clipgrad']
             if G_clipgrad_max > 0:
-                # Unscales the gradients of optimizer's assigned params in-place if AMP is enabled
                 self.gen_scaler.unscale_(self.G_optimizer)
-                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
                 self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(
-                    self.netG.parameters(),
-                    max_norm=G_clipgrad_max,
-                    norm_type=2
+                    self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2
                 )
-
-            self.gen_scaler.step(self.G_optimizer)  # update weights
+            self.gen_scaler.step(self.G_optimizer)
             self.gen_scaler.update()
-            self.G_optimizer.zero_grad()  # set parameter gradients to zero
-
-            # Reset gradient accumulation count
+            self.G_optimizer.zero_grad()
             self.G_accum_count = 0
-
-        else:  # Update gradient accumulation count
+        else:
             self.G_accum_count += 1
-
 
     def optimize_parameters(self, current_step, update=False):
 
-        # ------------------------------------
-        # optimize G
-        # ------------------------------------
         self.netG_forward()
         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
-        self.gen_loss = self.gen_loss / self.num_accum_steps_G  # Scale loss by number of accumulation steps
+        self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
-        self.G_train_loss = self.gen_loss  # Add generator training loss to total loss
+        self.G_train_loss = self.gen_loss
         if self.opt['rank'] == 0:
             print("G train loss:", self.G_train_loss.item())
 
-        # -------------------------------------------------
-        # update logic for gradient accumulation
-        # -------------------------------------------------
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
 
-        # -------------------------------------------------
-        # DDP optimization: skip gradient sync during accumulation
-        # -------------------------------------------------
         if not self.update:
-            if isinstance(self.netG, DistributedDataParallel):  # Check if the model is DDP and supports no_sync
-                with self.netG.no_sync():  # avoid expensive all-reduce
+            if isinstance(self.netG, DistributedDataParallel):
+                with self.netG.no_sync():
                     self.gen_loss.backward()
             else:
                 self.gen_loss.backward()
         else:
-            # sync gradients
             self.gen_loss.backward()
 
-        if self.update:  # Gradient acculumation
-            # ------------------------------------
-            # clip_grad on G
-            # ------------------------------------
+        if self.update:
             G_clipgrad_max = self.opt_train['G_optimizer_clipgrad']
             if G_clipgrad_max > 0:
-                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2)
-                # if self.opt['rank'] == 0:
-                #     print("G gradient norm:", grad_norm.item())
-
-            self.G_optimizer.step()  # update weights
-            self.G_optimizer.zero_grad()  # set parameter gradients to zero
-
-            # Reset gradient accumulation count
+                self.G_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                    self.netG.parameters(), max_norm=G_clipgrad_max, norm_type=2
+                )
+            self.G_optimizer.step()
+            self.G_optimizer.zero_grad()
             self.G_accum_count = 0
-
-        else:  # Update gradient accumulation count
+        else:
             self.G_accum_count += 1
 
-
     def record_train_log(self, current_step):
-        # ------------------------------------
-        # record log
-        # ------------------------------------
-
-        # Record training losses using wandb
         loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": loss})
 
@@ -623,121 +275,39 @@ class ModelPlain(ModelBase):
             self.update_E(self.opt_train['E_decay'])
 
     def record_avg_train_log(self, current_step, idx_train):
-        # ------------------------------------
-        # record log
-        # ------------------------------------
-
-        # Record training losses using wandb
         avg_loss = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": avg_loss})
 
-        # Reset training losses
         self.G_train_loss = 0.0
 
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
 
-    def early_stopping(self, current_step, idx_train):
-        validation_loss = self.G_valid_loss / idx_train  # calculate average validation loss
-
-        if validation_loss.item() < self.min_validation_loss:
-            self.min_validation_loss = validation_loss
-            self.patience_counter = 0
-        elif validation_loss > (self.min_validation_loss + self.min_delta):
-            self.patience_counter += 1
-            if (self.patience_counter >= self.patience) and current_step > 75000:
-                self.early_stop = True
-
-        early_stop_tensor = torch.tensor(int(self.early_stop), device=self.device)
-        early_stop_tensor = reduce_max(early_stop_tensor)  # Sync early stop decision across GPUs
-        self.early_stop = early_stop_tensor.item() == 1  # If any GPU has early_stop, set early_stop for all
-
-
-    def record_test_log(self, idx_test):
-
-        idx_tensor = torch.tensor(idx_test, device=self.device)
-        global_idx_tensor = reduce_sum(idx_tensor)
-
-        # ------------------------------------
-        # Reduce validation metrics across GPUs
-        # ------------------------------------
-        for key, value in self.metric_val_dict.items():
-            metric_tensor = torch.tensor(float(value), device=self.device)
-            global_average = reduce_sum(metric_tensor) / global_idx_tensor
-
-            if get_rank() == 0:  # Only rank 0 logs
-                metric_name = "Average " + key
-                self.run.log({metric_name: global_average.item()})
-                print(metric_name, global_average.item())
-
-            # Reset local metric accumulator
-            self.metric_val_dict[key] = 0.0
-
-        # ------------------------------------
-        # Reduce validation loss across GPUs
-        # ------------------------------------
-        loss_tensor = torch.tensor(float(self.G_valid_loss), device=self.device)
-        global_valid_loss = reduce_sum(loss_tensor) / global_idx_tensor
-
-        if get_rank() == 0:  # Only rank 0 logs
-            self.run.log({"G_valid_loss": global_valid_loss.item()})
-            print("G_valid_loss", global_valid_loss.item())
-
-        # Reset validation loss
-        self.G_valid_loss = 0.0
-
-
-    # ----------------------------------------
-    # test and inference
-    # ----------------------------------------
     def test(self):
         self.netG.eval()
-        #with torch.no_grad():
         with torch.inference_mode():
             self.netG_forward()
         self.netG.train()
 
     def validation(self):
-
-        # Forward G
         self.netG_forward()
-
-        # Compute loss for G
         self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
-
-        # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
-        # Compute performance metrics
-        rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+        rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
-
     def validation_amp(self):
-
-        # Forward G
         self.netG_forward()
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            # Compute loss for G
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
 
-        # Add generator validation loss to total loss
         self.G_valid_loss += self.gen_loss
 
-        rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
+        rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
-
-    # ----------------------------------------
-    # get log_dict
-    # ----------------------------------------
-    def current_log(self):
-        return self.log_dict
-
-    # ----------------------------------------
-    # get L, E, H images
-    # ----------------------------------------
     def current_visuals(self, need_H=True):
         out_dict = OrderedDict()
 
@@ -751,163 +321,3 @@ class ModelPlain(ModelBase):
         if need_H:
             out_dict['H'] = self.H.detach()[0].float().cpu()
         return out_dict
-
-    def log_comparison_image(self, img_dict, current_step):
-
-        grid_image = self.comparison_tool.get_comparison_image(img_dict)
-        figure_string = "SR comparison: %s, step %d, %dx upscaling" % (self.opt['model_opt']['model_architecture'], current_step, self.opt['up_factor'])
-
-        if self.opt['run_type'] == "HOME PC":
-            height, width = grid_image.shape[:2]
-            plt.figure(figsize=(4 * width / 100, 4 * height / 100), dpi=100)
-            plt.imshow(grid_image, vmin=0, vmax=255)
-            plt.title(figure_string)
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-
-        wandb.log({"Comparisons training": wandb.Image(grid_image, caption=figure_string, mode="RGB")})  # WandB assumes channel last
-
-    """
-    # ----------------------------------------
-    # Information of netG
-    # ----------------------------------------
-    """
-
-    # ----------------------------------------
-    # print network
-    # ----------------------------------------
-    def print_network(self):
-        msg = self.describe_network(self.netG)
-        print(msg)
-
-    # ----------------------------------------
-    # print params
-    # ----------------------------------------
-    def print_params(self):
-        msg = self.describe_params(self.netG)
-        print(msg)
-
-    # ----------------------------------------
-    # network information
-    # ----------------------------------------
-    def info_network(self):
-        msg = self.describe_network(self.netG)
-        return msg
-
-    # ----------------------------------------
-    # params information
-    # ----------------------------------------
-    def info_params(self):
-        msg = self.describe_params(self.netG)
-        return msg
-
-
-# import lightning as L
-#
-# class ModelPlainLit(L.LightningModule):
-#     def __init__(self, opt, model: ModelPlain):
-#         super().__init__()
-#         self.opt = opt
-#         self.model = model
-#
-#     def training_step(self, train_batch, batch_idx):
-#
-#         if self.opt['model_architecture'] == "MTVNet" and not self.opt['dataset_opt']['enable_femur_padding']:
-#             train_batch['H'] = crop_context(train_batch['H'], L=self.model.opt['netG']['num_levels'], level_ratio=self.model.opt['netG']['level_ratio'])
-#
-#         self.model.feed_data(train_batch, need_H=True)
-#
-#         self.model.netG_forward()
-#
-#         loss = compute_generator_loss(self.model.H, self.model.E, self.model.loss_fn_dict, self.model.loss_val_dict, None, self.model.device)
-#
-#         # Log training loss here
-#         self.log("G_train_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-#
-#         return loss
-#
-#
-#     def validation_step(self, test_batch, batch_idx):
-#
-#         if self.opt['model_architecture'] == "MTVNet" and not self.opt['dataset_opt']['enable_femur_padding']:
-#             test_batch['H'] = crop_context(test_batch['H'], L=self.model.opt['netG']['num_levels'], level_ratio=self.model.opt['netG']['level_ratio'])
-#
-#         self.model.feed_data(test_batch, need_H=True)
-#
-#         self.model.netG_forward()
-#
-#         loss = compute_generator_loss(self.model.H, self.model.E, self.model.loss_fn_dict, self.model.loss_val_dict, None, self.model.device)
-#
-#         # Log validation loss here
-#         self.log("G_valid_loss", loss, on_epoch=True, prog_bar=True, logger=True)
-#
-#         # Compute performance metrics
-#         rescale_images = True if self.opt['dataset_opt']['norm_type'] == "znormalization" else False
-#         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
-#
-#         return loss
-#
-#
-#     def configure_optimizers(self):
-#         """defines model optimizer and scheduler"""
-#         return {
-#             "optimizer": self.model.G_optimizer,
-#             "lr_scheduler": {
-#                 "scheduler": self.model.schedulers,
-#                 "interval": "step",  # Step after every global_step
-#             },
-#         }
-#
-# from lightning.pytorch.callbacks import Callback
-# from utils.utils_3D_image import crop_context, crop_center
-#
-# class CustomCallback(Callback):
-#     def on_train_start(self, trainer, pl_module):
-#         print("Training started!")
-#
-#     def on_validation_end(self, trainer, pl_module):
-#
-#         if pl_module.opt['model_architecture'] == "MTVNet":
-#             pl_module.model.L = crop_center(pl_module.model.L, center_size=pl_module.model.opt['netG']['context_sizes'][-1])
-#
-#         visuals = pl_module.model.current_visuals()
-#         pl_module.model.log_comparison_image(visuals, trainer.global_step)
-#
-#         print("Validation completed!")
-#
-#
-# from lightning.pytorch.loggers.logger import Logger, rank_zero_experiment
-# from lightning.pytorch.utilities import rank_zero_only
-# class MyLogger(Logger):
-#     @property
-#     def name(self):
-#         return "MyLogger"
-#
-#     @property
-#     def version(self):
-#         # Return the experiment version, int or str.
-#         return "0.1"
-#
-#     @rank_zero_only
-#     def log_hyperparams(self, params):
-#         # params is an argparse.Namespace
-#         # your code to record hyperparameters goes here
-#         pass
-#
-#     @rank_zero_only
-#     def log_metrics(self, metrics, step):
-#         # metrics is a dictionary of metric names and values
-#         # your code to record metrics goes here
-#         pass
-#
-#     @rank_zero_only
-#     def save(self):
-#         # Optional. Any code necessary to save logger data goes here
-#         pass
-#
-#     @rank_zero_only
-#     def finalize(self, status):
-#         # Optional. Any code that needs to be run after training
-#         # finishes goes here
-#         pass
