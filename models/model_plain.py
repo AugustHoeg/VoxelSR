@@ -179,14 +179,10 @@ class ModelPlain(ModelBase):
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
     def netG_forward(self):
-        if self.mixed_precision is not None:
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                self.E = self.netG(self.L)
-        else:
-            self.E = self.netG(self.L)
+        self.E = self.netG(self.L)
 
     def optimize_parameters_amp(self, current_step, update=False):
-
+        
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.netG_forward()
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
@@ -288,9 +284,9 @@ class ModelPlain(ModelBase):
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
     def validation_amp(self):
-        self.netG_forward()
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.netG_forward()
             self.gen_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
 
         self.G_valid_loss += self.gen_loss
