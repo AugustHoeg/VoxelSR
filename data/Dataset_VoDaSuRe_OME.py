@@ -131,9 +131,17 @@ class Dataset_VoDaSuRe_OME():
                 print("Group pairs for VoDaSuRe: ", group_pairs["VoDaSuRe"])
             else:
                 if self.synthetic:
-                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}]}
+                    group_pairs["VoDaSuRe"] = {
+                        "4": [{"H": "HR/0", "L": "HR/2"}],
+                        "2": [{"H": "HR/0", "L": "HR/1"}],
+                        "1": [{"H": "HR/0", "L": "HR/0"}]
+                    }
                 else:
-                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/0", "L": "REG/0"}], "2": [{"H": "HR/1", "L": "REG/0"}]}
+                    group_pairs["VoDaSuRe"] = {
+                        "4": [{"H": "HR/0", "L": "REG/0"}],
+                        "2": [{"H": "HR/1", "L": "REG/0"}],
+                        "1": [{"H": "HR/0", "L": "HR/0"}]
+                    }
 
         self.dataset_dict_train = {}
         self.dataset_dict_test = {}

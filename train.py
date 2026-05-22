@@ -1,17 +1,17 @@
 import os
 import time
-import matplotlib.pyplot as plt
+
 import hydra
-from hydra.core.hydra_config import HydraConfig
-from omegaconf import DictConfig
-from omegaconf import OmegaConf
+import matplotlib.pyplot as plt
 import torch
 import torch.distributed as dist
-from torch.utils.data.distributed import DistributedSampler
-from monai.data import SmartCacheDataset, DataLoader
+from hydra.core.hydra_config import HydraConfig
+from monai.data import DataLoader, SmartCacheDataset
+from omegaconf import DictConfig, OmegaConf
 
 import config
-from utils.load_options import save_yaml, init_options, set_seed
+from utils.load_options import init_options, save_yaml, set_seed
+
 
 def test_plot(train_batch):
     size_hr = train_batch['H'].shape[-1]
