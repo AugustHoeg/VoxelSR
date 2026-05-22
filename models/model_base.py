@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import wandb
 from torch.nn.parallel import DataParallel, DistributedDataParallel
-from torch.optim import lr_scheduler
+from torch.optim import Adam, AdamW, lr_scheduler
 
 import config
 from performance_metrics.performance_metrics import NRMSE_2D, NRMSE_3D, PSNR_2D, PSNR_3D, SSIM_2D, SSIM_3D
@@ -38,10 +38,35 @@ class ModelBase():
     def init_train(self):
         pass
 
-    def define_wandb_run(self):
-        pass
+    def _init_wandb_run(self, extra_config=None):
+        """Initialize wandb run with shared config and create checkpoint subdirectories."""
+        run_config = {
+            "iterations": self.opt["train_opt"]["iterations"],
+            "G_learning_rate": self.opt["train_opt"]["G_optimizer_lr"],
+            "batch_size": self.opt["dataset_opt"]["train_dataloader_params"]["dataloader_batch_size"],
+            "dataset": self.opt["dataset_opt"]["name"],
+            "architecture": self.opt["model_opt"]["model_architecture"],
+        }
+        if extra_config:
+            run_config.update(extra_config)
 
-    def load(self):
+        self.run = wandb.init(
+            mode=self.opt["wandb_mode"],
+            entity=self.opt["wandb_entity"],
+            project=self.opt["wandb_project"],
+            name=self.opt["run_name"],
+            id=self.opt["experiment_id"],
+            notes=self.opt["note"],
+            dir="logs/" + self.opt["dataset_opt"]["name"],
+            config=run_config,
+        )
+
+        for subdir in ("saved_models", "saved_optimizers", "saved_schedulers", "saved_gradscalers"):
+            os.mkdir(os.path.join(wandb.run.dir, subdir))
+
+        self.wandb_config = wandb.config
+
+    def define_wandb_run(self):
         pass
 
     # ----------------------------------------
@@ -68,27 +93,49 @@ class ModelBase():
         """Return the path to a named subdirectory within the current WandB run."""
         return os.path.join(self.run.dir, subdir)
 
+    def _resolve_eid(self, experiment_id):
+        """Return the effective experiment ID from the argument or config."""
+        return self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+
     # ----------------------------------------
-    # Default G-only checkpoint load/save
-    # GAN-style models override to also handle D
+    # Paired G / D  network load
     # ----------------------------------------
 
-    def save(self, iter_label):
-        self.save_network(self._run_dir("saved_models"), self.netG, 'G', iter_label)
-        self.save_optimizer(self._run_dir("saved_optimizers"), self.G_optimizer, 'optimizerG', iter_label)
-        self.save_scheduler(self._run_dir("saved_schedulers"), self.schedulers[0], 'schedulerG', iter_label)
-        if self.mixed_precision is not None:
-            self.save_gradscaler(self._run_dir("saved_gradscalers"), self.gen_scaler, 'gradscalerG', iter_label)
-        if hasattr(self, 'netE'):
-            self.save_network(self._run_dir("saved_models"), self.netE, 'E', iter_label)
-
-    def load_optimizers(self, experiment_id=None):
-        if self.opt['train_mode'] != 'resume':
+    def load_G(self, eid, mode='train'):
+        path = self._find_latest_checkpoint(eid, "saved_models", "*G.h5")
+        if path is None:
+            print("No G checkpoint found, skipping loading...")
             return
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
-        assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
-        self.opt['train_opt']['G_optimizer_reuse'] = True
+        if self.opt['rank'] == 0:
+            print(f"Loading G [{self._short_path(path)}] ...")
+        self.load_network(path, self.netG, strict=self.opt_train['G_param_strict'])
+        self.last_iteration = int(os.path.basename(path).split('_')[0])
 
+    def load_D(self, eid):
+        path = self._find_latest_checkpoint(eid, "saved_models", "*D.h5")
+        if path is None:
+            print("No D checkpoint found, skipping loading...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading D [{self._short_path(path)}] ...")
+        self.load_network(path, self.netD, strict=self.opt_train['D_param_strict'])
+
+    def load(self, experiment_id=None, mode='train'):
+        """Default: G only. GAN models override to also call load_D()."""
+        eid = self._resolve_eid(experiment_id)
+        if mode == 'train':
+            if self.opt['train_mode'] == 'scratch':
+                return
+            assert eid is not None, f"Pretrained experiment ID required for train_mode='{self.opt['train_mode']}'."
+        else:
+            assert eid is not None, "Experiment ID required for test mode."
+        self.load_G(eid, mode)
+
+    # ----------------------------------------
+    # Paired G / D  optimizer load
+    # ----------------------------------------
+
+    def load_G_optimizer(self, eid):
         path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerG.h5")
         if path is None:
             print("No G optimizer checkpoint found, skipping...")
@@ -97,12 +144,29 @@ class ModelBase():
             print(f"Loading G optimizer [{self._short_path(path)}] ...")
         self.load_optimizer(path, self.G_optimizer)
 
-    def load_schedulers(self, experiment_id=None):
+    def load_D_optimizer(self, eid):
+        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerD.h5")
+        if path is None:
+            print("No D optimizer checkpoint found, skipping...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading D optimizer [{self._short_path(path)}] ...")
+        self.load_optimizer(path, self.D_optimizer)
+
+    def load_optimizers(self, experiment_id=None):
+        """Default: G only. GAN models override to also call load_D_optimizer()."""
         if self.opt['train_mode'] != 'resume':
             return
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+        eid = self._resolve_eid(experiment_id)
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
+        self.opt['train_opt']['G_optimizer_reuse'] = True
+        self.load_G_optimizer(eid)
 
+    # ----------------------------------------
+    # Paired G / D  scheduler load
+    # ----------------------------------------
+
+    def load_G_scheduler(self, eid):
         path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerG.h5")
         if path is None:
             print("No G scheduler checkpoint found, skipping...")
@@ -111,12 +175,28 @@ class ModelBase():
             print(f"Loading G scheduler [{self._short_path(path)}] ...")
         self.load_scheduler(path, self.schedulers[0])
 
-    def load_gradscalers(self, experiment_id=None):
+    def load_D_scheduler(self, eid):
+        path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerD.h5")
+        if path is None:
+            print("No D scheduler checkpoint found, skipping...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading D scheduler [{self._short_path(path)}] ...")
+        self.load_scheduler(path, self.schedulers[1])
+
+    def load_schedulers(self, experiment_id=None):
+        """Default: G only. GAN models override to also call load_D_scheduler()."""
         if self.opt['train_mode'] != 'resume':
             return
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+        eid = self._resolve_eid(experiment_id)
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
+        self.load_G_scheduler(eid)
 
+    # ----------------------------------------
+    # Paired G / D  gradscaler load
+    # ----------------------------------------
+
+    def load_G_gradscaler(self, eid):
         path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerG.h5")
         if path is None:
             print("No G gradscaler checkpoint found, skipping...")
@@ -124,6 +204,47 @@ class ModelBase():
         if self.opt['rank'] == 0:
             print(f"Loading G gradscaler [{self._short_path(path)}] ...")
         self.load_gradscaler(path, self.gen_scaler)
+
+    def load_D_gradscaler(self, eid):
+        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerD.h5")
+        if path is None:
+            print("No D gradscaler checkpoint found, skipping...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading D gradscaler [{self._short_path(path)}] ...")
+        self.load_gradscaler(path, self.dis_scaler)
+
+    def load_gradscalers(self, experiment_id=None):
+        """Default: G only. GAN models override to also call load_D_gradscaler()."""
+        if self.opt['train_mode'] != 'resume':
+            return
+        eid = self._resolve_eid(experiment_id)
+        assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
+        self.load_G_gradscaler(eid)
+
+    # ----------------------------------------
+    # Paired G / D  save
+    # ----------------------------------------
+
+    def save_G(self, iter_label):
+        self.save_network(self._run_dir("saved_models"), self.netG, 'G', iter_label)
+        self.save_optimizer(self._run_dir("saved_optimizers"), self.G_optimizer, 'optimizerG', iter_label)
+        self.save_scheduler(self._run_dir("saved_schedulers"), self.schedulers[0], 'schedulerG', iter_label)
+        if self.mixed_precision is not None:
+            self.save_gradscaler(self._run_dir("saved_gradscalers"), self.gen_scaler, 'gradscalerG', iter_label)
+        if hasattr(self, 'netE'):
+            self.save_network(self._run_dir("saved_models"), self.netE, 'E', iter_label)
+
+    def save_D(self, iter_label):
+        self.save_network(self._run_dir("saved_models"), self.netD, 'D', iter_label)
+        self.save_optimizer(self._run_dir("saved_optimizers"), self.D_optimizer, 'optimizerD', iter_label)
+        self.save_scheduler(self._run_dir("saved_schedulers"), self.schedulers[1], 'schedulerD', iter_label)
+        if self.mixed_precision is not None:
+            self.save_gradscaler(self._run_dir("saved_gradscalers"), self.dis_scaler, 'gradscalerD', iter_label)
+
+    def save(self, iter_label):
+        """Default: G only. GAN models override to also call save_D()."""
+        self.save_G(iter_label)
 
     # ----------------------------------------
     # Loss function construction
@@ -186,8 +307,38 @@ class ModelBase():
     def define_loss(self):
         pass
 
+    def define_G_optimizer(self):
+        self.G_accum_count = 0
+        self.num_accum_steps_G = self.opt_train["num_accum_steps_G"]
+
+        G_optim_params = []
+        for k, v in self.netG.named_parameters():
+            if v.requires_grad:
+                G_optim_params.append(v)
+            else:
+                print(f"Params [{k}] will not optimize.")
+
+        if self.opt_train["G_optimizer_type"] == "adam":
+            self.G_optimizer = Adam(G_optim_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+        elif self.opt_train["G_optimizer_type"] == "adamw":
+            self.G_optimizer = AdamW(G_optim_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+        else:
+            raise NotImplementedError(f"Optimizer [{self.opt_train['G_optimizer_type']}] is not implemented.")
+
+    def define_D_optimizer(self):
+        self.D_accum_count = 0
+        self.num_accum_steps_D = self.opt_train["num_accum_steps_D"]
+
+        if self.opt_train["D_optimizer_type"] == "adam":
+            self.D_optimizer = Adam(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=(0.9, 0.999))
+        elif self.opt_train["D_optimizer_type"] == "adamw":
+            self.D_optimizer = AdamW(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=(0.9, 0.999))
+        else:
+            raise NotImplementedError(f"Optimizer [{self.opt_train['D_optimizer_type']}] is not implemented.")
+
     def define_optimizer(self):
-        pass
+        """Default: G only. GAN models override to also call define_D_optimizer()."""
+        self.define_G_optimizer()
 
     def define_G_gradscaler(self):
         self.gen_scaler = torch.amp.GradScaler("cuda")

@@ -79,87 +79,45 @@ class ModelVQGAN(ModelBase):
     # ----------------------------------------
 
     def load(self, experiment_id=None, mode='train'):
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
-
+        eid = self._resolve_eid(experiment_id)
         if mode == 'train':
             if self.opt['train_mode'] == 'scratch':
                 return
             assert eid is not None, f"Pretrained experiment ID required for train_mode='{self.opt['train_mode']}'."
         else:
-            assert eid is not None, "Experiment ID required for test mode."
-
-        G_path = self._find_latest_checkpoint(eid, "saved_models", "*G.h5")
-        D_path = self._find_latest_checkpoint(eid, "saved_models", "*D.h5")
-        if G_path is None or D_path is None:
-            print("No G or D checkpoint found, skipping loading...")
-            return
-        if self.opt['rank'] == 0:
-            print(f"Loading G [{self._short_path(G_path)}] ...")
-            print(f"Loading D [{self._short_path(D_path)}] ...")
-        self.load_network(G_path, self.netG, strict=self.opt_train['G_param_strict'])
+            assert eid is not None, 'Experiment ID required for test mode.'
+        self.load_G(eid, mode)
         if mode == 'train':
-            self.load_network(D_path, self.netD, strict=self.opt_train['D_param_strict'])
-        self.last_iteration = int(os.path.basename(G_path).split('_')[0])
+            self.load_D(eid)
 
     def save(self, iter_label):
-        super().save(iter_label)  # saves G, G_optimizer, schedulers[0], gen_scaler, netE
-        self.save_network(self._run_dir("saved_models"), self.netD, 'D', iter_label)
-        self.save_optimizer(self._run_dir("saved_optimizers"), self.D_optimizer, 'optimizerD', iter_label)
-        self.save_scheduler(self._run_dir("saved_schedulers"), self.schedulers[1], 'schedulerD', iter_label)
-        if self.mixed_precision is not None:
-            self.save_gradscaler(self._run_dir("saved_gradscalers"), self.dis_scaler, 'gradscalerD', iter_label)
+        self.save_G(iter_label)
+        self.save_D(iter_label)
 
     def load_optimizers(self, experiment_id=None):
         if self.opt['train_mode'] != 'resume':
             return
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+        eid = self._resolve_eid(experiment_id)
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
         self.opt['train_opt']['G_optimizer_reuse'] = True
-
-        G_path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerG.h5")
-        D_path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerD.h5")
-        if G_path is None or D_path is None:
-            print("No G or D optimizer checkpoint found, skipping...")
-            return
-        if self.opt['rank'] == 0:
-            print(f"Loading G optimizer [{self._short_path(G_path)}] ...")
-            print(f"Loading D optimizer [{self._short_path(D_path)}] ...")
-        self.load_optimizer(G_path, self.G_optimizer)
-        self.load_optimizer(D_path, self.D_optimizer)
+        self.load_G_optimizer(eid)
+        self.load_D_optimizer(eid)
 
     def load_schedulers(self, experiment_id=None):
         if self.opt['train_mode'] != 'resume':
             return
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+        eid = self._resolve_eid(experiment_id)
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
-
-        G_path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerG.h5")
-        D_path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerD.h5")
-        if G_path is None or D_path is None:
-            print("No G or D scheduler checkpoint found, skipping...")
-            return
-        if self.opt['rank'] == 0:
-            print(f"Loading G scheduler [{self._short_path(G_path)}] ...")
-            print(f"Loading D scheduler [{self._short_path(D_path)}] ...")
-        self.load_scheduler(G_path, self.schedulers[0])
-        self.load_scheduler(D_path, self.schedulers[1])
+        self.load_G_scheduler(eid)
+        self.load_D_scheduler(eid)
 
     def load_gradscalers(self, experiment_id=None):
         if self.opt['train_mode'] != 'resume':
             return
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
+        eid = self._resolve_eid(experiment_id)
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
-
-        G_path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerG.h5")
-        D_path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerD.h5")
-        if G_path is None or D_path is None:
-            print("No G or D gradscaler checkpoint found, skipping...")
-            return
-        if self.opt['rank'] == 0:
-            print(f"Loading G gradscaler [{self._short_path(G_path)}] ...")
-            print(f"Loading D gradscaler [{self._short_path(D_path)}] ...")
-        self.load_gradscaler(G_path, self.gen_scaler)
-        self.load_gradscaler(D_path, self.dis_scaler)
+        self.load_G_gradscaler(eid)
+        self.load_D_gradscaler(eid)
 
     def define_gradscaler(self):
         self.define_G_gradscaler()
@@ -170,31 +128,7 @@ class ModelVQGAN(ModelBase):
         self.define_D_scheduler()
 
     def define_wandb_run(self):
-
-        self.run = wandb.init(
-            mode=self.opt["wandb_mode"],
-            entity=self.opt['wandb_entity'],
-            project=self.opt['wandb_project'],
-            name=self.opt['run_name'],
-            id=self.opt['experiment_id'],
-            notes=self.opt['note'],
-            dir="logs/" + self.opt['dataset_opt']['name'],
-            config={
-                "iterations": self.opt['train_opt']['iterations'],
-                "G_learning_rate": self.opt['train_opt']['G_optimizer_lr'],
-                "batch_size": self.opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size'],
-                "dataset": self.opt['dataset_opt']['name'],
-                "up_factor": self.opt['up_factor'],
-                "architecture": self.opt['model_opt']['model_architecture'],
-            })
-
-        os.mkdir(os.path.join(wandb.run.dir, "saved_models"))
-        os.mkdir(os.path.join(wandb.run.dir, "saved_optimizers"))
-        os.mkdir(os.path.join(wandb.run.dir, "saved_schedulers"))
-        os.mkdir(os.path.join(wandb.run.dir, "saved_gradscalers"))
-
-        self.wandb_config = wandb.config
-
+        self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
         self.model_artifact_G = wandb.Artifact(
             "Generator", type=self.opt['model_opt']['netG']['net_type'],
             description=self.opt['model_opt']['netG']['description'],
@@ -212,32 +146,8 @@ class ModelVQGAN(ModelBase):
         self.init_D_loss_trackers()
 
     def define_optimizer(self):
-
-        self.D_accum_count = 0
-        self.num_accum_steps_D = self.opt_train['num_accum_steps_D']
-        self.G_accum_count = 0
-        self.num_accum_steps_G = self.opt_train['num_accum_steps_G']
-
-        G_optim_params = []
-        for k, v in self.netG.named_parameters():
-            if v.requires_grad:
-                G_optim_params.append(v)
-            else:
-                print('Params [{:s}] will not optimize.'.format(k))
-
-        if self.opt_train['G_optimizer_type'] == 'adam':
-            self.G_optimizer = Adam(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
-        elif self.opt_train['G_optimizer_type'] == 'adamw':
-            self.G_optimizer = AdamW(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
-        else:
-            raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['G_optimizer_type']))
-
-        if self.opt_train['D_optimizer_type'] == 'adam':
-            self.D_optimizer = Adam(self.netD.parameters(), lr=self.opt_train['D_optimizer_lr'], weight_decay=self.opt_train['D_optimizer_wd'], betas=(0.9, 0.999))
-        elif self.opt_train['D_optimizer_type'] == 'adamw':
-            self.D_optimizer = AdamW(self.netD.parameters(), lr=self.opt_train['D_optimizer_lr'], weight_decay=self.opt_train['D_optimizer_wd'], betas=(0.9, 0.999))
-        else:
-            raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['D_optimizer_type']))
+        self.define_G_optimizer()
+        self.define_D_optimizer()
 
     def feed_data(self, data):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)

@@ -57,51 +57,8 @@ class ModelVQVAE(ModelBase):
 
         self.define_visual_eval()
 
-    def load(self, experiment_id=None, mode='train'):
-        eid = self.opt['path']['pretrained_experiment_id'] if experiment_id is None else experiment_id
-
-        if mode == 'train':
-            if self.opt['train_mode'] == 'scratch':
-                return
-            assert eid is not None, f"Pretrained experiment ID required for train_mode='{self.opt['train_mode']}'."
-        else:
-            assert eid is not None, "Experiment ID required for test mode."
-
-        path = self._find_latest_checkpoint(eid, "saved_models", "*G.h5")
-        if path is None:
-            print("No G checkpoint found, skipping loading...")
-            return
-        if self.opt['rank'] == 0:
-            print(f"Loading G [{self._short_path(path)}] ...")
-        self.load_network(path, self.netG, strict=self.opt_train['G_param_strict'])
-        self.last_iteration = int(os.path.basename(path).split('_')[0])
-
     def define_wandb_run(self):
-
-        self.run = wandb.init(
-            mode=self.opt["wandb_mode"],
-            entity=self.opt['wandb_entity'],
-            project=self.opt['wandb_project'],
-            name=self.opt['run_name'],
-            id=self.opt['experiment_id'],
-            notes=self.opt['note'],
-            dir="logs/" + self.opt['dataset_opt']['name'],
-            config={
-                "iterations": self.opt['train_opt']['iterations'],
-                "G_learning_rate": self.opt['train_opt']['G_optimizer_lr'],
-                "batch_size": self.opt['dataset_opt']['train_dataloader_params']['dataloader_batch_size'],
-                "dataset": self.opt['dataset_opt']['name'],
-                "up_factor": self.opt['up_factor'],
-                "architecture": self.opt['model_opt']['model_architecture'],
-            })
-
-        os.mkdir(os.path.join(wandb.run.dir, "saved_models"))
-        os.mkdir(os.path.join(wandb.run.dir, "saved_optimizers"))
-        os.mkdir(os.path.join(wandb.run.dir, "saved_schedulers"))
-        os.mkdir(os.path.join(wandb.run.dir, "saved_gradscalers"))
-
-        self.wandb_config = wandb.config
-
+        self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
         self.model_artifact_G = wandb.Artifact(
             "Generator", type=self.opt['model_opt']['netG']['net_type'],
             description=self.opt['model_opt']['netG']['description'],
@@ -113,23 +70,7 @@ class ModelVQVAE(ModelBase):
         self.init_G_loss_trackers()
 
     def define_optimizer(self):
-
-        self.G_accum_count = 0
-        self.num_accum_steps_G = self.opt_train['num_accum_steps_G']
-
-        G_optim_params = []
-        for k, v in self.netG.named_parameters():
-            if v.requires_grad:
-                G_optim_params.append(v)
-            else:
-                print('Params [{:s}] will not optimize.'.format(k))
-
-        if self.opt_train['G_optimizer_type'] == 'adam':
-            self.G_optimizer = Adam(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
-        elif self.opt_train['G_optimizer_type'] == 'adamw':
-            self.G_optimizer = AdamW(G_optim_params, lr=self.opt_train['G_optimizer_lr'], weight_decay=self.opt_train['G_optimizer_wd'], betas=(0.9, 0.999))
-        else:
-            raise NotImplementedError('optimizer [{:s}] is not implemented.'.format(self.opt_train['G_optimizer_type']))
+        self.define_G_optimizer()
 
     def feed_data(self, data):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
