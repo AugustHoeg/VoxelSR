@@ -15,13 +15,13 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_DOWN_LPIPS_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_REG_LPIPS_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000
+run_name: ${model_opt.model_architecture}_AESOP_000
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -31,7 +31,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: RRDBNet3D_VoDaSuRe_REG_2x_VoDaSuRe_OME_ID005700  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
@@ -46,7 +46,7 @@ train_opt:
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
-  G_warmup_steps: 0  # new
+  G_warmup_steps: 1000  # new
 
   G_loss_weights:
     L1: 0.0  # Disabled inplace of AESOP3D loss

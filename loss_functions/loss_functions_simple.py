@@ -294,6 +294,31 @@ class AESOPLoss3D(nn.Module):
 
         return self.ae_loss_weight * self.ae_criterion(x_ae, gt_ae)
 
+    def viz_loss_map(self, gt, x):
+        with torch.no_grad():
+            gt_ae = self.ae_net(gt.detach(), return_bottleneck=False)
+        x_ae = self.ae_net(x, return_bottleneck=False)
+            
+        l1_loss_map = torch.abs(gt - x)
+        ae_loss_map = torch.abs(gt_ae - x_ae)
+        
+        # Visualizes of loss maps
+        B, C, D, H, W = gt.shape
+        plt.figure(figsize=(4*B, 8))
+
+        c = 1
+        for i in range(B):
+            plt.subplot(2, i, c)
+            plt.imshow(l1_loss_map[i, 0, D//2, :, :], cmap='gray')
+            plt.title(f'l1 loss map ({i})')
+
+            plt.subplot(2, i, c + 1)
+            plt.imshow(ae_loss_map[i, 0, D//2, :, :], cmap='gray')
+            plt.title(f'ae loss map ({i})')
+
+            c = c + 1
+
+
 
 if __name__ == "__main__":
 
