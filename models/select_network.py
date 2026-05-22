@@ -375,14 +375,9 @@ def define_D(opt, mode='train'):
                    use_checkpoint=opt_net['use_checkpoint'])
 
     elif model_arch == "ESRGAN3D":  # ESRGAN3D Discriminator
-        from models.mDCSRN_GAN import DiscriminatorV2 as net  # Currently same discriminator as mDCSRN_GAN
-        netD = net(patch_size=opt['dataset_opt']['patch_size'],
-                   up_factor=opt['up_factor'],
-                   in_c=opt_net['in_channels'],
-                   n_conv_vec=opt_net['n_conv_vec'],
-                   n_dense=opt_net['n_dense'],
-                   k_size=opt_net['k_size'],
-                   use_checkpoint=opt_net['use_checkpoint'])
+        from models.RRDBNet3D_official import VGGStyleDiscriminator128 as net
+        netD = net(num_in_ch=opt_net['in_channels'],
+                   num_feat=opt_net['num_channels'])
 
     elif model_arch == "PatchGAN3D":  # PatchGAN Discriminator
         from models.VQGAN3D import PatchGAN3D as net
