@@ -125,9 +125,15 @@ class Dataset_VoDaSuRe_OME():
             if "ablation_downsampling_test" in opt:
                 print("Running ablation downsample test")
                 if self.synthetic:
-                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/1", "L": "HR/3"}], "2": [{"H": "HR/1", "L": "HR/2"}]}
+                    group_pairs["VoDaSuRe"] = {
+                        "4": [{"H": "HR/1", "L": "HR/3"}],
+                        "2": [{"H": "HR/1", "L": "HR/2"}]
+                    }
                 else:
-                    group_pairs["VoDaSuRe"] = {"4": [{"H": "HR/1", "L": "REG/1"}], "2": [{"H": "HR/2", "L": "REG/1"}]}
+                    group_pairs["VoDaSuRe"] = {
+                        "4": [{"H": "HR/1", "L": "REG/1"}],
+                        "2": [{"H": "HR/2", "L": "REG/1"}]
+                    }
                 print("Group pairs for VoDaSuRe: ", group_pairs["VoDaSuRe"])
             else:
                 if self.synthetic:
