@@ -13,8 +13,11 @@ def define_Model(opt, mode, data_parallel=True):
     if model == 'plain':
         from models.model_plain import ModelPlain as M
 
-    elif model == 'gan' or model == 'ragan':     # one input: L
+    elif model == 'gan':     # one input: L
         from models.model_gan import ModelGAN as M
+
+    elif model == 'ragan':
+        from models.model_ragan import ModelRaGAN as M
 
     elif model == 'vqvae':     # one input: L
         from models.model_vqvae import ModelVQVAE as M
@@ -24,9 +27,6 @@ def define_Model(opt, mode, data_parallel=True):
 
     elif model == 'aesop':
         from models.model_aesop import ModelAESOP as M
-
-    elif model == "implicit":
-        from models.model_implicit import ModelImplicit as M
 
     elif model == "degradation":
         from models.model_degradation import ModelDegradation as M

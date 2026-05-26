@@ -42,12 +42,18 @@ def define_G(opt, mode='train'):
                    use_checkpoint=opt_net['use_checkpoint'])
 
     elif model_arch == "VQGAN3D":  # VQGAN_3D
-        from models.VQGAN3D import VQModel3D as net
+        # from models.VQGAN3D import VQModel3D as net
+        # netG = net(in_channels=opt_net['in_channels'],
+        #            latent_dim=opt_net['latent_dim'],
+        #            num_embeddings=opt_net['num_embeddings'],
+        #            resolution=opt['dataset_opt']['patch_size'],
+        #            use_checkpoint=opt_net['use_checkpoint'])
+        from models.VQVAE3D import VQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],
-                   latent_dim=opt_net['latent_dim'],
+                   hidden_channels=opt_net['latent_dim'],
                    num_embeddings=opt_net['num_embeddings'],
-                   resolution=opt['dataset_opt']['patch_size'],
                    use_checkpoint=opt_net['use_checkpoint'])
+
 
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
@@ -375,8 +381,9 @@ def define_D(opt, mode='train'):
                    use_checkpoint=opt_net['use_checkpoint'])
 
     elif model_arch == "ESRGAN3D":  # ESRGAN3D Discriminator
-        from models.RRDBNet3D_official import VGGStyleDiscriminator128 as net
-        netD = net(num_in_ch=opt_net['in_channels'],
+        from models.RRDBNet3D_official import VGGStyleDiscriminator as net
+        netD = net(patch_size=opt['dataset_opt']['patch_size_hr'],
+                   num_in_ch=opt_net['in_channels'],
                    num_feat=opt_net['num_channels'])
 
     elif model_arch == "PatchGAN3D":  # PatchGAN Discriminator

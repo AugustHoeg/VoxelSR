@@ -11,14 +11,46 @@ from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_
 from utils.load_options import load_options_from_experiment_id
 
 
-def bce_dis_loss(prop_real, prop_fake):
-    dis_loss_fake = F.binary_cross_entropy_with_logits(prop_fake, torch.zeros_like(prop_fake))
-    dis_loss_real = F.binary_cross_entropy_with_logits(prop_real, torch.ones_like(prop_real) - 0.1 * torch.ones_like(prop_real))
+def bce_dis_loss(prop_real, prop_fake, label_smooth_val=0.1):
+    dis_loss_fake = F.binary_cross_entropy_with_logits(
+        prop_fake,
+        torch.zeros_like(prop_fake)
+    )
+    dis_loss_real = F.binary_cross_entropy_with_logits(
+        prop_real,
+        torch.ones_like(prop_real) - label_smooth_val * torch.ones_like(prop_real)
+    )
 
     # Formulate Discriminator loss: Max log(D(I_HR)) + log(1 - D(G(I_LR)))
     dis_loss = dis_loss_real + dis_loss_fake
 
     return dis_loss
+
+
+def ragan_dis_loss(prop_real, prop_fake):
+    """Relativistic Average GAN (RaGAN) discriminator loss."""
+
+    relative_prop_real = prop_real - prop_fake.mean()
+    relative_prop_fake = prop_fake - prop_real.mean()
+
+    dis_loss = 0.5 * bce_dis_loss(relative_prop_real, relative_prop_fake, label_smooth_val=0.0)
+
+    return dis_loss
+
+
+def ragan_gen_loss(prop_real, prop_fake):
+    """Relativistic Average GAN (RaGAN) generator loss."""
+
+    relative_prop_real = prop_real - prop_fake.mean()
+    relative_prop_fake = prop_fake - prop_real.mean()
+
+    gen_loss_real = F.binary_cross_entropy_with_logits(relative_prop_real, torch.zeros_like(relative_prop_real))
+    gen_loss_fake = F.binary_cross_entropy_with_logits(relative_prop_fake, torch.ones_like(relative_prop_fake))
+
+    gen_loss = 0.5 * gen_loss_real + gen_loss_fake
+
+    return gen_loss
+
 
 def compute_gradient_penalty(interpolated_images, mixed_scores, device="cuda"):
 
@@ -46,7 +78,7 @@ def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None
     aux_loss = torch.tensor(0.0).to(device)
 
     for key, value in loss_val_dict.items():
-        if value > 0:
+        if value > 0 and key != "ADV": # Adversarial G loss is handled by respective GAN model classes
             aux_loss += value*loss_fn_dict[key](real_hi_res, fake_hi_res)
 
     gen_loss += aux_loss
@@ -258,11 +290,12 @@ class CSCLoss(nn.Module):
 
 class AESOPLoss3D(nn.Module):
     """AESOP loss."""
-    def __init__(self, ae_criterion_type='L1', ae_weight=1.0, experiment_id=None):
+    def __init__(self, ae_criterion_type='L1', ae_weight=1.0, experiment_id=None, viz_loss=False):
 
         super(AESOPLoss3D, self).__init__()
 
         self.ae_loss_weight = ae_weight
+        self.viz_loss = viz_loss
 
         # build and load autoencoder
         if experiment_id is None:
@@ -288,6 +321,10 @@ class AESOPLoss3D(nn.Module):
             raise NotImplementedError(f'{ae_criterion_type} AE criterion has not been supported.')
 
     def forward(self, gt, x):
+
+        if self.viz_loss:
+            self.viz_loss_map(gt, x)  # <--- ONLY FOR DEBUGGING
+
         with torch.no_grad():
             gt_ae = self.ae_net(gt.detach(), return_bottleneck=False)
         x_ae = self.ae_net(x, return_bottleneck=False)
@@ -299,24 +336,40 @@ class AESOPLoss3D(nn.Module):
             gt_ae = self.ae_net(gt.detach(), return_bottleneck=False)
         x_ae = self.ae_net(x, return_bottleneck=False)
             
-        l1_loss_map = torch.abs(gt - x)
-        ae_loss_map = torch.abs(gt_ae - x_ae)
+        l1_loss_map = torch.abs(gt.float().cpu() - x.detach().float().cpu())
+        ae_loss_map = torch.abs(gt_ae.float().cpu() - x_ae.detach().float().cpu())
         
         # Visualizes of loss maps
         B, C, D, H, W = gt.shape
         plt.figure(figsize=(4*B, 8))
 
         c = 1
-        for i in range(B):
-            plt.subplot(2, i, c)
-            plt.imshow(l1_loss_map[i, 0, D//2, :, :], cmap='gray')
-            plt.title(f'l1 loss map ({i})')
+        for i in range(1, B):
+            plt.subplot(4, B, c)
+            plt.imshow(gt[i - 1, 0, D // 2, :, :].detach().float().cpu(), cmap='gray')
+            plt.title(f'GT ({i})')
+            plt.axis('off')
+            c += 1
 
-            plt.subplot(2, i, c + 1)
-            plt.imshow(ae_loss_map[i, 0, D//2, :, :], cmap='gray')
-            plt.title(f'ae loss map ({i})')
+            plt.subplot(4, B, c)
+            plt.imshow(l1_loss_map[i - 1, 0, D // 2, :, :], cmap="gray")
+            plt.title(f"L1 loss map ({i})")
+            plt.axis("off")
+            c += 1
 
-            c = c + 1
+            plt.subplot(4, B, c)
+            plt.imshow(x[i-1, 0, D // 2, :, :].detach().float().cpu(), cmap='gray')
+            plt.title(f'SR ({i})')
+            plt.axis('off')
+            c += 1
+
+            plt.subplot(4, B, c)
+            plt.imshow(ae_loss_map[i-1, 0, D // 2, :, :], cmap='gray')
+            plt.title(f'AESOP loss map ({i})')
+            plt.axis('off')
+            c += 1
+
+        plt.show()
 
 
 

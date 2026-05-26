@@ -112,8 +112,8 @@ class RRDBNet(nn.Module):
         return out
 
 
-class VGGStyleDiscriminator128(nn.Module):
-    """VGG style discriminator with input size 128 x 128 x 128.
+class VGGStyleDiscriminator(nn.Module):
+    """VGG style discriminator.
 
     It is used to train SRGAN and ESRGAN.
 
@@ -123,47 +123,47 @@ class VGGStyleDiscriminator128(nn.Module):
             Default: 64.
     """
 
-    def __init__(self, num_in_ch, num_feat):
-        super(VGGStyleDiscriminator128, self).__init__()
+    def __init__(self, patch_size, num_in_ch, num_feat):
+        super(VGGStyleDiscriminator, self).__init__()
 
-        # 128 x 128 x 128
+        # patch_size x patch_size x patch_size
         self.conv0_0 = nn.Conv3d(num_in_ch, num_feat, 3, 1, 1, bias=True)
         self.conv0_1 = nn.Conv3d(num_feat, num_feat, 4, 2, 1, bias=False)
         self.bn0_1 = nn.BatchNorm3d(num_feat, affine=True)
 
-        # 64 x 64 x 64
+        # patch_size / 2 x patch_size / 2 x patch_size / 2
         self.conv1_0 = nn.Conv3d(num_feat, num_feat * 2, 3, 1, 1, bias=False)
         self.bn1_0 = nn.BatchNorm3d(num_feat * 2, affine=True)
         self.conv1_1 = nn.Conv3d(num_feat * 2, num_feat * 2, 4, 2, 1, bias=False)
         self.bn1_1 = nn.BatchNorm3d(num_feat * 2, affine=True)
 
-        # 32 x 32 x 32
+        # patch_size / 4 x patch_size / 4 x patch_size / 4
         self.conv2_0 = nn.Conv3d(num_feat * 2, num_feat * 4, 3, 1, 1, bias=False)
         self.bn2_0 = nn.BatchNorm3d(num_feat * 4, affine=True)
         self.conv2_1 = nn.Conv3d(num_feat * 4, num_feat * 4, 4, 2, 1, bias=False)
         self.bn2_1 = nn.BatchNorm3d(num_feat * 4, affine=True)
 
-        # 16 x 16 x 16
+        # patch_size / 8 x patch_size / 8 x patch_size / 8
         self.conv3_0 = nn.Conv3d(num_feat * 4, num_feat * 8, 3, 1, 1, bias=False)
         self.bn3_0 = nn.BatchNorm3d(num_feat * 8, affine=True)
         self.conv3_1 = nn.Conv3d(num_feat * 8, num_feat * 8, 4, 2, 1, bias=False)
         self.bn3_1 = nn.BatchNorm3d(num_feat * 8, affine=True)
 
-        # 8 x 8 x 8
+        # patch_size / 16 x patch_size / 16 x patch_size / 16
         self.conv4_0 = nn.Conv3d(num_feat * 8, num_feat * 8, 3, 1, 1, bias=False)
         self.bn4_0 = nn.BatchNorm3d(num_feat * 8, affine=True)
         self.conv4_1 = nn.Conv3d(num_feat * 8, num_feat * 8, 4, 2, 1, bias=False)
         self.bn4_1 = nn.BatchNorm3d(num_feat * 8, affine=True)
 
-        # 4 x 4 x 4
-        self.linear1 = nn.Linear(num_feat * 8 * 4 * 4 * 4, 100)
+        # patch_size / 32 x patch_size / 32 x patch_size / 32
+        self.linear1 = nn.Linear(num_feat * 8 * (patch_size // 32)**3, 100)
         self.linear2 = nn.Linear(100, 1)
 
         # activation function
         self.lrelu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):
-        assert x.size(2) == 128 and x.size(3) == 128, (f'Input spatial size must be 128x128, but received {x.size()}.')
+        assert x.size(2) > 32 and x.size(3) > 32 and x.size(3) > 32, (f'Input spatial sizes must > 32, but received {x.size()}.')
 
         feat = self.lrelu(self.conv0_0(x))
         feat = self.lrelu(self.bn0_1(self.conv0_1(feat)))  # output spatial size: (64, 64, 64)
