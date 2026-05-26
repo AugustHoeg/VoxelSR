@@ -62,39 +62,29 @@ class Encoder(nn.Module):
     def __init__(self, in_channels, hidden_channels=256):
         super(Encoder, self).__init__()
 
-        self.down1 = DownBlock(in_channels, hidden_channels)
-        self.down2 = DownBlock(hidden_channels, hidden_channels)
-
-        self.res1 = ResidualBlock(hidden_channels, hidden_channels)
-        self.res2 = ResidualBlock(hidden_channels, hidden_channels)
+        self.model = nn.Sequential(
+            DownBlock(in_channels, hidden_channels),
+            DownBlock(hidden_channels, hidden_channels),
+            ResidualBlock(hidden_channels, hidden_channels),
+            ResidualBlock(hidden_channels, hidden_channels),
+        )
 
     def forward(self, x):
-        x = self.down1(x)
-        x = self.down2(x)
-
-        x = self.res1(x)
-        x = self.res2(x)
-
-        return x
+        return self.model(x)
 
 class Decoder(nn.Module):
     def __init__(self, hidden_channels=256, out_channels=1):
         super(Decoder, self).__init__()
 
-        self.res1 = ResidualBlock(hidden_channels, hidden_channels)
-        self.res2 = ResidualBlock(hidden_channels, hidden_channels)
-
-        self.up1 = UpBlock(hidden_channels, hidden_channels)
-        self.up2 = UpBlock(hidden_channels, out_channels)
+        self.model = nn.Sequential(
+            ResidualBlock(hidden_channels, hidden_channels),
+            ResidualBlock(hidden_channels, hidden_channels),
+            UpBlock(hidden_channels, hidden_channels),
+            UpBlock(hidden_channels, out_channels),
+        )
 
     def forward(self, x):
-        x = self.res1(x)
-        x = self.res2(x)
-
-        x = self.up1(x)
-        x = self.up2(x)
-
-        return x
+        return self.model(x)
 
 class CodeBook(nn.Module):
     def __init__(self, num_embeddings, embedding_dim, beta=0.25):
