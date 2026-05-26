@@ -129,31 +129,31 @@ class VGGStyleDiscriminator(nn.Module):
         # patch_size x patch_size x patch_size
         self.conv0_0 = nn.Conv3d(num_in_ch, num_feat, 3, 1, 1, bias=True)
         self.conv0_1 = nn.Conv3d(num_feat, num_feat, 4, 2, 1, bias=False)
-        self.bn0_1 = nn.BatchNorm3d(num_feat, affine=True)
+        self.bn0_1 = nn.InstanceNorm3d(num_feat, affine=True)
 
         # patch_size / 2 x patch_size / 2 x patch_size / 2
         self.conv1_0 = nn.Conv3d(num_feat, num_feat * 2, 3, 1, 1, bias=False)
-        self.bn1_0 = nn.BatchNorm3d(num_feat * 2, affine=True)
+        self.bn1_0 = nn.InstanceNorm3d(num_feat * 2, affine=True)
         self.conv1_1 = nn.Conv3d(num_feat * 2, num_feat * 2, 4, 2, 1, bias=False)
-        self.bn1_1 = nn.BatchNorm3d(num_feat * 2, affine=True)
+        self.bn1_1 = nn.InstanceNorm3d(num_feat * 2, affine=True)
 
         # patch_size / 4 x patch_size / 4 x patch_size / 4
         self.conv2_0 = nn.Conv3d(num_feat * 2, num_feat * 4, 3, 1, 1, bias=False)
-        self.bn2_0 = nn.BatchNorm3d(num_feat * 4, affine=True)
+        self.bn2_0 = nn.InstanceNorm3d(num_feat * 4, affine=True)
         self.conv2_1 = nn.Conv3d(num_feat * 4, num_feat * 4, 4, 2, 1, bias=False)
-        self.bn2_1 = nn.BatchNorm3d(num_feat * 4, affine=True)
+        self.bn2_1 = nn.InstanceNorm3d(num_feat * 4, affine=True)
 
         # patch_size / 8 x patch_size / 8 x patch_size / 8
         self.conv3_0 = nn.Conv3d(num_feat * 4, num_feat * 8, 3, 1, 1, bias=False)
-        self.bn3_0 = nn.BatchNorm3d(num_feat * 8, affine=True)
+        self.bn3_0 = nn.InstanceNorm3d(num_feat * 8, affine=True)
         self.conv3_1 = nn.Conv3d(num_feat * 8, num_feat * 8, 4, 2, 1, bias=False)
-        self.bn3_1 = nn.BatchNorm3d(num_feat * 8, affine=True)
+        self.bn3_1 = nn.InstanceNorm3d(num_feat * 8, affine=True)
 
         # patch_size / 16 x patch_size / 16 x patch_size / 16
         self.conv4_0 = nn.Conv3d(num_feat * 8, num_feat * 8, 3, 1, 1, bias=False)
-        self.bn4_0 = nn.BatchNorm3d(num_feat * 8, affine=True)
+        self.bn4_0 = nn.InstanceNorm3d(num_feat * 8, affine=True)
         self.conv4_1 = nn.Conv3d(num_feat * 8, num_feat * 8, 4, 2, 1, bias=False)
-        self.bn4_1 = nn.BatchNorm3d(num_feat * 8, affine=True)
+        self.bn4_1 = nn.InstanceNorm3d(num_feat * 8, affine=True)
 
         # patch_size / 32 x patch_size / 32 x patch_size / 32
         self.linear1 = nn.Linear(num_feat * 8 * (patch_size // 32)**3, 100)

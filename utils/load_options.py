@@ -158,9 +158,9 @@ def init_options(opt, opt_path):
     # default setting for distributeddataparallel
     # ----------------------------------------
     if 'find_unused_parameters' not in opt:
-        opt['find_unused_parameters'] = True
+        opt['find_unused_parameters'] = False
     if 'use_static_graph' not in opt:
-        opt['use_static_graph'] = False
+        opt['use_static_graph'] = True
     if 'dist' not in opt:
         opt['dist'] = False
     if opt['gpu_ids'] is not None:

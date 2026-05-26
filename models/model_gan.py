@@ -154,29 +154,20 @@ class ModelGAN(ModelBase):
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
     def netG_forward(self):
-        if self.mixed_precision is not None:
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                self.E = self.netG(self.L)  # self.L
-        else:  # Standard precision
-            self.E = self.netG(self.L)
+        self.E = self.netG(self.L)
 
     def netD_forward(self, input):
-        if self.mixed_precision is not None:
-            # Evaluate using AMP
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                return self.netD(input)
-        else:  # Standard precision
-                return self.netD(input)
+        return self.netD(input)
 
     def optimize_parameters_amp(self, current_step, update=False):
 
         # optimize D
         self.netD.requires_grad_(True)
 
-        self.netG_forward()
-        self.prop_real = self.netD_forward(self.H)
-        self.prop_fake = self.netD_forward(self.E.detach())
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.netG_forward()
+            self.prop_real = self.netD_forward(self.H)
+            self.prop_fake = self.netD_forward(self.E.detach())
             self.dis_loss = bce_dis_loss(self.prop_real, self.prop_fake)
             self.dis_loss = self.dis_loss / self.num_accum_steps_D
 
@@ -212,8 +203,8 @@ class ModelGAN(ModelBase):
         # optimize G
         self.netD.requires_grad_(False)
 
-        self.prop_fake = self.netD_forward(self.E)
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.prop_fake = self.netD_forward(self.E)
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = F.binary_cross_entropy_with_logits(self.prop_fake, torch.ones_like(self.prop_fake))
             self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss
@@ -403,15 +394,13 @@ class ModelGAN(ModelBase):
 
     def validation_amp(self):
 
-        self.netG_forward()
-        self.prop_real = self.netD_forward(self.H)
-        self.prop_fake = self.netD_forward(self.E)
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.netG_forward()
+            self.prop_real = self.netD_forward(self.H)
+            self.prop_fake = self.netD_forward(self.E)
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = F.binary_cross_entropy_with_logits(self.prop_fake, torch.ones_like(self.prop_fake))
             self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss
-
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.dis_loss = bce_dis_loss(self.prop_real, self.prop_fake)
 
         self.G_valid_loss += self.gen_loss
