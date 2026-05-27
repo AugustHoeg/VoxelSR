@@ -67,10 +67,12 @@ def compute_gradient_penalty(interpolated_images, mixed_scores, device="cuda"):
     gradient_penalty = torch.mean((gradient_norm - 1) ** 2)
     return gradient_penalty
 
+
 def compute_critic_loss(critic_real, critic_fake, scaled_gradient_penalty):
 
     loss_critic = -(torch.mean(critic_real.reshape(-1)) - torch.mean(critic_fake.reshape(-1))) + scaled_gradient_penalty
     return loss_critic
+
 
 def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, device="cuda"):
 

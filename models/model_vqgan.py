@@ -162,9 +162,14 @@ class ModelVQGAN(ModelBase):
     def netD_forward(self, input):
         return self.netD(input)
 
+    def find_last_conv(self, model):
+        for layer in reversed(list(model.modules())):
+            if isinstance(layer, torch.nn.Conv3d):
+                return layer
+        raise ValueError("No convolutional layer found in the model.")
+
     def calculate_lambda(self, recon_loss, adv_loss):
-        last_layer = self.netG.module.decoder.model[-1]
-        last_layer_weight = last_layer.weight
+        last_layer_weight = self.find_last_conv(self.netG.module.decoder.model).weight
         recon_loss_grads = torch.autograd.grad(recon_loss, last_layer_weight, retain_graph=True)[0]
         adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
 
