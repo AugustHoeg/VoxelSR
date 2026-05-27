@@ -145,6 +145,8 @@ class ModelVQGAN(ModelBase):
         self.init_G_loss_trackers()
         self.init_D_loss_trackers()
 
+        self.lambda_adv = self.loss_val_dict['ADV']  # Initial value, will be dynamically updated during training
+
     def define_optimizer(self):
         self.define_G_optimizer()
         self.define_D_optimizer()
@@ -154,10 +156,10 @@ class ModelVQGAN(ModelBase):
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
 
     def vq_forward(self):
-        self.E, self.vq_loss = self.netG(self.H)
+        self.E, self.vq_loss = self.netG(self.H)  # HR input for AE
 
     def netG_forward(self):
-        self.E, _ = self.netG(self.L)
+        self.E, _ = self.netG(self.H)  # HR input for AE
 
     def netD_forward(self, input):
         return self.netD(input)
@@ -173,7 +175,7 @@ class ModelVQGAN(ModelBase):
         recon_loss_grads = torch.autograd.grad(recon_loss, last_layer_weight, retain_graph=True)[0]
         adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
 
-        lambda_adv = torch.norm(recon_loss_grads) / (torch.norm(adv_loss_grads) + 1e-4)
+        lambda_adv = torch.norm(recon_loss_grads.float()) / (torch.norm(adv_loss_grads.float()) + 1e-4)
         lambda_adv = torch.clamp(lambda_adv, 0, 1e4).detach()
         return 0.8 * lambda_adv
 
@@ -227,8 +229,9 @@ class ModelVQGAN(ModelBase):
             self.prop_fake = self.netD_forward(self.E)
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
-            lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
-            self.gen_loss = self.vq_loss + recon_loss + dis_factor * lambda_adv * adv_loss
+            self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss) if dis_factor > 0.0 else 0.0
+
+            self.gen_loss = self.vq_loss + recon_loss + dis_factor * self.lambda_adv * adv_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -306,8 +309,8 @@ class ModelVQGAN(ModelBase):
         self.prop_fake = self.netD_forward(self.E)
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
-        lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
-        self.gen_loss = self.vq_loss + recon_loss + dis_factor * lambda_adv * adv_loss
+        self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss) if dis_factor > 0.0 else 0.0
+        self.gen_loss = self.vq_loss + recon_loss + dis_factor * self.lambda_adv * adv_loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -409,7 +412,7 @@ class ModelVQGAN(ModelBase):
 
         recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
-        self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss
+        self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
         self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
 
         self.G_valid_loss += self.gen_loss
@@ -426,7 +429,7 @@ class ModelVQGAN(ModelBase):
 
             recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
-            self.gen_loss = self.vq_loss + recon_loss + self.loss_val_dict['ADV'] * adv_loss
+            self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
             self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
 
         self.G_valid_loss += self.gen_loss
