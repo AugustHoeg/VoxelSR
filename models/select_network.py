@@ -34,6 +34,19 @@ def define_G(opt, mode='train'):
                    enc_opt=opt_net['enc_opt'],
                    dec_opt=opt_net['dec_opt'])
 
+    elif model_arch == "GPT3D":
+        from models.gpt3d import GPT3D as net
+        netG = net(
+            num_embeddings=opt_net['num_embeddings'],
+            embed_dim=opt_net['embed_dim'],
+            depth=opt_net['depth'],
+            num_heads=opt_net['num_heads'],
+            seq_len=opt_net['seq_len'],
+            mlp_ratio=opt_net.get('mlp_ratio', 4.0),
+            dropout=opt_net.get('dropout', 0.0),
+            is_causal=opt_net.get('is_causal', True),
+        )
+
     elif model_arch == "VQVAE3D":  # VQVAE_3D
         from models.VQVAE3D import VQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],

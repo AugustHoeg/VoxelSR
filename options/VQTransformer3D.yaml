@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: VQGAN3D                  # Default model config
+  - model_opt: GPT3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -17,7 +17,7 @@ wandb_mode: offline
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -34,6 +34,8 @@ path:
   pretrained_experiment_id: null  # "mDCSRN_ID000000"
   pretrained_netE: null
 
+  pretrained_vqmodel_id: VQGAN3D_IXI_VoDaSuRe_OME_ID000006  # Pretrained VQ model must be specified for VQTransformer3D
+
 # Overwrite default training parameters
 train_opt:
   iterations: 1000
@@ -47,15 +49,6 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
 
-  D_optimizer_lr: 2e-4
-  D_optimizer_wd: 0
-  D_optimizer_clipgrad: 10
-  D_start_iteration: 500  # new
-
-  G_loss_weights:
-    L1: 1.0
-    LPIPS: 0.01
-
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
@@ -64,13 +57,13 @@ dataset_opt:
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
+    dataloader_batch_size: 2
     num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
+    dataloader_batch_size: 2
     num_load_workers: 2
     persist_workers: true
     pin_memory: false

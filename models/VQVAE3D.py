@@ -134,14 +134,13 @@ class VQVAE3D(nn.Module):
     def encode(self, x):
         z_e = self.encoder(x)
         z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
-
-        return z_e, z_q, vq_loss
+        return z_e, z_q, vq_loss, q_indices
 
     def decode(self, z_q):
         return self.decoder(z_q)
 
     def compute_loss(self, x):
-        z_e, z_q, vq_loss = self.encode(x)
+        z_e, z_q, vq_loss, _ = self.encode(x)
 
         # Reconstruction loss
         x_hat = self.decoder(z_q)
@@ -161,7 +160,7 @@ class VQVAE3D(nn.Module):
 if __name__ == '__main__':
     model = VQVAE3D(in_channels=1, hidden_channels=256)
     x = torch.randn(2, 1, 32, 32, 32)  # Example input
-    z_e, z_q, vq_loss = model.encode(x)
+    z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)
 
     print("Encoded shape:", z_e.shape)

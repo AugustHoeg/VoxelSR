@@ -126,14 +126,13 @@ class VQModel3D(nn.Module):
     def encode(self, x):
         z_e = self.encoder(x)
         z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
-
-        return z_e, z_q, vq_loss
+        return z_e, z_q, vq_loss, q_indices
 
     def decode(self, z_q):
         return self.decoder(z_q)
 
     def compute_loss(self, x):
-        z_e, z_q, vq_loss = self.encode(x)
+        z_e, z_q, vq_loss, _ = self.encode(x)
 
         # Reconstruction loss
         x_hat = self.decoder(z_q)
@@ -171,7 +170,7 @@ if __name__ == '__main__':
 
     model = VQModel3D(in_channels=1, latent_dim=256, resolution=patch_size)
 
-    z_e, z_q, vq_loss = model.encode(x)
+    z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)
 
     print("Encoded shape:", z_e.shape)
