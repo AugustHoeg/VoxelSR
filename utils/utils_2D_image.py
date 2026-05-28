@@ -1,14 +1,9 @@
-import os
-import math
-from PIL import Image
-
 import numpy as np
 import torch
-from tqdm import tqdm
-import torch.nn.functional as F
 import torchio.transforms as tiotransforms
 from torchvision.utils import make_grid
-import matplotlib.pyplot as plt
+from tqdm import tqdm
+
 
 def upscale_slices_upfactor(model, img_L, img_H, batch_size_2D, up_factor=2):
 
@@ -52,6 +47,24 @@ def upscale_slices(model, img_L, img_H, batch_size_2D):
     output_tensor = output_tensor.reshape(B, D, C, H, W).permute(0, 2, 3, 4, 1).contiguous()
     return output_tensor
 
+def unnorm_and_rescale(img, out_dtype=np.uint8, unnorm=False, div_max=False):
+
+    if unnorm:
+        img = (img/2) + 0.5  # unnormalize from [-1; 1] to [0; 1]
+
+    if div_max:
+        img = img / torch.max(img)  # Divide by max to ensure output is between 0 and 1
+        img[img < 0] = 0
+
+    img = torch.clamp(img, min=0.0, max=1.0)  # Clip values
+    if out_dtype == torch.uint8:
+        img = torch.squeeze((torch.round(img * 255)).type(torch.uint8))  # Convert to uint8
+    elif out_dtype == np.uint8:
+        img = (np.round(img.numpy() * 255)).astype(np.uint8).squeeze()  # Convert to numpy uint8
+    elif out_dtype == np.uint16:
+        img = (np.round(img.numpy() * 65535)).astype(np.uint16).squeeze()  # Convert to numpy uint16 (unsupported in torch)
+
+        return img
 
 class ImageComparisonTool2D():
     def __init__(self, patch_size_hr, upscaling_methods, unnorm=True, div_max=False, out_dtype=np.uint8):
@@ -97,25 +110,6 @@ class ImageComparisonTool2D():
 
         row = torch.stack(img_list)
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)  # make grid, then permute to H, W, C because WandB assumes channel last
-        grid_image = self.unnorm_and_rescale(grid, self.out_dtype)
+        grid_image = unnorm_and_rescale(grid, self.out_dtype, self.unnorm, self.div_max)
 
         return grid_image
-
-    def unnorm_and_rescale(self, img, out_dtype=np.uint8):
-
-        if self.unnorm:
-            img = (img/2) + 0.5  # unnormalize from [-1; 1] to [0; 1]
-
-        if self.div_max:
-            img = img / torch.max(img)  # Divide by max to ensure output is between 0 and 1
-            img[img < 0] = 0
-
-        img = torch.clamp(img, min=0.0, max=1.0)  # Clip values
-        if out_dtype == torch.uint8:
-            img = torch.squeeze((torch.round(img * 255)).type(torch.uint8))  # Convert to uint8
-        elif out_dtype == np.uint8:
-            img = (np.round(img.numpy() * 255)).astype(np.uint8).squeeze()  # Convert to numpy uint8
-        elif out_dtype == np.uint16:
-            img = (np.round(img.numpy() * 65535)).astype(np.uint16).squeeze()  # Convert to numpy uint16 (unsupported in torch)
-
-        return img
