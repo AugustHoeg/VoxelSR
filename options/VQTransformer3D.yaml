@@ -38,12 +38,12 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 1000
-  validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  iterations: 50000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 10000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
@@ -57,14 +57,14 @@ dataset_opt:
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 2
+    dataloader_batch_size: 16
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 2
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 
