@@ -1,0 +1,28 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: transformer_vq
+model_architecture: GPT3D
+
+netG:
+  net_type: GPT3D
+  description: "GPT-style autoregressive transformer over VQ codebook indices"
+
+  # Must match the num_embeddings of the pretrained VQ model (path.pretrained_vqmodel_id)
+  num_embeddings: 512
+
+  # seq_len = D' * H' * W' where (D', H', W') is the spatial shape of the VQ encoder output.
+  # VQVAE3D (2x DownBlocks, 4x downsampling): patch_size=64 -> 16^3 = 4096
+  # VQGAN3D (4x DownBlocks, 16x downsampling): patch_size=64 -> 4^3 = 64
+  seq_len: 4096
+
+  embed_dim: 512
+  depth: 12
+  num_heads: 8     # must evenly divide embed_dim
+  mlp_ratio: 4.0
+  dropout: 0.0
+
+  # Set to false to switch to bidirectional attention (e.g. for MaskGIT)
+  is_causal: true
+
+  init_type: default     # GPT3D initialises its own weights; this skips select_network init
+  init_bn_type: uniform
+  init_gain: 0.2
