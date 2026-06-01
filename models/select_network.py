@@ -1,5 +1,5 @@
 import functools
-import torch
+
 import torch.nn as nn
 from torch.nn import init
 
@@ -34,8 +34,8 @@ def define_G(opt, mode='train'):
                    enc_opt=opt_net['enc_opt'],
                    dec_opt=opt_net['dec_opt'])
 
-    elif model_arch == "GPT3D":
-        from models.gpt3d import GPT3D as net
+    elif model_arch == "VQTransformer3D":
+        from models.VQTransformer3D import VQTransformer3D as net
         netG = net(
             num_embeddings=opt_net['num_embeddings'],
             embed_dim=opt_net['embed_dim'],

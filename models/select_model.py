@@ -1,4 +1,4 @@
-
+﻿
 
 """
 # --------------------------------------------
@@ -26,7 +26,10 @@ def define_Model(opt, mode, data_parallel=True):
         from models.model_vqgan import ModelVQGAN as M
 
     elif model == 'transformer_vq':
-        from models.model_transformer import ModelTransformerVQ as M
+        from models.model_vq_transformer import ModelTransformerVQ as M
+
+    elif model == 'mask_transformer':
+        from models.model_mask_transformer import ModelMaskTransformer as M
 
     elif model == 'aesop':
         from models.model_aesop import ModelAESOP as M

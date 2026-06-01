@@ -1,4 +1,4 @@
-import torch
+﻿import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -49,7 +49,7 @@ class TransformerBlock(nn.Module):
         return x
 
 
-class GPT3D(nn.Module):
+class VQTransformer3D(nn.Module):
     """GPT-style autoregressive transformer over VQ codebook indices.
 
     Sequence length is inferred at runtime — positional embeddings are
@@ -101,20 +101,19 @@ class GPT3D(nn.Module):
                 nn.init.zeros_(m.bias)
 
     def forward(self, idx: torch.Tensor) -> torch.Tensor:
-        """Teacher-forced forward pass for training.
+        """Plain forward pass: embed idx directly, run transformer blocks, project to logits.
+
+        Teacher-forced (autoregressive) inputs should be prepared by the caller —
+        see ModelTransformerVQ which prepends the SOS token before calling this.
 
         Args:
-            idx: (B, T) codebook indices in [0, num_embeddings)
+            idx: (B, T) token indices
         Returns:
-            logits: (B, T, num_embeddings) — position i predicts token idx[i]
+            logits: (B, T, num_embeddings)
         """
         B, T = idx.shape
-
-        # Right-shift by one: [SOS, t_0, ..., t_{T-2}] -> predicts [t_0, ..., t_{T-1}]
-        sos = idx.new_full((B, 1), self.num_embeddings)
-        idx_in = torch.cat([sos, idx[:, :-1]], dim=1)
         positions = torch.arange(T, device=idx.device).unsqueeze(0)
-        x = self.drop(self.tok_emb(idx_in) + self.pos_emb(positions))
+        x = self.drop(self.tok_emb(idx) + self.pos_emb(positions))
         for block in self.blocks:
             x = block(x)
         return self.head(self.ln_f(x))  # (B, T, num_embeddings)
@@ -159,7 +158,7 @@ class GPT3D(nn.Module):
 
 if __name__ == '__main__':
     # Quick sanity check: 64-token sequences (e.g. 4^3 from a 64^3 patch + 16x encoder)
-    model = GPT3D(num_embeddings=512, embed_dim=512, depth=12, num_heads=8, seq_len=64)
+    model = VQTransformer3D(num_embeddings=512, embed_dim=512, depth=12, num_heads=8, seq_len=64)
     idx = torch.randint(0, 512, (2, 64))
     logits = model(idx)
     assert logits.shape == (2, 64, 512), logits.shape
