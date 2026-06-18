@@ -118,7 +118,24 @@ class ModelTransformerVQ(ModelBase):
         """
         assert self.latent_shape is not None, "latent_shape not set; run encode_to_indices first."
         gpt = self.get_bare_model(self.netG)
-        q_indices = gpt.sample(n_samples=n_samples, temperature=temperature, top_k=top_k, device=self.device)
+
+        was_training = gpt.training
+        gpt.eval()
+
+        # Seed sequence with SOS token (index = num_embeddings)
+        tokens = torch.full((n_samples, 1), self.num_embeddings, dtype=torch.long, device=self.device)
+        for _ in range(gpt.seq_len):
+            logits = gpt(tokens)[:, -1] / temperature  # (B, num_embeddings)
+            if top_k is not None:
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = float('-inf')
+            next_token = torch.multinomial(F.softmax(logits, dim=-1), num_samples=1)
+            tokens = torch.cat([tokens, next_token], dim=1)
+
+        if was_training:
+            gpt.train()
+
+        q_indices = tokens[:, 1:]  # strip SOS -> (n_samples, seq_len)
         return self.decode_indices(q_indices, self.latent_shape)
 
     # ----------------------------------------

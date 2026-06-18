@@ -13,6 +13,7 @@ from torchvision.utils import make_grid
 from models.model_base import ModelBase
 from models.select_model import define_Model
 from models.select_network import define_G
+from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 from utils.load_options import load_options_from_experiment_id
 
@@ -106,14 +107,19 @@ class ModelMaskVSRT(ModelBase):
             x: (B, C, D, H, W)
             vq_model: Either LR or HR VQ model.
         Returns:
-            q_indices:    codebook indices: (B, L) int64  where L = D'*H'*W' 
-            z_e:          latent embedding vectors: (B, D', H', W')
+            q_indices:    codebook indices: (B, L) int64  where L = D'*H'*W'
+            z_e:          latent embedding vectors: (B, C, D', H', W')
             latent_shape: (D', H', W')
         """
         z_e = vq_model.encoder(x)
         latent_shape = tuple(z_e.shape[2:])
         _, _, q_indices, _ = vq_model.codebook(z_e)
         return q_indices, z_e, latent_shape
+
+    def _flatten_lr_embeddings(self, z_lr: torch.Tensor) -> torch.Tensor:
+        """Reshape LR encoder output (B, C, D', H', W') -> (B, N_lr, C) for the transformer."""
+        B, C = z_lr.shape[:2]
+        return z_lr.view(B, C, -1).permute(0, 2, 1)
 
     @torch.no_grad()
     def decode_indices(self, q_indices: torch.Tensor, vq_model: torch.nn.Module, latent_shape: tuple) -> torch.Tensor:
@@ -198,7 +204,7 @@ class ModelMaskVSRT(ModelBase):
     # ----------------------------------------
 
     @torch.no_grad()
-    def sample_from_transformer(self, n_samples: int = 1, n_steps: int = 12,
+    def sample_E(self, z_lr: torch.Tensor, n_steps: int = 12,
                                  temperature: float = 1.0) -> torch.Tensor:
         """Generate volumes via iterative masked token prediction (MaskGIT inference).
 
@@ -210,18 +216,19 @@ class ModelMaskVSRT(ModelBase):
         According to authors, the model learns to simply copy-paste already unmasked values.
 
         Args:
-            n_samples:   number of volumes to generate
+            z_lr:        LR image embeddings
             n_steps:     refinement iterations (12 is the MaskGIT paper default)
             temperature: softmax temperature (lower = sharper, higher = more stochastic)
         Returns:
-            x_sampled: (n_samples, C, D, H, W)
+            x_sampled: (B, C, D, H, W)
         """
         assert self.latent_shape_hr is not None, "latent_shape not set; call encode_to_indices first."
         L = int(np.prod(self.latent_shape_hr))
+        B = z_lr.shape[0]
 
         # Start fully masked
-        code = torch.full((n_samples, L), self.mask_token_id, dtype=torch.long, device=self.device)
-        mask = torch.ones(n_samples, L, dtype=torch.bool, device=self.device)
+        code = torch.full((B, L), self.mask_token_id, dtype=torch.long, device=self.device)
+        mask = torch.ones(B, L, dtype=torch.bool, device=self.device)
 
         schedule = self._make_unmask_schedule(L, n_steps)
 
@@ -232,20 +239,20 @@ class ModelMaskVSRT(ModelBase):
 
             t = max(t, index + 1)  # make sure to predict at least 1 token at each step
 
-            logits = self.netG(code)  # (n_samples, L, num_embeddings)
+            logits = self.netG(code, z_lr)  # (B, L, num_embeddings)
             prob = torch.softmax(logits / temperature, dim=-1)
-            pred_code = torch.distributions.Categorical(probs=prob).sample()   # (n_samples, L)
+            pred_code = torch.distributions.Categorical(probs=prob).sample()   # (B, L)
 
             # Confidence = probability assigned to the sampled token
-            conf = prob.gather(-1, pred_code.unsqueeze(-1)).squeeze(-1)  # (n_samples, L)
+            conf = prob.gather(-1, pred_code.unsqueeze(-1)).squeeze(-1)  # (B, L)
             conf[~mask] = math.inf  # Force retention of already-revealed token positions
 
             # Select the t highest-confidence masked positions via a threshold
             tresh_conf, index_mask = torch.topk(conf, k=int(t), dim=-1)
-            tresh_conf = tresh_conf[:, [-1]]  # (n_samples, 1) cutoff value per sample
+            tresh_conf = tresh_conf[:, [-1]]  # (B, 1) cutoff value per sample
 
             # Update code and recompute mask from code
-            f_mask = (conf >= tresh_conf)  # (n_samples, L)
+            f_mask = (conf >= tresh_conf)  # (B, L)
             code[f_mask] = pred_code[f_mask]  # Already revealed tokens may still be updated
             mask = (code == self.mask_token_id)
 
@@ -258,7 +265,8 @@ class ModelMaskVSRT(ModelBase):
 
     def init_train(self):
         self.load()
-        self.load_vq_model()
+        self.load_hr_vq_model()
+        self.load_lr_vq_model()
         self.netG.train()
 
         self.define_loss()
@@ -277,7 +285,8 @@ class ModelMaskVSRT(ModelBase):
 
     def init_test(self, experiment_id):
         self.load(experiment_id, mode='test')
-        self.load_vq_model()
+        self.load_hr_vq_model()
+        self.load_lr_vq_model()
         self.netG.eval()
         self.define_metrics()
         self.define_mixed_precision()
@@ -318,7 +327,8 @@ class ModelMaskVSRT(ModelBase):
     def optimize_parameters_amp(self, current_step, update=False):
         q_indices, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
         q_lr, z_lr, _ = self.encode_to_indices(self.L, self.vq_model_lr)
-        
+        z_lr = self._flatten_lr_embeddings(z_lr)  # (B, N_lr, C)
+
         masked_indices, mask = self._mask_tokens(q_indices)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
@@ -361,7 +371,8 @@ class ModelMaskVSRT(ModelBase):
     def optimize_parameters(self, current_step, update=False):
         q_indices, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
         q_lr, z_lr, _ = self.encode_to_indices(self.L, self.vq_model_lr)
-        
+        z_lr = self._flatten_lr_embeddings(z_lr)  # (B, N_lr, C)
+
         masked_indices, mask = self._mask_tokens(q_indices)
 
         logits = self.netG(masked_indices, z_lr)
@@ -401,6 +412,7 @@ class ModelMaskVSRT(ModelBase):
     def validation(self):
         q_indices, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
         q_lr, z_lr, _ = self.encode_to_indices(self.L, self.vq_model_lr)
+        z_lr = self._flatten_lr_embeddings(z_lr)  # (B, N_lr, C)
         masked_indices, mask = self._mask_tokens(q_indices)
         logits = self.netG(masked_indices, z_lr)
         self.gen_loss = F.cross_entropy(logits[mask], q_indices[mask])
@@ -409,6 +421,7 @@ class ModelMaskVSRT(ModelBase):
     def validation_amp(self):
         q_indices, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
         q_lr, z_lr, _ = self.encode_to_indices(self.L, self.vq_model_lr)
+        z_lr = self._flatten_lr_embeddings(z_lr)  # (B, N_lr, C)
         masked_indices, mask = self._mask_tokens(q_indices)
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             logits = self.netG(masked_indices, z_lr)
@@ -428,13 +441,16 @@ class ModelMaskVSRT(ModelBase):
     def current_visuals(self):
         out_dict = OrderedDict()
 
-        q_indices, z_hr, latent_shape = self.encode_to_indices(self.H, self.vq_model_hr)
+        q_indices, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+        q_lr, z_lr, _ = self.encode_to_indices(self.L, self.vq_model_lr)
+        z_lr = self._flatten_lr_embeddings(z_lr)  # (B, N_lr, C)
+
         E_vq = self.decode_indices(q_indices, self.vq_model_hr, self.latent_shape_hr)
-        E_maskgit = self.sample_from_transformer(n_samples=1)
+        E = self.sample_E(z_lr)
 
         out_dict['H'] = self.H.detach()[0].float().cpu()
         out_dict['E_vq'] = E_vq.detach()[0].float().cpu()
-        out_dict['E_maskgit'] = E_maskgit.detach()[0].float().cpu()
+        out_dict['E'] = E.detach()[0].float().cpu()
 
         return out_dict
 
@@ -442,13 +458,13 @@ class ModelMaskVSRT(ModelBase):
         slice_idx = img_dict['H'].shape[-1] // 2
         H_slice = img_dict['H'][:, :, :, slice_idx]
         E_vq_slice = img_dict['E_vq'][:, :, :, slice_idx]
-        E_maskgit_slice = img_dict['E_maskgit'][:, :, :, slice_idx]
+        E_slice = img_dict['E'][:, :, :, slice_idx]
 
-        row = torch.stack([E_maskgit_slice, E_vq_slice, H_slice])
+        row = torch.stack([E_slice, E_vq_slice, H_slice])
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)
         grid_image = utils_3D_image.unnorm_and_rescale(grid, out_dtype)
 
-        figure_string = "MaskGIT: %s, step %d: MaskGIT Sample, VQ Recon, HR" % (
+        figure_string = "MaskVSRT: %s, step %d: E, VQ Recon, HR" % (
             self.opt["model_opt"]["model_architecture"], current_step,
         )
 

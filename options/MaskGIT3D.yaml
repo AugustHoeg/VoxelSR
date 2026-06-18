@@ -16,7 +16,7 @@ run_profile: false
 wandb_mode: offline
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
-experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000001
 run_name: ${model_opt.model_architecture}_000
 note: Note
 
@@ -40,10 +40,10 @@ path:
 train_opt:
   iterations: 1000
   validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  checkpoint_test: 100
+  checkpoint_save: 100
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0

@@ -1,0 +1,75 @@
+defaults:
+  - train_opt: train_VoDaSuRe
+  - dataset_opt: VoDaSuRe_OME
+  - model_opt: RQVAE3D
+  - _self_
+
+task: superresolution
+input_type: 3D
+up_factor: 1
+
+run_profile: false
+
+wandb_mode: offline
+wandb_entity: null
+wandb_project: ${dataset_opt.name}_RQVAE
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+run_name: ${model_opt.model_architecture}_001
+note: Note
+
+train_mode: "scratch"
+gpu_ids: [0]
+dist: false
+cluster: DTU_HPC
+
+save_model: true
+save_time: 36
+
+path:
+  root: superresolution
+  pretrained_experiment_id: null
+  pretrained_netE: null
+
+train_opt:
+  iterations: 200000
+  validation_iterations: 500
+  checkpoint_test: 2000
+  checkpoint_save: 2000
+  checkpoint_print: 500
+  checkpoint_save_visuals: 2000
+  num_accum_steps_G: 1
+  G_optimizer_lr: 2e-4
+  G_optimizer_wd: 0
+  G_optimizer_clipgrad: 10
+
+  G_loss_weights:
+    L1: 1.0
+
+dataset_opt:
+  synthetic: true
+  patch_size: 64
+
+  datasets: [IXI]
+
+  train_dataloader_params:
+    dataloader_batch_size: 1
+    num_load_workers: 2
+    persist_workers: true
+    pin_memory: false
+
+  test_dataloader_params:
+    dataloader_batch_size: 1
+    num_load_workers: 2
+    persist_workers: true
+    pin_memory: false
+
+hydra:
+  run:
+    dir: .
+  job:
+    chdir: False
+  output_subdir: null
+  sweep:
+    dir: .
+  job_logging:
+    disable_existing_loggers: False

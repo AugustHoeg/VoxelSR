@@ -24,6 +24,7 @@ class ModelVQVAE(ModelBase):
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters", utils_3D_image.numel(self.netG, only_trainable=True))
 
+        self.vae_target = opt.get('vae_target', 'HR')
         self.update = False
 
         self.early_stop = False
@@ -75,9 +76,10 @@ class ModelVQVAE(ModelBase):
     def feed_data(self, data):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
+        self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss = self.netG(self.H)
+        self.E, self.vq_loss, self.q_indices = self.netG(self.vae_in)
 
     def netG_forward(self):
         self.E, _ = self.netG(self.L)
@@ -86,7 +88,7 @@ class ModelVQVAE(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
+            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
             self.gen_loss = self.vq_loss + recon_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
@@ -141,24 +143,24 @@ class ModelVQVAE(ModelBase):
     def validation(self):
         self.vq_forward()
 
-        recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
+        recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
         self.gen_loss = self.vq_loss + recon_loss
 
         self.G_valid_loss += self.gen_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.vae_in, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
     def validation_amp(self):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict)
+            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
             self.gen_loss = self.vq_loss + recon_loss
 
         self.G_valid_loss += self.gen_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.vae_in, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
     def current_log(self):
         return self.log_dict

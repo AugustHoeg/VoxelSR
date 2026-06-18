@@ -118,50 +118,10 @@ class VQTransformer3D(nn.Module):
             x = block(x)
         return self.head(self.ln_f(x))  # (B, T, num_embeddings)
 
-    @torch.no_grad()
-    def sample(
-        self,
-        n_samples: int = 1,
-        temperature: float = 1.0,
-        top_k: int = None,
-        device: str = 'cuda',
-    ) -> torch.Tensor:
-        """Autoregressively sample a token sequence of length self.seq_len.
-
-        Args:
-            n_samples: batch size
-            temperature: softmax temperature
-            top_k: if set, restrict to top-k logits before sampling
-            device: target device string
-        Returns:
-            tokens: (n_samples, seq_len) int64
-        """
-        was_training = self.training
-        self.eval()
-        tokens = torch.full((n_samples, 1), self.num_embeddings, dtype=torch.long, device=device)
-        for _ in range(self.seq_len):
-            T = tokens.shape[1]
-            positions = torch.arange(T, device=device).unsqueeze(0)
-            x = self.tok_emb(tokens) + self.pos_emb(positions)
-            for block in self.blocks:
-                x = block(x)
-            logits = self.head(self.ln_f(x[:, -1])) / temperature  # (B, num_embeddings)
-            if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = float('-inf')
-            next_token = torch.multinomial(F.softmax(logits, dim=-1), num_samples=1)
-            tokens = torch.cat([tokens, next_token], dim=1)
-        if was_training:
-            self.train()
-        return tokens[:, 1:]  # strip SOS -> (n_samples, seq_len)
-
-
 if __name__ == '__main__':
     # Quick sanity check: 64-token sequences (e.g. 4^3 from a 64^3 patch + 16x encoder)
     model = VQTransformer3D(num_embeddings=512, embed_dim=512, depth=12, num_heads=8, seq_len=64)
     idx = torch.randint(0, 512, (2, 64))
     logits = model(idx)
     assert logits.shape == (2, 64, 512), logits.shape
-    tokens = model.sample(n_samples=2, device='cpu')
-    assert tokens.shape == (2, 64), tokens.shape
-    print("GPT3D OK — logits:", logits.shape, "| sampled:", tokens.shape)
+    print("GPT3D OK — logits:", logits.shape)

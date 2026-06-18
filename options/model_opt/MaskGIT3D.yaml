@@ -1,11 +1,10 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
 model: mask_transformer
-model_architecture: VQTransformer3D
+model_architecture: MaskTransformer3D
 
 netG:
-  net_type: VQTransformer3D
-  description: "MaskGIT-style bidirectional transformer over VQ codebook indices"
-
+  net_type: MaskTransformer3D
+  description: "3D Masked Autoencoder with Vector Quantization (VQTransformer3D)"
   mask_schedule: arccos
 
   # Must match the num_embeddings of the pretrained VQ model (path.pretrained_vqmodel_id)
@@ -18,12 +17,10 @@ netG:
 
   embed_dim: 512
   depth: 12
-  num_heads: 8     # must evenly divide embed_dim
-  mlp_ratio: 4.0
-  dropout: 0.0
-
-  # Set to false to switch to bidirectional attention (e.g. for MaskGIT)
-  is_causal: false
+  num_heads: 6     # must evenly divide embed_dim
+  mlp_ratio: 4
+  dropout: 0.1
+  use_checkpoint: true  # enable checkpointing to save memory (at the cost of extra computation)
 
   init_type: default     # VQTransformer3D initialises its own weights; this skips select_network init
   init_bn_type: uniform

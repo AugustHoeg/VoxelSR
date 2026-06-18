@@ -8,6 +8,7 @@ defaults:
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
 up_factor: 1  # upscaling factor
+vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile
 run_profile: false

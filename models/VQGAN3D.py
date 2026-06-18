@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint as checkpoint
 
-from models.VQVAE3D import ResidualBlock, GroupNorm, Swish, UpBlock, DownBlock, CodeBook
+from models.VQVAE3D import CodeBook, DownBlock, GroupNorm, ResidualBlock, Swish, UpBlock
 
 
 class NonLocalBlock(nn.Module):
@@ -41,8 +42,9 @@ class NonLocalBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16,)):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16,), use_checkpoint=False):
         super(Encoder, self).__init__()
+        self.use_checkpoint = use_checkpoint
         channels = [128, 128, 128, 256, 256, 512]
         layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
         for i in range(len(channels)-1):
@@ -65,12 +67,17 @@ class Encoder(nn.Module):
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.model(x)
-
+        if self.use_checkpoint:
+            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x)
+        else:
+            out = self.model(x)
+        return out
+        
 
 class Decoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16,)):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16,), use_checkpoint=False):
         super(Decoder, self).__init__()
+        self.use_checkpoint = use_checkpoint
         channels = [512, 256, 256, 128, 128, 128]
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
         layers.append(ResidualBlock(channels[0], channels[0]))
@@ -95,7 +102,11 @@ class Decoder(nn.Module):
         self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        return self.model(x)
+        if self.use_checkpoint:
+            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x)
+        else:
+            out = self.model(x)
+        return out
 
 
 class VQModel3D(nn.Module):
@@ -110,14 +121,16 @@ class VQModel3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             resolution=resolution,
-            attn_resolutions=[resolution // 16]
+            attn_resolutions=[resolution // 16],
+            use_checkpoint=use_checkpoint
         )
 
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
             resolution=resolution//16,  # Assuming 16x downsampling in encoder
-            attn_resolutions=[resolution // 16]
+            attn_resolutions=[resolution // 16],
+            use_checkpoint=use_checkpoint
         )
 
         self.codebook = CodeBook(num_embeddings=num_embeddings, embedding_dim=latent_dim)
@@ -165,10 +178,13 @@ class PatchGAN3D(nn.Module):
 
 
 if __name__ == '__main__':
-    patch_size = 32
-    x = torch.randn(1, 1, patch_size, patch_size, patch_size)  # Example input
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    model = VQModel3D(in_channels=1, latent_dim=256, resolution=patch_size)
+    patch_size = 128
+    x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)  # Example input
+
+    model = VQModel3D(in_channels=1, latent_dim=256, resolution=patch_size, use_checkpoint=True).to(device)
 
     z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)
@@ -176,3 +192,6 @@ if __name__ == '__main__':
     print("Encoded shape:", z_e.shape)
     print("Quantized shape:", z_q.shape)
     print("Reconstructed shape:", x_hat.shape)
+
+    max_memory_reserved = torch.cuda.max_memory_reserved()
+    print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10**9, total_gpu_mem))

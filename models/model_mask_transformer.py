@@ -123,6 +123,20 @@ class ModelMaskTransformer(ModelBase):
     # Masking utilities
     # ----------------------------------------
 
+    def _get_mask_ratios(self, r: torch.Tensor) -> torch.Tensor:
+
+        if self.mask_schedule == "linear":
+            mask_ratio = 1 - r
+        elif self.mask_schedule == "square":
+            mask_ratio = 1 - (r ** 2)
+        elif self.mask_schedule == "cosine":
+            mask_ratio = torch.cos(r * math.pi * 0.5)
+        else:  # "arccos" - MaskGIT default, biased toward high masking ratios
+            mask_ratio = torch.arccos(r) / (math.pi * 0.5)
+
+        return mask_ratio
+
+
     def _mask_tokens(self, q_indices: torch.Tensor):
         """Apply MaskGIT masking to a batch of token sequences.
 
@@ -138,14 +152,7 @@ class ModelMaskTransformer(ModelBase):
         B, L = q_indices.shape
         r = torch.rand(B, device=q_indices.device)
 
-        if self.mask_schedule == "linear":
-            mask_ratio = r
-        elif self.mask_schedule == "square":
-            mask_ratio = r ** 2
-        elif self.mask_schedule == "cosine":
-            mask_ratio = torch.cos(r * math.pi * 0.5)
-        else:  # "arccos" -- MaskGIT default, biased toward high masking ratios
-            mask_ratio = torch.arccos(r) / (math.pi * 0.5)
+        mask_ratio = self._get_mask_ratios(r)  # (0, 1) fraction of tokens to mask for each sample in the batch
 
         noise = torch.rand(B, L, device=q_indices.device)  # Sample noise
         mask = noise < mask_ratio.unsqueeze(1)  # Create mask bool of shape (B, L) by value according to schedule
@@ -164,15 +171,14 @@ class ModelMaskTransformer(ModelBase):
             n_tokens: total sequence length L
             n_steps:  number of refinement iterations
         Returns:
-            list of ints, length n_steps, summing to approximately n_tokens
+            list of ints, length n_steps, with total number of tokens to unmask at each step
         """
 
-        r = torch.linspace(1, 0, n_steps)
-        val_to_mask = torch.arccos(r) / (math.pi * 0.5)
-        sche = (val_to_mask / val_to_mask.sum()) * n_tokens
-        sche[sche == 0] = 1  # add 1 to predict a least 1 token / step
-        sche[-1] += n_tokens - sche.sum()  # need to sum up nb of code
-        return sche.int()
+        r = torch.linspace(1/n_steps, 1, n_steps)
+        mask_ratio = 1 - self._get_mask_ratios(r)
+        sche = mask_ratio * n_tokens
+        sche = sche.int()
+        return sche
 
     # ----------------------------------------
     # Inference: iterative masked decoding
@@ -184,8 +190,11 @@ class ModelMaskTransformer(ModelBase):
         """Generate volumes via iterative masked token prediction (MaskGIT inference).
 
         Starting from a fully masked sequence, at each of n_steps iterations the
-        transformer predicts all positions and the t most confident masked tokens are
-        revealed. t follows an arccos schedule so coarse structure emerges early.
+        transformer predicts all positions and the t most confident masked tokens are revealed.
+        NOTE: Positions of unmasked tokens are retained from iteration to iteration, however,
+        the predicted values are still be updated. This is different from Halton-MaskGIT,
+        see issue: https://github.com/valeoai/Halton-MaskGIT/issues/27#issuecomment-2890779342.
+        According to authors, the model learns to simply copy-paste already unmasked values.
 
         Args:
             n_samples:   number of volumes to generate
@@ -203,24 +212,29 @@ class ModelMaskTransformer(ModelBase):
 
         schedule = self._make_unmask_schedule(L, n_steps)
 
-        for t in schedule:
+        for index, t in enumerate(schedule):  # Beginning of sampling, t = total of tokens predicted a step "index"
+            print(f"Sampling step {index + 1}/{n_steps}")
             if not mask.any():  # Break if mask is empty (all tokens revealed)
                 break
 
+            t = max(t, index + 1)  # make sure to predict at least 1 token at each step
+
             logits = self.netG(code)  # (n_samples, L, num_embeddings)
             prob = torch.softmax(logits / temperature, dim=-1)
-            pred = torch.distributions.Categorical(probs=prob).sample()   # (n_samples, L)
+            pred_code = torch.distributions.Categorical(probs=prob).sample()   # (n_samples, L)
 
             # Confidence = probability assigned to the sampled token
-            conf = prob.gather(-1, pred.unsqueeze(-1)).squeeze(-1)         # (n_samples, L)
-            conf = conf.masked_fill(~mask, float('-inf'))                  # ignore already-unmasked
+            conf = prob.gather(-1, pred_code.unsqueeze(-1)).squeeze(-1)  # (n_samples, L)
+            conf[~mask] = math.inf  # Force retention of already-revealed token positions
 
-            # Unmask the t highest-confidence still-masked positions
-            t_actual = min(t, int(mask.sum(dim=-1).max().item()))
-            _, topk_idx = conf.topk(t_actual, dim=-1)                     # (n_samples, t_actual)
+            # Select the t highest-confidence masked positions via a threshold
+            tresh_conf, index_mask = torch.topk(conf, k=int(t), dim=-1)
+            tresh_conf = tresh_conf[:, [-1]]  # (n_samples, 1) cutoff value per sample
 
-            code.scatter_(1, topk_idx, pred.gather(1, topk_idx))
-            mask.scatter_(1, topk_idx, False)
+            # Update code and recompute mask from code
+            f_mask = (conf >= tresh_conf)  # (n_samples, L)
+            code[f_mask] = pred_code[f_mask]  # Already revealed tokens may still be updated
+            mask = (code == self.mask_token_id)
 
         code = code.clamp(0, self.num_embeddings - 1)
         return self.decode_indices(code, self.latent_shape)
@@ -406,8 +420,8 @@ class ModelMaskTransformer(ModelBase):
 
     def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):
         slice_idx = img_dict['H'].shape[-1] // 2
-        H_slice         = img_dict['H'][:, :, :, slice_idx]
-        E_vq_slice      = img_dict['E_vq'][:, :, :, slice_idx]
+        H_slice = img_dict['H'][:, :, :, slice_idx]
+        E_vq_slice = img_dict['E_vq'][:, :, :, slice_idx]
         E_maskgit_slice = img_dict['E_maskgit'][:, :, :, slice_idx]
 
         row = torch.stack([E_maskgit_slice, E_vq_slice, H_slice])

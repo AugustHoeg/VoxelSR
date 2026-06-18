@@ -32,6 +32,7 @@ class ModelVQGAN(ModelBase):
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
             print("Number of trainable parameters, D", utils_3D_image.numel(self.netD, only_trainable=True))
 
+        self.vae_target = opt.get('vae_target', 'HR')
         self.update = False
 
         self.early_stop = False
@@ -154,12 +155,13 @@ class ModelVQGAN(ModelBase):
     def feed_data(self, data):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
+        self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss = self.netG(self.H)  # HR input for AE
+        self.E, self.vq_loss = self.netG(self.vae_in)
 
     def netG_forward(self):
-        self.E, _ = self.netG(self.H)  # HR input for AE
+        self.E, _ = self.netG(self.vae_in)
 
     def netD_forward(self, input):
         return self.netD(input)
@@ -186,7 +188,7 @@ class ModelVQGAN(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
-            self.prop_real = self.netD_forward(self.H)
+            self.prop_real = self.netD_forward(self.vae_in)
             self.prop_fake = self.netD_forward(self.E.detach())
             dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
@@ -227,7 +229,7 @@ class ModelVQGAN(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.prop_fake = self.netD_forward(self.E)
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
             self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss) if dis_factor > 0.0 else 0.0
 
@@ -269,7 +271,7 @@ class ModelVQGAN(ModelBase):
         self.netD.requires_grad_(True)
 
         self.vq_forward()
-        self.prop_real = self.netD_forward(self.H)
+        self.prop_real = self.netD_forward(self.vae_in)
         self.prop_fake = self.netD_forward(self.E.detach())
         dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
@@ -307,7 +309,7 @@ class ModelVQGAN(ModelBase):
         self.netD.requires_grad_(False)
 
         self.prop_fake = self.netD_forward(self.E)
-        recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+        recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
         self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss) if dis_factor > 0.0 else 0.0
         self.gen_loss = self.vq_loss + recon_loss + dis_factor * self.lambda_adv * adv_loss
@@ -407,10 +409,10 @@ class ModelVQGAN(ModelBase):
 
     def validation(self):
         self.vq_forward()
-        self.prop_real = self.netD_forward(self.H)
+        self.prop_real = self.netD_forward(self.vae_in)
         self.prop_fake = self.netD_forward(self.E)
 
-        recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+        recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
         self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
         self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
@@ -419,15 +421,15 @@ class ModelVQGAN(ModelBase):
         self.D_valid_loss += self.dis_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.vae_in, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
     def validation_amp(self):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
-            self.prop_real = self.netD_forward(self.H)
+            self.prop_real = self.netD_forward(self.vae_in)
             self.prop_fake = self.netD_forward(self.E)
 
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
             self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
             self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
@@ -436,7 +438,7 @@ class ModelVQGAN(ModelBase):
         self.D_valid_loss += self.dis_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.vae_in, self.metric_fn_dict, self.metric_val_dict, rescale_images)
 
     def current_log(self):
         return self.log_dict

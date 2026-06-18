@@ -41,3 +41,4 @@ einops
 lpips
 triton
 omegaconf
+ultralytics-thop

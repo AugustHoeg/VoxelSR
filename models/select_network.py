@@ -47,12 +47,43 @@ def define_G(opt, mode='train'):
             is_causal=opt_net.get('is_causal', True),
         )
 
+    elif model_arch == "MaskTransformer3D":
+        from models.MaskTransformer3D import MaskTransformer3D as net
+        netG = net(
+            seq_len=opt_net['seq_len'],
+            embed_dim=opt_net['embed_dim'],
+            codebook_size=opt_net['num_embeddings'],
+            depth=opt_net['depth'],
+            num_heads=opt_net['num_heads'],
+            mlp_ratio=opt_net.get('mlp_ratio', 4.0),
+            dropout=opt_net.get('dropout', 0.0),
+            register=opt_net.get('register', 1),
+            use_checkpoint=opt_net.get('use_checkpoint', False),
+            lr_seq_len=opt_net.get('lr_seq_len', None),
+            lr_embed_dim=opt_net.get('lr_embed_dim', None),
+        )
+
     elif model_arch == "VQVAE3D":  # VQVAE_3D
         from models.VQVAE3D import VQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],
                    hidden_channels=opt_net['hidden_channels'],
                    num_embeddings=opt_net['num_embeddings'],
                    use_checkpoint=opt_net['use_checkpoint'])
+
+    elif model_arch == "RQVAE3D":
+        from models.RQVAE3D import RQVAE3D as net
+        netG = net(
+            in_channels=opt_net['in_channels'],
+            latent_dim=opt_net['latent_dim'],
+            n_embed=opt_net['n_embed'],
+            n_rq_depth=opt_net['n_rq_depth'],
+            resolution=opt['dataset_opt']['patch_size'],
+            num_res_blocks=opt_net.get('num_res_blocks', 2),
+            decay=opt_net.get('decay', 0.99),
+            shared_codebook=opt_net.get('shared_codebook', False),
+            restart_unused_codes=opt_net.get('restart_unused_codes', True),
+            use_checkpoint=opt_net.get('use_checkpoint', False),
+        )
 
     elif model_arch == "VQGAN3D":  # VQGAN_3D
         # from models.VQGAN3D import VQModel3D as net
