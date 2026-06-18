@@ -86,16 +86,11 @@ def define_G(opt, mode='train'):
         )
 
     elif model_arch == "VQGAN3D":  # VQGAN_3D
-        # from models.VQGAN3D import VQModel3D as net
-        # netG = net(in_channels=opt_net['in_channels'],
-        #            latent_dim=opt_net['latent_dim'],
-        #            num_embeddings=opt_net['num_embeddings'],
-        #            resolution=opt['dataset_opt']['patch_size'],
-        #            use_checkpoint=opt_net['use_checkpoint'])
-        from models.VQVAE3D import VQVAE3D as net
+        from models.VQGAN3D import VQModel3D as net
         netG = net(in_channels=opt_net['in_channels'],
-                   hidden_channels=opt_net['latent_dim'],
+                   latent_dim=opt_net['latent_dim'],
                    num_embeddings=opt_net['num_embeddings'],
+                   resolution=opt['dataset_opt']['patch_size'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
 

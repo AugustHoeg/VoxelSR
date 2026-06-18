@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 1  # upscaling factor
+up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile
@@ -16,7 +16,7 @@ run_profile: false
 # WandB parameters
 wandb_mode: offline
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_001
 note: Note
@@ -55,19 +55,19 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 64
+  patch_size: 32
 
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 1
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 1
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
