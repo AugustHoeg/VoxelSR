@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 import wandb
 from omegaconf import OmegaConf
-from torch.nn.parallel import DistributedDataParallel
+from torch.nn.parallel import DataParallel, DistributedDataParallel
 from torch.optim import Adam, AdamW
 
 from loss_functions.loss_functions_simple import compute_generator_loss
@@ -173,7 +173,7 @@ class ModelVQGAN(ModelBase):
         raise ValueError("No convolutional layer found in the model.")
 
     def calculate_lambda(self, recon_loss, adv_loss):
-        net = self.netG.module if isinstance(self.netG, DistributedDataParallel) else self.netG
+        net = self.netG.module if isinstance(self.netG, (DataParallel, DistributedDataParallel)) else self.netG
         last_layer_weight = self.find_last_conv(net.decoder.model).weight
         recon_loss_grads = torch.autograd.grad(recon_loss, last_layer_weight, retain_graph=True)[0]
         adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
