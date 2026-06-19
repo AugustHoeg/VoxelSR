@@ -16,7 +16,7 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${vae_target}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_001
 note: Note
@@ -51,7 +51,7 @@ train_opt:
   D_optimizer_lr: 2e-4
   D_optimizer_wd: 0
   D_optimizer_clipgrad: 10
-  D_start_iteration: 10000  # new
+  D_start_iteration: 25000  # new
 
   G_loss_weights:
     L1: 1.0
@@ -60,7 +60,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 32
+  patch_size: 16
 
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
