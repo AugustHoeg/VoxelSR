@@ -173,7 +173,8 @@ class ModelVQGAN(ModelBase):
         raise ValueError("No convolutional layer found in the model.")
 
     def calculate_lambda(self, recon_loss, adv_loss):
-        last_layer_weight = self.find_last_conv(self.netG.module.decoder.model).weight
+        net = self.netG.module if isinstance(self.netG, DistributedDataParallel) else self.netG
+        last_layer_weight = self.find_last_conv(net.decoder.model).weight
         recon_loss_grads = torch.autograd.grad(recon_loss, last_layer_weight, retain_graph=True)[0]
         adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
 
@@ -183,57 +184,64 @@ class ModelVQGAN(ModelBase):
 
     def optimize_parameters_amp(self, current_step, update=False):
 
+        dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
+
         # optimize D
         self.netD.requires_grad_(True)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
-            self.prop_real = self.netD_forward(self.vae_in)
-            self.prop_fake = self.netD_forward(self.E.detach())
-            dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
-
-            self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake))) * dis_factor
-            self.dis_loss = self.dis_loss / self.num_accum_steps_D
+            if dis_factor > 0.0:
+                self.prop_real = self.netD_forward(self.vae_in)
+                self.prop_fake = self.netD_forward(self.E.detach())
+                self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
+                self.dis_loss = self.dis_loss / self.num_accum_steps_D
+            else:
+                self.dis_loss = torch.zeros(1, device=self.device)
 
         self.D_train_loss = self.dis_loss
         if self.opt['rank'] == 0:
             print("D train loss:", self.D_train_loss.item())
 
-        self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
+        if dis_factor > 0.0:
+            self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
 
-        if not self.D_update:
-            if isinstance(self.netD, DistributedDataParallel):
-                with self.netD.no_sync():
+            if not self.D_update:
+                if isinstance(self.netD, DistributedDataParallel):
+                    with self.netD.no_sync():
+                        self.dis_scaler.scale(self.dis_loss).backward()
+                else:
                     self.dis_scaler.scale(self.dis_loss).backward()
             else:
                 self.dis_scaler.scale(self.dis_loss).backward()
-        else:
-            self.dis_scaler.scale(self.dis_loss).backward()
 
-        if self.D_update:
-            D_clipgrad_max = self.opt_train['D_optimizer_clipgrad']
-            if D_clipgrad_max > 0:
-                self.dis_scaler.unscale_(self.D_optimizer)
-                self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
-                    self.netD.parameters(), max_norm=D_clipgrad_max, norm_type=2
-                )
-            self.dis_scaler.step(self.D_optimizer)
-            self.dis_scaler.update()
-            self.D_optimizer.zero_grad()
-            self.D_accum_count = 0
-        else:
-            self.D_accum_count += 1
+            if self.D_update:
+                D_clipgrad_max = self.opt_train['D_optimizer_clipgrad']
+                if D_clipgrad_max > 0:
+                    self.dis_scaler.unscale_(self.D_optimizer)
+                    self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                        self.netD.parameters(), max_norm=D_clipgrad_max, norm_type=2
+                    )
+                self.dis_scaler.step(self.D_optimizer)
+                self.dis_scaler.update()
+                self.D_optimizer.zero_grad()
+                self.D_accum_count = 0
+            else:
+                self.D_accum_count += 1
 
         # optimize G
         self.netD.requires_grad_(False)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.prop_fake = self.netD_forward(self.E)
             recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-            adv_loss = -torch.mean(self.prop_fake)
-            self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss) if dis_factor > 0.0 else 0.0
-
-            self.gen_loss = self.vq_loss + recon_loss + dis_factor * self.lambda_adv * adv_loss
+            if dis_factor > 0.0:
+                self.prop_fake = self.netD_forward(self.E)
+                adv_loss = -torch.mean(self.prop_fake)
+                self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
+                self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
+            else:
+                self.lambda_adv = 0.0
+                self.gen_loss = self.vq_loss + recon_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -267,52 +275,60 @@ class ModelVQGAN(ModelBase):
 
     def optimize_parameters(self, current_step, update=False):
 
+        dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
+
         # optimize D
         self.netD.requires_grad_(True)
 
         self.vq_forward()
-        self.prop_real = self.netD_forward(self.vae_in)
-        self.prop_fake = self.netD_forward(self.E.detach())
-        dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
-
-        self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake))) * dis_factor
-        self.dis_loss = self.dis_loss / self.num_accum_steps_D
+        if dis_factor > 0.0:
+            self.prop_real = self.netD_forward(self.vae_in)
+            self.prop_fake = self.netD_forward(self.E.detach())
+            self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
+            self.dis_loss = self.dis_loss / self.num_accum_steps_D
+        else:
+            self.dis_loss = torch.zeros(1, device=self.device)
 
         self.D_train_loss = self.dis_loss
         if self.opt['rank'] == 0:
             print("D train loss:", self.D_train_loss.item())
 
-        self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
+        if dis_factor > 0.0:
+            self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
 
-        if not self.D_update:
-            if isinstance(self.netD, DistributedDataParallel):
-                with self.netD.no_sync():
+            if not self.D_update:
+                if isinstance(self.netD, DistributedDataParallel):
+                    with self.netD.no_sync():
+                        self.dis_loss.backward()
+                else:
                     self.dis_loss.backward()
             else:
                 self.dis_loss.backward()
-        else:
-            self.dis_loss.backward()
 
-        if self.D_update:
-            D_clipgrad_max = self.opt_train['D_optimizer_clipgrad']
-            if D_clipgrad_max > 0:
-                self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
-                    self.netD.parameters(), max_norm=D_clipgrad_max, norm_type=2
-                )
-            self.D_optimizer.step()
-            self.D_optimizer.zero_grad()
-            self.D_accum_count = 0
-        else:
-            self.D_accum_count += 1
+            if self.D_update:
+                D_clipgrad_max = self.opt_train['D_optimizer_clipgrad']
+                if D_clipgrad_max > 0:
+                    self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                        self.netD.parameters(), max_norm=D_clipgrad_max, norm_type=2
+                    )
+                self.D_optimizer.step()
+                self.D_optimizer.zero_grad()
+                self.D_accum_count = 0
+            else:
+                self.D_accum_count += 1
 
         # optimize G
         self.netD.requires_grad_(False)
 
-        self.prop_fake = self.netD_forward(self.E)
         recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-        adv_loss = -torch.mean(self.prop_fake)
-        self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss) if dis_factor > 0.0 else 0.0
-        self.gen_loss = self.vq_loss + recon_loss + dis_factor * self.lambda_adv * adv_loss
+        if dis_factor > 0.0:
+            self.prop_fake = self.netD_forward(self.E)
+            adv_loss = -torch.mean(self.prop_fake)
+            self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
+            self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
+        else:
+            self.lambda_adv = 0.0
+            self.gen_loss = self.vq_loss + recon_loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss

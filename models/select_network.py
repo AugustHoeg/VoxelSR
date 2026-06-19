@@ -90,7 +90,7 @@ def define_G(opt, mode='train'):
         netG = net(in_channels=opt_net['in_channels'],
                    latent_dim=opt_net['latent_dim'],
                    num_embeddings=opt_net['num_embeddings'],
-                   resolution=opt['dataset_opt']['patch_size'],
+                   resolution=opt['dataset_opt']['patch_size_hr'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
 

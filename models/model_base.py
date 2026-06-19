@@ -295,14 +295,14 @@ class ModelBase():
     def init_G_loss_trackers(self):
         self.G_train_loss = 0.0
         self.G_valid_loss = 0.0
-        self.G_train_grad_norm = 0.0
-        self.G_valid_grad_norm = 0.0
+        self.G_train_grad_norm = torch.zeros(1)
+        self.G_valid_grad_norm = torch.zeros(1)
 
     def init_D_loss_trackers(self):
         self.D_train_loss = 0.0
         self.D_valid_loss = 0.0
-        self.D_train_grad_norm = 0.0
-        self.D_valid_grad_norm = 0.0
+        self.D_train_grad_norm = torch.zeros(1)
+        self.D_valid_grad_norm = torch.zeros(1)
 
     def define_loss(self):
         pass
