@@ -5,7 +5,7 @@ netG:
   net_type: VQGAN3D
   description: "3D Vector Quantized GAN (VQGAN3D)"
   in_channels: 1
-  latent_dim: 128
+  latent_dim: 512
   num_embeddings: 1024
   use_checkpoint: true
 

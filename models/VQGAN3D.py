@@ -43,10 +43,10 @@ class NonLocalBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16,), use_checkpoint=False):
+    def __init__(self, image_channels=1, latent_dim=512, num_res_blocks=2, resolution=256, attn_resolutions=(16,), use_checkpoint=False):
         super(Encoder, self).__init__()
         self.use_checkpoint = use_checkpoint
-        channels = [64, 64, 64, 128, 128, 256]  # [128, 128, 128, 256, 256, 512]
+        channels = [64, 64, 128, 256, 512]  # [128, 128, 128, 256, 256, 512]
         layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
         for i in range(len(channels)-1):
             in_channels = channels[i]
@@ -69,17 +69,17 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         if self.use_checkpoint:
-            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x, use_reentrant=True)
+            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x, use_reentrant=False)
         else:
             out = self.model(x)
         return out
         
 
 class Decoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16,), use_checkpoint=False):
+    def __init__(self, image_channels=1, latent_dim=512, num_res_blocks=2, resolution=16, attn_resolutions=(16,), use_checkpoint=False):
         super(Decoder, self).__init__()
         self.use_checkpoint = use_checkpoint
-        channels = [256, 128, 128, 64, 64, 64] # [512, 256, 256, 128, 128, 128]
+        channels = [512, 256, 128, 64, 64] # [512, 256, 256, 128, 128, 128]
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
         layers.append(ResidualBlock(channels[0], channels[0]))
         layers.append(NonLocalBlock(channels[0]))
@@ -104,7 +104,7 @@ class Decoder(nn.Module):
 
     def forward(self, x):
         if self.use_checkpoint:
-            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x, use_reentrant=True)
+            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x, use_reentrant=False)
         else:
             out = self.model(x)
         return out
@@ -112,7 +112,7 @@ class Decoder(nn.Module):
 
 class VQModel3D(nn.Module):
     def __init__(self, in_channels,
-                 latent_dim=256,
+                 latent_dim=512,
                  num_embeddings=1024,
                  resolution=32,
                  use_checkpoint=False):
@@ -122,15 +122,15 @@ class VQModel3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             resolution=resolution,
-            attn_resolutions=[resolution // 16],
+            attn_resolutions=[resolution // 8],
             use_checkpoint=use_checkpoint
         )
 
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
-            resolution=resolution//16,  # Assuming 16x downsampling in encoder
-            attn_resolutions=[resolution // 16],
+            resolution=resolution//8,  # Assuming 8x downsampling in encoder
+            attn_resolutions=[resolution // 8],
             use_checkpoint=use_checkpoint
         )
 
@@ -185,7 +185,7 @@ if __name__ == '__main__':
     patch_size = 128
     x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)  # Example input
 
-    model = VQModel3D(in_channels=1, latent_dim=256, resolution=patch_size, use_checkpoint=True).to(device)
+    model = VQModel3D(in_channels=1, latent_dim=512, resolution=patch_size, use_checkpoint=True).to(device)
 
     z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)
