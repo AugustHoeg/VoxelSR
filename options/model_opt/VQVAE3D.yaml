@@ -5,8 +5,8 @@ netG:
   net_type: VQVAE3D
   description: "3D Vector Quantized Variational Autoencoder (VQVAE)"
   in_channels: 1
-  hidden_channels:
-  num_embeddings: 1024
+  hidden_channels: 256
+  num_embeddings: 512
   use_checkpoint: false
 
   init_type: default

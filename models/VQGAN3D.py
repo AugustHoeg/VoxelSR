@@ -43,10 +43,10 @@ class NonLocalBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=512, num_res_blocks=2, resolution=256, attn_resolutions=(16,), use_checkpoint=False):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16,), use_checkpoint=False):
         super(Encoder, self).__init__()
         self.use_checkpoint = use_checkpoint
-        channels = [64, 64, 128, 256, 512]  # [128, 128, 128, 256, 256, 512]
+        channels = [64, 64, 128, 256]  # [128, 128, 128, 256, 256, 512]
         layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
         for i in range(len(channels)-1):
             in_channels = channels[i]
@@ -76,10 +76,10 @@ class Encoder(nn.Module):
         
 
 class Decoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=512, num_res_blocks=2, resolution=16, attn_resolutions=(16,), use_checkpoint=False):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16,), use_checkpoint=False):
         super(Decoder, self).__init__()
         self.use_checkpoint = use_checkpoint
-        channels = [512, 256, 128, 64, 64] # [512, 256, 256, 128, 128, 128]
+        channels = [256, 128, 64, 64] # [512, 256, 256, 128, 128, 128]
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
         layers.append(ResidualBlock(channels[0], channels[0]))
         layers.append(NonLocalBlock(channels[0]))
@@ -112,9 +112,9 @@ class Decoder(nn.Module):
 
 class VQModel3D(nn.Module):
     def __init__(self, in_channels,
-                 latent_dim=512,
+                 latent_dim=256,
                  num_embeddings=1024,
-                 resolution=32,
+                 resolution=64,
                  use_checkpoint=False):
         super(VQModel3D, self).__init__()
 
@@ -122,15 +122,15 @@ class VQModel3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             resolution=resolution,
-            attn_resolutions=[resolution // 8],
+            attn_resolutions=[resolution // 4],
             use_checkpoint=use_checkpoint
         )
 
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
-            resolution=resolution//8,  # Assuming 8x downsampling in encoder
-            attn_resolutions=[resolution // 8],
+            resolution=resolution//4,  # Assuming 8x downsampling in encoder
+            attn_resolutions=[resolution // 4],
             use_checkpoint=use_checkpoint
         )
 
@@ -164,15 +164,33 @@ class VQModel3D(nn.Module):
 
 
 class PatchGAN3D(nn.Module):
-    def __init__(self, in_channels=1):
+    """3D PatchGAN discriminator matching the NLayerDiscriminator used in VQGAN.
+    Groups are set to 1 (InstanceNorm-style) to stay stable at small 3D batch sizes."""
+    def __init__(self, in_channels=1, ndf=64, n_layers=3):
         super().__init__()
-        self.model = nn.Sequential(
-            nn.Conv3d(in_channels, 64, 4, 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv3d(64, 128, 4, 2, 1),
-            nn.LeakyReLU(0.2),
-            nn.Conv3d(128, 1, 3, 1, 1)
-        )
+        kw, padw = 4, 1
+        sequence = [
+            nn.Conv3d(in_channels, ndf, kernel_size=kw, stride=2, padding=padw),
+            nn.LeakyReLU(0.2, True),
+        ]
+        nf = ndf
+        for n in range(1, n_layers):
+            nf_prev = nf
+            nf = min(ndf * 2 ** n, 512)
+            sequence += [
+                nn.Conv3d(nf_prev, nf, kernel_size=kw, stride=2, padding=padw, bias=False),
+                nn.GroupNorm(num_groups=min(32, nf), num_channels=nf),
+                nn.LeakyReLU(0.2, True),
+            ]
+        nf_prev = nf
+        nf = min(ndf * 2 ** n_layers, 512)
+        sequence += [
+            nn.Conv3d(nf_prev, nf, kernel_size=kw, stride=1, padding=padw, bias=False),
+            nn.GroupNorm(num_groups=min(32, nf), num_channels=nf),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv3d(nf, 1, kernel_size=kw, stride=1, padding=padw),
+        ]
+        self.model = nn.Sequential(*sequence)
 
     def forward(self, x):
         return self.model(x)
@@ -182,10 +200,10 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    patch_size = 128
+    patch_size = 64
     x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)  # Example input
 
-    model = VQModel3D(in_channels=1, latent_dim=512, resolution=patch_size, use_checkpoint=True).to(device)
+    model = VQModel3D(in_channels=1, latent_dim=256, resolution=patch_size, use_checkpoint=True).to(device)
 
     z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)
