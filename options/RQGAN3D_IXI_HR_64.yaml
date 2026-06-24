@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVAE3D                  # Default model config
+  - model_opt: RQGAN3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -14,9 +14,9 @@ vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${vae_target}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_001
 note: Note
@@ -37,16 +37,21 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 1000
-  validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  iterations: 50000
+  validation_iterations: 500
+  checkpoint_test: 2500
+  checkpoint_save: 10000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+
+  D_optimizer_lr: 2e-4
+  D_optimizer_wd: 0
+  D_optimizer_clipgrad: 10
+  D_start_iteration: 20000  # new
 
   G_loss_weights:
     L1: 1.0
@@ -60,14 +65,14 @@ dataset_opt:
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 2
+    dataloader_batch_size: 16
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 2
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 

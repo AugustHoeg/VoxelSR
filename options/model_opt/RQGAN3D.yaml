@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-model: vqvae
+model: vqgan
 model_architecture: RQVAE3D
 netG:
   net_type: RQVAE3D
@@ -19,3 +19,13 @@ netG:
   init_type: default
   init_bn_type: uniform  # "uniform" | "constant"
   init_gain: 0.2
+
+netD:
+  net_type: PatchGAN3D
+  description: "3D PatchGAN Discriminator for RQGAN3D"
+  in_channels: 1
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.1

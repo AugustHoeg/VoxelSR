@@ -129,7 +129,7 @@ class VQModel3D(nn.Module):
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
-            resolution=resolution//4,  # Assuming 8x downsampling in encoder
+            resolution=resolution // 4,  # Assuming 4x downsampling in encoder
             attn_resolutions=[resolution // 4],
             use_checkpoint=use_checkpoint
         )
@@ -160,7 +160,7 @@ class VQModel3D(nn.Module):
         z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
         x_hat = self.decoder(z_q)
 
-        return x_hat, vq_loss
+        return x_hat, vq_loss, q_indices
 
 
 class PatchGAN3D(nn.Module):

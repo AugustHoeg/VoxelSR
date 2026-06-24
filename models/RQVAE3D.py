@@ -8,109 +8,128 @@ from models.VQGAN3D import Encoder, Decoder
 
 
 class VQEmbedding(nn.Embedding):
-    """
-    VQ codebook with EMA updates and dead-code restart.
+    """VQ embedding module with ema update."""
 
-    Index n_embed is reserved as a padding/mask token (always-zero embedding),
-    which is useful for MaskGIT-style transformers built on top of RQVAE.
-
-    Args:
-        n_embed:               number of active codebook entries
-        embed_dim:             embedding dimension
-        decay:                 EMA momentum for codebook update
-        restart_unused_codes:  reassign dead entries to random batch vectors
-        eps:                   Laplace smoothing epsilon for EMA normalisation
-    """
-
-    def __init__(self, n_embed, embed_dim, decay=0.99, restart_unused_codes=True, eps=1e-5):
+    def __init__(self, n_embed, embed_dim, ema=True, decay=0.99, restart_unused_codes=True, eps=1e-5):
         super().__init__(n_embed + 1, embed_dim, padding_idx=n_embed)
-        self.n_embed = n_embed
+
+        self.ema = ema
         self.decay = decay
         self.eps = eps
         self.restart_unused_codes = restart_unused_codes
+        self.n_embed = n_embed
 
-        for p in self.parameters():
-            p.requires_grad_(False)
+        if self.ema:
+            _ = [p.requires_grad_(False) for p in self.parameters()]
 
-        self.register_buffer('cluster_size_ema', torch.zeros(n_embed))
-        self.register_buffer('embed_ema', self.weight[:-1].detach().clone())
+            # padding index is not updated by EMA
+            self.register_buffer('cluster_size_ema', torch.zeros(n_embed))
+            self.register_buffer('embed_ema', self.weight[:-1, :].detach().clone())
 
     @torch.no_grad()
     def compute_distances(self, inputs):
-        # Cast to weight dtype to be safe under mixed precision
-        codebook_t = self.weight[:-1].t()  # (embed_dim, n_embed)
-        inputs_flat = inputs.reshape(-1, inputs.shape[-1]).to(codebook_t.dtype)
-        inputs_sq = inputs_flat.pow(2).sum(1, keepdim=True)
-        cb_sq = codebook_t.pow(2).sum(0, keepdim=True)
-        dists = torch.addmm(inputs_sq + cb_sq, inputs_flat, codebook_t, alpha=-2.0)
-        return dists.reshape(*inputs.shape[:-1], -1)  # (..., n_embed)
+        codebook_t = self.weight[:-1, :].t()
+
+        (embed_dim, _) = codebook_t.shape
+        inputs_shape = inputs.shape
+        assert inputs_shape[-1] == embed_dim
+
+        inputs_flat = inputs.reshape(-1, embed_dim)
+        inputs_flat = inputs_flat.to(codebook_t.dtype)  # // August
+
+        inputs_norm_sq = inputs_flat.pow(2.).sum(dim=1, keepdim=True)
+        codebook_t_norm_sq = codebook_t.pow(2.).sum(dim=0, keepdim=True)
+        distances = torch.addmm(
+            inputs_norm_sq + codebook_t_norm_sq,
+            inputs_flat,
+            codebook_t,
+            alpha=-2.0,
+        )
+        distances = distances.reshape(*inputs_shape[:-1], -1)  # [B, d, h, w, n_embed or n_embed+1]
+        return distances
+
 
     @torch.no_grad()
-    def find_nearest(self, inputs):
-        return self.compute_distances(inputs).argmin(dim=-1)
+    def find_nearest_embedding(self, inputs):
+        distances = self.compute_distances(inputs)  # [B, d, h, w, n_embed or n_embed+1]
+        embed_idxs = distances.argmin(dim=-1)  # use padding index or not
+
+        return embed_idxs
+
 
     @torch.no_grad()
     def _tile_with_noise(self, x, target_n):
-        n, d = x.shape
-        n_rep = (target_n + n - 1) // n
-        std = x.new_ones(d) * 0.01 / (d ** 0.5)
-        x = x.repeat(n_rep, 1)[:target_n]
-        return x + torch.rand_like(x) * std
+        B, embed_dim = x.shape
+        n_repeats = (target_n + B -1) // B
+        std = x.new_ones(embed_dim) * 0.01 / np.sqrt(embed_dim)
+        x = x.repeat(n_repeats, 1)
+        x = x + torch.rand_like(x) * std
+        return x
+
 
     @torch.no_grad()
     def _update_buffers(self, vectors, idxs):
-        v = vectors.reshape(-1, self.weight.shape[-1]).float()
-        idx = idxs.reshape(-1)
-        n_v = v.shape[0]
+        n_embed, embed_dim = self.weight.shape[0] - 1, self.weight.shape[-1]
 
-        one_hot = v.new_zeros(self.n_embed, n_v)
-        one_hot.scatter_(0, idx.unsqueeze(0), 1.0)
+        vectors = vectors.reshape(-1, embed_dim)
+        idxs = idxs.reshape(-1)
 
-        cluster_size = one_hot.sum(1)
-        vectors_sum = one_hot @ v
+        n_vectors = vectors.shape[0]
+        n_total_embed = n_embed
+
+        one_hot_idxs = vectors.new_zeros(n_total_embed, n_vectors)
+        one_hot_idxs.scatter_(dim=0, index=idxs.unsqueeze(0), src=vectors.new_ones(1, n_vectors))
+
+        cluster_size = one_hot_idxs.sum(dim=1)
+        vectors_sum_per_cluster = one_hot_idxs @ vectors
 
         if dist.is_initialized():
+            dist.all_reduce(vectors_sum_per_cluster, op=dist.ReduceOp.SUM)
             dist.all_reduce(cluster_size, op=dist.ReduceOp.SUM)
-            dist.all_reduce(vectors_sum, op=dist.ReduceOp.SUM)
 
         self.cluster_size_ema.mul_(self.decay).add_(cluster_size, alpha=1 - self.decay)
-        self.embed_ema.mul_(self.decay).add_(vectors_sum, alpha=1 - self.decay)
+        self.embed_ema.mul_(self.decay).add_(vectors_sum_per_cluster, alpha=1 - self.decay)
 
         if self.restart_unused_codes:
-            if n_v < self.n_embed:
-                v = self._tile_with_noise(v, self.n_embed)
-            rand_v = v[torch.randperm(v.shape[0], device=v.device)][:self.n_embed]
+            if n_vectors < n_embed:
+                vectors = self._tile_with_noise(vectors, n_embed)
+            n_vectors = vectors.shape[0]
+            _vectors_random = vectors[torch.randperm(n_vectors, device=vectors.device)][:n_embed]
+
             if dist.is_initialized():
-                dist.broadcast(rand_v, 0)
-            usage = (self.cluster_size_ema >= 1).float().unsqueeze(1)
-            self.embed_ema.mul_(usage).add_(rand_v * (1 - usage))
-            self.cluster_size_ema.mul_(usage.squeeze(1))
-            self.cluster_size_ema.add_(1 - usage.squeeze(1))
+                dist.broadcast(_vectors_random, 0)
+
+            usage = (self.cluster_size_ema.view(-1, 1) >= 1).float()
+            self.embed_ema.mul_(usage).add_(_vectors_random * (1 - usage))
+            self.cluster_size_ema.mul_(usage.view(-1))
+            self.cluster_size_ema.add_(torch.ones_like(self.cluster_size_ema) * (1 - usage).view(-1))
+
 
     @torch.no_grad()
     def _update_embedding(self):
+        n_embed = self.weight.shape[0] - 1
         n = self.cluster_size_ema.sum()
-        smoothed = n * (self.cluster_size_ema + self.eps) / (n + self.n_embed * self.eps)
-        self.weight[:-1] = self.embed_ema / smoothed.unsqueeze(1)
+        normalized_cluster_size = n * (self.cluster_size_ema + self.eps) / (n + n_embed * self.eps)
+        self.weight[:-1, :] = self.embed_ema / normalized_cluster_size.reshape(-1, 1)
 
-    def embed(self, idxs):
-        """Look up embeddings by index without any update."""
-        return super().forward(idxs)
 
     def forward(self, inputs):
-        """
-        inputs: (..., embed_dim)
-        Returns:
-            embeds: (..., embed_dim)  nearest codebook vectors
-            idxs:   (...,)            LongTensor of codebook indices
-        """
-        idxs = self.find_nearest(inputs)
+        embed_idxs = self.find_nearest_embedding(inputs)
         if self.training:
-            self._update_buffers(inputs, idxs)
-        embeds = self.embed(idxs)
-        if self.training:
+            if self.ema:
+                self._update_buffers(inputs, embed_idxs)
+
+        embeds = self.embed(embed_idxs)
+
+        if self.ema and self.training:
             self._update_embedding()
-        return embeds, idxs
+
+        return embeds, embed_idxs
+
+
+    def embed(self, idxs):
+        embeds = super().forward(idxs)
+        return embeds
 
 
 class RQBottleneck3D(nn.Module):
@@ -149,7 +168,7 @@ class RQBottleneck3D(nn.Module):
         self.shared_codebook = shared_codebook
 
         n_embed_list = [n_embed] * n_rq_depth if isinstance(n_embed, int) else list(n_embed)
-        decay_list   = [decay]   * n_rq_depth if isinstance(decay, float)  else list(decay)
+        decay_list = [decay] * n_rq_depth if isinstance(decay, float)  else list(decay)
         assert len(n_embed_list) == len(decay_list) == n_rq_depth
 
         if shared_codebook:
@@ -182,23 +201,28 @@ class RQBottleneck3D(nn.Module):
         aggregated = torch.zeros_like(x)
         quant_list, code_list = [], []
 
-        for cb in self.codebooks:
-            quant, code = cb(residual)
-            residual = residual - quant
-            aggregated = aggregated + quant
+        for codebook in self.codebooks:
+            quant, code = codebook(residual)
+            residual.sub_(quant)  #
+            aggregated.add_(quant)  #
             quant_list.append(aggregated.clone())
             code_list.append(code.unsqueeze(-1))
 
         codes = torch.cat(code_list, dim=-1)
         return quant_list, codes
 
+
     def compute_commitment_loss(self, x, quant_list):
-        """
-        Average MSE between encoder output and each cumulative quantization.
-        Averaging over depths encourages every level to carry useful information.
-        """
-        losses = [F.mse_loss(x, q.detach()) for q in quant_list]
-        return torch.stack(losses).mean()
+
+        loss_list = []
+
+        for idx, quant in enumerate(quant_list):
+            partial_loss = F.mse_loss(x, quant.detach())
+            loss_list.append(partial_loss)
+
+        commitment_loss = torch.mean(torch.stack(loss_list))
+        return commitment_loss
+
 
     def forward(self, x):
         """
@@ -209,55 +233,82 @@ class RQBottleneck3D(nn.Module):
             commitment_loss: scalar training loss for encoder alignment
             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
         """
-        x_cl = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Dz, Dy, Dx, C)
-        quant_list, codes = self.quantize(x_cl)
-        commitment_loss = self.compute_commitment_loss(x_cl, quant_list)
+        x_code = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Dz, Dy, Dx, C)
+        quant_list, codes = self.quantize(x_code)
+        commitment_loss = self.compute_commitment_loss(x_code, quant_list)
 
-        z_q_cl = quant_list[-1]
-        z_q = z_q_cl.permute(0, 4, 1, 2, 3)           # (B, C, Dz, Dy, Dx)
-        z_q = x + (z_q - x).detach()                   # straight-through estimator
+        z_q_last = quant_list[-1]  # Aggregated quantized codes
+        z_q = z_q_last.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, Dz, Dy, Dx)
+        z_q = x + (z_q - x).detach()  # straight-through estimator
         return z_q, commitment_loss, codes
 
-    @torch.no_grad()
-    def embed_codes(self, codes):
-        """
-        Reconstruct quantized latent by summing all depth embeddings.
-
-        codes: (B, Dz, Dy, Dx, n_rq_depth)
-        Returns: (B, C, Dz, Dy, Dx)
-        """
-        depth_slices = codes.unbind(dim=-1)
-        embeds = sum(cb.embed(c) for cb, c in zip(self.codebooks, depth_slices))
-        return embeds.permute(0, 4, 1, 2, 3)
 
     @torch.no_grad()
-    def embed_codes_partial(self, codes, up_to_depth):
-        """
-        Reconstruct using only the first up_to_depth codebook levels.
-        Enables progressive decoding and quality vs. compute trade-off.
+    def embed_code(self, code):
+        assert code.shape[1:] == self.code_shape
 
-        codes: (B, Dz, Dy, Dx, n_rq_depth)
-        Returns: (B, C, Dz, Dy, Dx)
-        """
-        depth_slices = codes[..., :up_to_depth].unbind(dim=-1)
-        embeds = sum(
-            cb.embed(c) for cb, c in zip(self.codebooks[:up_to_depth], depth_slices)
-        )
-        return embeds.permute(0, 4, 1, 2, 3)
+        code_slices = torch.chunk(code, chunks=code.shape[-1], dim=-1)
+
+        if self.shared_codebook:
+            embeds = [self.codebooks[0].embed(code_slice) for i, code_slice in enumerate(code_slices)]
+        else:
+            embeds = [self.codebooks[i].embed(code_slice) for i, code_slice in enumerate(code_slices)]
+
+        embeds = torch.cat(embeds, dim=-2).sum(-2)
+        embeds = embeds.permute(0, 4, 1, 2, 3).contiguous()
+
+        return embeds
+
 
     @torch.no_grad()
-    def embed_codes_by_depth(self, codes):
-        """
-        Return per-depth embeddings without summing, for use by the SR transformer.
+    def embed_partial_code(self, code, code_idx, decode_type="select"):
+        r"""
+        Decode the input codes, using [0, 1, ..., code_idx] codebooks.
 
-        codes: (B, Dz, Dy, Dx, n_rq_depth)
-        Returns: list of n_rq_depth tensors, each (B, C, Dz, Dy, Dx)
+        Arguments:
+            code (Tensor): codes of input image
+            code_idx (int): the index of the last selected codebook for decoding
+
+        Returns:
+            embeds (Tensor): quantized feature map
         """
-        depth_slices = codes.unbind(dim=-1)
-        return [
-            cb.embed(c).permute(0, 4, 1, 2, 3)
-            for cb, c in zip(self.codebooks, depth_slices)
-        ]
+
+        B, d, h, w, n_rq_depth = code.shape
+
+        code_slices = torch.chunk(code, chunks=code.shape[-1], dim=-1)
+        if self.shared_codebook:
+            embeds = [self.codebooks[0].embed(code_slice) for i, code_slice in enumerate(code_slices)]
+        else:
+            embeds = [self.codebooks[i].embed(code_slice) for i, code_slice in enumerate(code_slices)]
+
+        if decode_type == "select":
+            embeds = embeds[code_idx].view(B, d, h, w, -1)
+        elif decode_type == "add":
+            embeds = torch.cat(embeds[: code_idx + 1], dim=-2).sum(-2)
+        else:
+            raise NotImplementedError(f"{decode_type} is not implemented in partial decoding")
+
+        embeds = embeds.permute(0, 4, 1, 2, 3).contiguous()
+
+        return embeds
+
+
+    @torch.no_grad()
+    def embed_code_with_depth(self, code):
+        """
+        Return per-depth embeddings without summing
+
+        Caution: RQ-VAE does not use scale of codebook, thus assume all scales are ones.
+        """
+
+        code_slices = torch.chunk(code, chunks=code.shape[-1], dim=-1)
+
+        if self.shared_codebook:
+            embeds = [self.codebooks[0].embed(code_slice).squeeze(-2) for i, code_slice in enumerate(code_slices)]
+        else:
+            embeds = [self.codebooks[i].embed(code_slice).squeeze(-2) for i, code_slice in enumerate(code_slices)]
+
+        return embeds
 
 
 class RQVAE3D(nn.Module):
@@ -285,6 +336,7 @@ class RQVAE3D(nn.Module):
         self,
         in_channels=1,
         latent_dim=256,
+        quant_embed_dim=256,  #
         n_embed=1024,
         n_rq_depth=4,
         resolution=64,
@@ -298,19 +350,16 @@ class RQVAE3D(nn.Module):
         self.n_rq_depth = n_rq_depth
         self.use_checkpoint = use_checkpoint
 
-        # Attention at the coarsest encoder/decoder resolution (16x downsampled)
-        attn_res = max(resolution // 16, 1)
-
         self.encoder = Encoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
             resolution=resolution,
-            attn_resolutions=(attn_res,),
+            attn_resolutions=[resolution // 4],
         )
 
         self.quantizer = RQBottleneck3D(
-            latent_dim=latent_dim,
+            latent_dim=quant_embed_dim,
             n_embed=n_embed,
             n_rq_depth=n_rq_depth,
             decay=decay,
@@ -322,48 +371,54 @@ class RQVAE3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
-            resolution=attn_res,
-            attn_resolutions=(attn_res,),
+            resolution=resolution // 4,
+            attn_resolutions=[resolution // 4],
         )
+
+        # Project encoder output (latent_dim) into quantizer space (quant_embed_dim),
+        # then back — matching the z_channels → embed_dim convention of the reference.
+        self.pre_quant_conv = nn.Conv3d(latent_dim, quant_embed_dim, 1)
+        self.post_quant_conv = nn.Conv3d(quant_embed_dim, latent_dim, 1)
+        
 
     def encode(self, x):
         """
         x: (B, C, D, H, W)
-
-        Returns:
-            z_e:             continuous encoder output  (B, latent_dim, Dz, Dy, Dx)
-            z_q:             straight-through quantized (B, latent_dim, Dz, Dy, Dx)
-            commitment_loss: scalar
-            codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
         """
         z_e = self.encoder(x)
-        z_q, commitment_loss, codes = self.quantizer(z_e)
-        return z_e, z_q, commitment_loss, codes
+        z_e = self.pre_quant_conv(z_e)
+        return z_e
+
 
     def decode(self, z_q):
-        return self.decoder(z_q)
+        z_q = self.post_quant_conv(z_q)
+        z_q = self.decoder(z_q)
+        return z_q
+
 
     @torch.no_grad()
     def get_codes(self, x):
         """Encode volume to discrete codes only (no stored intermediate tensors)."""
-        z_e = self.encoder(x)
-        _, _, codes = self.quantizer(z_e)
-        return codes
+        z_e = self.encode(x)
+        _, _, code = self.quantizer(z_e)
+        return code
+
 
     @torch.no_grad()
-    def decode_codes(self, codes):
+    def decode_code(self, code):
         """Reconstruct volume from full-depth discrete codes."""
-        z_q = self.quantizer.embed_codes(codes)
-        return self.decoder(z_q)
+        z_q = self.quantizer.embed_codes(code)
+        return self.decode(z_q)
+
 
     @torch.no_grad()
-    def decode_codes_partial(self, codes, up_to_depth):
+    def decode_code_partial(self, code, code_idx):
         """
-        Progressive reconstruction using only the first up_to_depth codebook levels.
+        Progressive reconstruction using only the first code_idx codebook levels.
         Useful for visualising the contribution of each RQ depth during analysis.
         """
-        z_q = self.quantizer.embed_codes_partial(codes, up_to_depth)
-        return self.decoder(z_q)
+        z_q = self.quantizer.embed_partial_code(code, code_idx)
+        return self.decode(z_q)
 
     def forward(self, x):
         """
@@ -372,7 +427,9 @@ class RQVAE3D(nn.Module):
             commitment_loss: RQ commitment loss (scalar, for training)
             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
         """
-        z_e, z_q, commitment_loss, codes = self.encode(x)
+
+        z_e = self.encode(x)
+        z_q, commitment_loss, codes = self.quantizer(z_e)
         x_hat = self.decode(z_q)
         return x_hat, commitment_loss, codes
 
@@ -392,13 +449,11 @@ if __name__ == '__main__':
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
     x_hat, loss, codes = model(x)
 
-    print(f"Input:            {tuple(x.shape)}")
-    print(f"Output:           {tuple(x_hat.shape)}")
-    print(f"Codes:            {tuple(codes.shape)}  (spatial × n_rq_depth)")
+    print(f"Input: {x.shape}")
+    print(f"Output: {x_hat.shape}")
+    print(f"Codes: {codes.shape} (spatial * n_rq_depth)")
     print(f"Commitment loss:  {loss.item():.4f}")
 
-    # Progressive decoding — quality should improve with each depth
-    for d in range(1, model.n_rq_depth + 1):
-        recon = model.decode_codes_partial(codes, d)
-        err = F.mse_loss(recon, x).item()
-        print(f"  Partial decode depth={d}: MSE={err:.4f}")
+    codes_depth = model.quantizer.embed_code_with_depth(codes)
+
+    print("Done")

@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVAE3D                  # Default model config
+  - model_opt: RQGAN3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -47,6 +47,11 @@ train_opt:
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+
+  D_optimizer_lr: 2e-4
+  D_optimizer_wd: 0
+  D_optimizer_clipgrad: 10
+  D_start_iteration: 500  # new
 
   G_loss_weights:
     L1: 1.0

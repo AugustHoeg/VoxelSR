@@ -158,7 +158,7 @@ class ModelVQGAN(ModelBase):
         self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss = self.netG(self.vae_in)
+        self.E, self.vq_loss, self.codes = self.netG(self.vae_in)
 
     def netG_forward(self):
         self.E, _ = self.netG(self.vae_in)

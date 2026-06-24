@@ -70,21 +70,6 @@ def define_G(opt, mode='train'):
                    num_embeddings=opt_net['num_embeddings'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
-    elif model_arch == "RQVAE3D":
-        from models.RQVAE3D import RQVAE3D as net
-        netG = net(
-            in_channels=opt_net['in_channels'],
-            latent_dim=opt_net['latent_dim'],
-            n_embed=opt_net['n_embed'],
-            n_rq_depth=opt_net['n_rq_depth'],
-            resolution=opt['dataset_opt']['patch_size'],
-            num_res_blocks=opt_net.get('num_res_blocks', 2),
-            decay=opt_net.get('decay', 0.99),
-            shared_codebook=opt_net.get('shared_codebook', False),
-            restart_unused_codes=opt_net.get('restart_unused_codes', True),
-            use_checkpoint=opt_net.get('use_checkpoint', False),
-        )
-
     elif model_arch == "VQGAN3D":  # VQGAN_3D
         from models.VQGAN3D import VQModel3D as net
         netG = net(in_channels=opt_net['in_channels'],
@@ -93,6 +78,20 @@ def define_G(opt, mode='train'):
                    resolution=opt['dataset_opt']['patch_size_hr'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
+    elif model_arch == "RQVAE3D" or model_arch == "RQGAN3D":
+        from models.RQVAE3D import RQVAE3D as net
+        netG = net(in_channels=opt_net['in_channels'],
+                   latent_dim=opt_net['latent_dim'],
+                   quant_embed_dim=opt_net['quant_embed_dim'],  #
+                   n_embed=opt_net['num_embeddings'],
+                   n_rq_depth=opt_net['n_rq_depth'],
+                   resolution=opt['dataset_opt']['patch_size_hr'],
+                   num_res_blocks=opt_net['num_res_blocks'],
+                   decay=opt_net['decay'],
+                   shared_codebook=opt_net['shared_codebook'],
+                   restart_unused_codes=opt_net['restart_unused_codes'],
+                   use_checkpoint=opt_net['use_checkpoint'],
+                   )
 
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net

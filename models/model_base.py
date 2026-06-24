@@ -316,7 +316,8 @@ class ModelBase():
             if v.requires_grad:
                 G_optim_params.append(v)
             else:
-                print(f"Params [{k}] will not optimize.")
+                if get_rank() == 0:
+                    print(f"Params [{k}] will not optimize.")
 
         if self.opt_train["G_optimizer_type"] == "adam":
             self.G_optimizer = Adam(G_optim_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
