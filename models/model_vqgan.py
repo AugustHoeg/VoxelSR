@@ -161,7 +161,7 @@ class ModelVQGAN(ModelBase):
         self.E, self.vq_loss, self.codes = self.netG(self.vae_in)
 
     def netG_forward(self):
-        self.E, _ = self.netG(self.vae_in)
+        self.E, _, _ = self.netG(self.vae_in)
 
     def netD_forward(self, input):
         return self.netD(input)

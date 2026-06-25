@@ -82,7 +82,7 @@ class ModelVQVAE(ModelBase):
         self.E, self.vq_loss, self.codes = self.netG(self.vae_in)
 
     def netG_forward(self):
-        self.E, _ = self.netG(self.L)
+        self.E, _, _ = self.netG(self.L)
 
     def optimize_parameters_amp(self, current_step, update=False):
 
