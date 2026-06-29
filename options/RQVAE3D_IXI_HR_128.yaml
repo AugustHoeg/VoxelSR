@@ -18,7 +18,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001
+run_name: ${model_opt.model_architecture}_000_8x
 note: Note
 
 # GPU configuration
@@ -32,15 +32,15 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: RQVAE3D_IXI_HR_64_VoDaSuRe_OME_ID000001  #
+  pretrained_experiment_id: null  #
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 10000
+  iterations: 50000
   validation_iterations: 500
   checkpoint_test: 2500
-  checkpoint_save: 5000
+  checkpoint_save: 10000
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
   num_accum_steps_G: 2
@@ -60,13 +60,13 @@ dataset_opt:
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 4
+    dataloader_batch_size: 8
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
+    dataloader_batch_size: 4
     num_load_workers: 4
     persist_workers: true
     pin_memory: false

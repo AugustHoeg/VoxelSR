@@ -355,7 +355,8 @@ class RQVAE3D(nn.Module):
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
             resolution=resolution,
-            attn_resolutions=[resolution // 4],
+            attn_resolutions=[resolution // 16],
+            use_checkpoint=use_checkpoint,
         )
 
         self.quantizer = RQBottleneck3D(
@@ -371,8 +372,9 @@ class RQVAE3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
-            resolution=resolution // 4,
-            attn_resolutions=[resolution // 4],
+            resolution=resolution // 8,
+            attn_resolutions=[resolution // 16],
+            use_checkpoint=use_checkpoint,
         )
 
         # Project encoder output (latent_dim) into quantizer space (quant_embed_dim),
@@ -435,16 +437,23 @@ class RQVAE3D(nn.Module):
 
 
 if __name__ == '__main__':
+    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    patch_size = 64
+    total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
+
+    patch_size = 128
 
     model = RQVAE3D(
         in_channels=1,
-        latent_dim=256,
+        latent_dim=1024,
+        quant_embed_dim=1024,
         n_embed=1024,
         n_rq_depth=4,
         resolution=patch_size,
+        use_checkpoint=True
     ).to(device)
+
+    model.train()
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
     x_hat, loss, codes = model(x)
@@ -454,6 +463,7 @@ if __name__ == '__main__':
     print(f"Codes: {codes.shape} (spatial * n_rq_depth)")
     print(f"Commitment loss:  {loss.item():.4f}")
 
-    codes_depth = model.quantizer.embed_code_with_depth(codes)
+    max_memory_reserved = torch.cuda.max_memory_reserved()
+    print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10**9, total_gpu_mem))
 
     print("Done")

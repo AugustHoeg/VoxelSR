@@ -5,11 +5,11 @@ netG:
   net_type: RQVAE3D
   description: "3D Residual Vector Quantized VAE (RQVAE3D)"
   in_channels: 1
-  latent_dim: 256
-  quant_embed_dim: 256
-  num_embeddings: 1024
+  latent_dim: 1024 # 256
+  quant_embed_dim: 1024 # 256
+  num_embeddings: 1024 # 1024
 
-  n_rq_depth: 4  # number of residual quantization steps
+  n_rq_depth: 4 # 4  # number of residual quantization steps
   num_res_blocks: 2
   decay: 0.99  # EMA decay for codebook updates
   shared_codebook: false  # share one codebook across all RQ depths
