@@ -63,6 +63,23 @@ def define_G(opt, mode='train'):
             lr_embed_dim=opt_net.get('lr_embed_dim', None),
         )
 
+    elif model_arch == "MaskRQTransformer3Dv2":
+        from models.MaskRQTransformer3Dv2 import MaskRQTransformer3Dv2 as net
+        netG = net(
+            seq_len=opt_net['seq_len'],
+            n_rq_depth=opt_net['n_rq_depth'],
+            embed_dim=opt_net['embed_dim'],
+            n_embed=opt_net['num_embeddings'],
+            body_depth=opt_net['body_depth'],
+            head_depth=opt_net['head_depth'],
+            num_heads=opt_net['num_heads'],
+            mlp_ratio=opt_net.get('mlp_ratio', 4),
+            dropout=opt_net.get('dropout', 0.0),
+            lr_seq_len=opt_net.get('lr_seq_len', None),
+            lr_embed_dim=opt_net.get('lr_embed_dim', None),
+            use_checkpoint=opt_net.get('use_checkpoint', False),
+        )
+
     elif model_arch == "VQVAE3D":  # VQVAE_3D
         from models.VQVAE3D import VQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],

@@ -257,6 +257,11 @@ def main(opt: DictConfig):
         opt['up_factor'] = 1  # Force up_factor of 1 for AutoEncoder
         context_width = 0
         patch_size_hr = opt['dataset_opt']['patch_size']
+    elif opt['model_opt']['model'] == "vqvae" or opt['model_opt']['model'] == "vqgan":
+        opt['up_factor'] = 1
+        context_width = 0
+        opt['dataset_opt']['patch_size'] = opt['dataset_opt']['patch_size_hr']
+        patch_size_hr = opt['dataset_opt']['patch_size']
     else:
         patch_size = opt['dataset_opt']['patch_size']
         context_width = 0

@@ -115,8 +115,14 @@ def extract_patch_levels_prealloc(data, group_pair, patch_size=(32, 32, 32), pat
     patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
     patch_H = np.zeros(patch_size_hr, dtype=volume_H.dtype)
     patch_H = sample(volume_H, patch_H, center=(C0, C1, C2), patch_size=patch_size_hr)
-
+    
     out_dict = {'L': patch_L, 'H': patch_H}
+    
+    if 'REG' in group_pair:  # Include REG if in group_pair (same size as L)
+        volume_REG = data[group_pair['REG']]
+        patch_REG = np.zeros(patch_size, dtype=volume_REG.dtype)
+        patch_REG = sample(volume_REG, patch_REG, center=(c0, c1, c2), patch_size=patch_size)
+        out_dict['REG'] = patch_REG
 
     # # test that it works:
     # plt.figure()
@@ -429,7 +435,7 @@ def main():
                                   print_metadata=False,
                                   slice_dim=None)
 
-    num_workers = 8
+    num_workers = 0
     persistent_workers = True if num_workers > 0 else False
     dataloader = torch.utils.data.DataLoader(dataset,
                                             batch_size=batch_size,
@@ -437,7 +443,7 @@ def main():
                                             num_workers=num_workers,
                                             pin_memory=False,
                                             persistent_workers=persistent_workers,
-                                            prefetch_factor=32)
+                                            prefetch_factor=None)
 
     no_epochs = 10
     plot_counter = 0

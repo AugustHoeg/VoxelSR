@@ -32,7 +32,10 @@ def define_Model(opt, mode, data_parallel=True):
         from models.model_mask_transformer import ModelMaskTransformer as M
 
     elif model == 'maskvsrt':
-        from models.model_maskvsrt import ModelMaskVSRT as M
+        from models.model_mask_vsrt import ModelMaskVSRT as M
+
+    elif model == 'maskrqvsrt':
+        from models.model_mask_rqvsrt import ModelMaskRQVSRT as M
 
     elif model == 'aesop':
         from models.model_aesop import ModelAESOP as M

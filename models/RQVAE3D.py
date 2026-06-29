@@ -397,7 +397,7 @@ class RQVAE3D(nn.Module):
 
 
     @torch.no_grad()
-    def get_codes(self, x):
+    def get_code(self, x):
         """Encode volume to discrete codes only (no stored intermediate tensors)."""
         z_e = self.encode(x)
         _, _, code = self.quantizer(z_e)
@@ -407,7 +407,7 @@ class RQVAE3D(nn.Module):
     @torch.no_grad()
     def decode_code(self, code):
         """Reconstruct volume from full-depth discrete codes."""
-        z_q = self.quantizer.embed_codes(code)
+        z_q = self.quantizer.embed_code(code)
         return self.decode(z_q)
 
 

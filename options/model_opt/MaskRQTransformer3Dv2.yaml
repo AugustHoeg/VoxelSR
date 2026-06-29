@@ -1,0 +1,27 @@
+## @package _global_
+model: maskrqvsrt
+model_architecture: MaskRQTransformer3Dv2
+
+netG:
+  net_type: MaskRQTransformer3Dv2
+  description: "Axial-attention RQ + MaskGIT with coarse-to-fine depth masking"
+  mask_schedule: arccos          # arccos | cosine | linear | square
+  depth_mask_scale: 0.25         # extra masking boost for finer depths (0 = uniform, 1 = depth D-1 always fully masked)
+
+  num_embeddings: 1024           # codebook size; must match the HR VQ model
+  n_rq_depth: 4                  # RQ depth; must match the HR VQ model
+  seq_len: 4096                  # HR latent spatial token count (Dz*Dy*Dx after VQ encoding)
+  lr_seq_len: 512                # LR latent spatial token count
+  lr_embed_dim: 256              # channel dim of LR VQ encoder output (quant_embed_dim)
+
+  embed_dim: 384
+  body_depth: 4                  # number of SpatialBlocks
+  head_depth: 4                  # number of DepthBlocks interleaved among body_depth
+  num_heads: 6                   # must evenly divide embed_dim
+  mlp_ratio: 4
+  dropout: 0.1
+  use_checkpoint: true
+
+  init_type: default             # model uses its own _init_weights(); external init is skipped
+  init_bn_type: uniform
+  init_gain: 0.2
