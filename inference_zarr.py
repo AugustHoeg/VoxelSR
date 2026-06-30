@@ -263,7 +263,6 @@ def main(opt: DictConfig):
         opt['dataset_opt']['patch_size'] = opt['dataset_opt']['patch_size_hr']
         patch_size_hr = opt['dataset_opt']['patch_size']
     else:
-        patch_size = opt['dataset_opt']['patch_size']
         context_width = 0
         patch_size_hr = opt['dataset_opt']['patch_size_hr']
 

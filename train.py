@@ -163,7 +163,8 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
                 # 13) Save visual comparison
                 # -------------------------------
                 if opt['rank'] == 0:
-                    model.log_comparison_image(model.current_visuals(), current_step)
+                    with torch.no_grad():
+                        model.log_comparison_image(model.current_visuals(), current_step)
 
                 # Update test_loader with new samples if SmartCacheDataset
                 if type(test_loader.dataset) == SmartCacheDataset:

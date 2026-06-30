@@ -328,7 +328,7 @@ class ModelTransformerVQ(ModelBase):
 
     def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):
         slice_idx = img_dict['H'].shape[-1] // 2
-        H_slice   = img_dict['H'][:, :, :, slice_idx]
+        H_slice = img_dict['H'][:, :, :, slice_idx]
         E_vq_slice = img_dict['E_vq'][:, :, :, slice_idx]
         E_gpt_slice = img_dict['E_gpt'][:, :, :, slice_idx]
 

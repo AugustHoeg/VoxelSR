@@ -189,6 +189,8 @@ class RandSRFlipd(Randomizable):
         do_transform = np.random.rand() < self.prob
 
         for key in self.keys:
+            if key not in d:
+                continue
             if do_transform:
                 d[key] = self.flipper(d[key])
 
@@ -230,6 +232,8 @@ class RandSRRotated(Randomizable):
             )
 
             for key in self.keys:
+                if key not in d:
+                    continue
                 if do_transform:
                     d[key] = rotator(d[key])
 
@@ -267,6 +271,8 @@ class RandSRZoomd(Randomizable):
             )
 
             for key in self.keys:
+                if key not in d:
+                    continue
                 if do_transform:
                     d[key] = zoomer(d[key])
 
@@ -290,6 +296,8 @@ class RandSRContrastd(Randomizable):
         if do_transform:
             gamma = np.random.uniform(*self.gamma_range)
             for key in self.keys:
+                if key not in d:
+                    continue
                 img = d[key]
                 if do_transform:
                     img_min = img.min()

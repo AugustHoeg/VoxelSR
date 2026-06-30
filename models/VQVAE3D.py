@@ -154,7 +154,7 @@ class VQVAE3D(nn.Module):
         z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
         x_hat = self.decoder(z_q)
 
-        return x_hat, vq_loss, q_indices
+        return x_hat, vq_loss, q_indices, z_e
 
 
 if __name__ == '__main__':

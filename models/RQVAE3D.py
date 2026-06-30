@@ -2,6 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.distributed as dist
+from contextlib import contextmanager
+
+from gevent.testing import skipping
 from torch.nn import functional as F
 
 from models.VQGAN3D import Encoder, Decoder
@@ -341,9 +344,11 @@ class RQVAE3D(nn.Module):
         n_rq_depth=4,
         resolution=64,
         num_res_blocks=2,
+        channels=[256, 128, 64, 64],
         decay=0.99,
         shared_codebook=False,
         restart_unused_codes=True,
+        skip_attn=False,
         use_checkpoint=False,
     ):
         super().__init__()
@@ -355,7 +360,9 @@ class RQVAE3D(nn.Module):
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
             resolution=resolution,
-            attn_resolutions=[resolution // 16],
+            attn_resolutions=[resolution // 4],
+            channels=channels,
+            skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
         )
 
@@ -372,8 +379,10 @@ class RQVAE3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
-            resolution=resolution // 8,
-            attn_resolutions=[resolution // 16],
+            resolution=resolution // 4,
+            attn_resolutions=[resolution // 4],
+            channels=channels[::-1],
+            skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
         )
 
@@ -433,7 +442,89 @@ class RQVAE3D(nn.Module):
         z_e = self.encode(x)
         z_q, commitment_loss, codes = self.quantizer(z_e)
         x_hat = self.decode(z_q)
-        return x_hat, commitment_loss, codes
+        return x_hat, commitment_loss, codes, z_e
+
+
+class DualRQVAE3D(RQVAE3D):
+    """
+    RQVAE3D with a second encoder E* for domain adaptation.
+
+    E, Q, D are trained on downsampled LR only. E* maps out-of-distribution LR
+    into the same codebook space via reconstruction through frozen D
+    (target = downsampled LR) and optional pre-quant distillation.
+    """
+
+    def __init__(self, in_channels=1, latent_dim=256, quant_embed_dim=256,
+                 n_embed=1024, n_rq_depth=4, resolution=64, num_res_blocks=2,
+                 channels=[64, 64, 128 ,256], decay=0.99, shared_codebook=False,
+                 restart_unused_codes=True, skip_attn=False, use_checkpoint=False):
+        super().__init__(
+            in_channels=in_channels, latent_dim=latent_dim,
+            quant_embed_dim=quant_embed_dim, n_embed=n_embed,
+            n_rq_depth=n_rq_depth, resolution=resolution,
+            num_res_blocks=num_res_blocks,
+            channels=channels,
+            decay=decay,
+            shared_codebook=shared_codebook,
+            restart_unused_codes=restart_unused_codes,
+            skip_attn=skip_attn,
+            use_checkpoint=use_checkpoint,
+        )
+
+        self.encoder_star = Encoder(
+            image_channels=in_channels,
+            latent_dim=latent_dim,
+            num_res_blocks=num_res_blocks,
+            resolution=resolution,
+            attn_resolutions=[resolution // 4],
+            channels=channels,
+            skip_attn=skip_attn,
+            use_checkpoint=use_checkpoint,
+        )
+        self.pre_quant_conv_star = nn.Conv3d(latent_dim, quant_embed_dim, 1)
+
+    @contextmanager
+    def frozen_decoder(self):
+        """Freeze the shared decoder during star-path training.
+
+        Gradient still flows *through* the frozen decoder back to E*, but the
+        decoder weights themselves do not accumulate gradients — and DDP
+        excludes them from all-reduce for that backward pass.
+        """
+        self.decoder.requires_grad_(False)
+        self.post_quant_conv.requires_grad_(False)
+        try:
+            yield
+        finally:
+            self.decoder.requires_grad_(True)
+            self.post_quant_conv.requires_grad_(True)
+
+    def encode_star(self, x):
+        z_e = self.encoder_star(x)
+        z_e = self.pre_quant_conv_star(z_e)
+        return z_e
+
+    def forward(self, x, star_mode=False):
+        """
+        :param x:           input volume  (B, C, D, H, W)
+        :param star_mode:   use E* encoder; disables codebook EMA and skips decoder grad accumulation
+        :return:            x_hat:           reconstructed volume  (B, C, D, H, W)
+                            commitment_loss: RQ commitment loss (scalar, for training)
+                            codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
+                            z_e:             pre-quantization latent (B, C, Dz, Dy, Dx)
+        """
+        if star_mode:
+            z_e = self.encode_star(x)
+            was_training = self.quantizer.training
+            self.quantizer.eval()
+            z_q, commitment_loss, codes = self.quantizer(z_e)
+            if was_training:
+                self.quantizer.train()
+            return self.decode(z_q), commitment_loss, codes, z_e
+        # main path
+        z_e = self.encode(x)
+        z_q, commitment_loss, codes = self.quantizer(z_e)
+        return self.decode(z_q), commitment_loss, codes, z_e
 
 
 if __name__ == '__main__':
@@ -441,22 +532,25 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    patch_size = 128
+    patch_size = 32
 
     model = RQVAE3D(
         in_channels=1,
-        latent_dim=1024,
-        quant_embed_dim=1024,
+        latent_dim=256,
+        channels=[64, 128, 256],
+        quant_embed_dim=256,
         n_embed=1024,
         n_rq_depth=4,
         resolution=patch_size,
-        use_checkpoint=True
+        num_res_blocks=4,
+        skip_attn=True,
+        use_checkpoint=True,
     ).to(device)
 
     model.train()
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
-    x_hat, loss, codes = model(x)
+    x_hat, loss, codes, z_e = model(x)
 
     print(f"Input: {x.shape}")
     print(f"Output: {x_hat.shape}")

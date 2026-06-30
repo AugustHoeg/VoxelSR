@@ -42,11 +42,16 @@ class NonLocalBlock(nn.Module):
         return x + A
 
 
+def channel_schedule(base_channels, channel_mult):
+    """Per-stage channel widths, e.g. base_channels=64, channel_mult=(1,1,2,4) -> [64,64,128,256]."""
+    return [base_channels * m for m in channel_mult]
+
+
 class Encoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256, attn_resolutions=(16,), use_checkpoint=False):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=256,
+                 attn_resolutions=(16,), channels=[64, 64, 128, 256], skip_attn=False, use_checkpoint=False):
         super(Encoder, self).__init__()
         self.use_checkpoint = use_checkpoint
-        channels = [64, 64, 128, 256, 512]  # [128, 128, 128, 256, 256, 512]
         layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
         for i in range(len(channels)-1):
             in_channels = channels[i]
@@ -54,13 +59,14 @@ class Encoder(nn.Module):
             for j in range(num_res_blocks):
                 layers.append(ResidualBlock(in_channels, out_channels))
                 in_channels = out_channels
-                if resolution in attn_resolutions:
+                if resolution in attn_resolutions and not skip_attn:
                     layers.append(NonLocalBlock(in_channels))
             if i != len(channels)-2:
                 layers.append(DownBlock(channels[i+1], channels[i+1]))
                 resolution //= 2
         layers.append(ResidualBlock(channels[-1], channels[-1]))
-        layers.append(NonLocalBlock(channels[-1]))
+        if not skip_attn:
+            layers.append(NonLocalBlock(channels[-1]))
         layers.append(ResidualBlock(channels[-1], channels[-1]))
         layers.append(GroupNorm(channels[-1]))
         layers.append(Swish())
@@ -76,13 +82,14 @@ class Encoder(nn.Module):
         
 
 class Decoder(nn.Module):
-    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16, attn_resolutions=(16,), use_checkpoint=False):
+    def __init__(self, image_channels=1, latent_dim=256, num_res_blocks=2, resolution=16,
+                 attn_resolutions=(16,), channels=[256, 128, 64, 64], skip_attn=False, use_checkpoint=False):
         super(Decoder, self).__init__()
         self.use_checkpoint = use_checkpoint
-        channels = [512, 256, 128, 64, 64] # [512, 256, 256, 128, 128, 128]
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
         layers.append(ResidualBlock(channels[0], channels[0]))
-        layers.append(NonLocalBlock(channels[0]))
+        if not skip_attn:
+            layers.append(NonLocalBlock(channels[0]))
         layers.append(ResidualBlock(channels[0], channels[0]))
 
         for i in range(len(channels)-1):
@@ -91,7 +98,7 @@ class Decoder(nn.Module):
             for j in range(num_res_blocks):
                 layers.append(ResidualBlock(in_channels, out_channels))
                 in_channels = out_channels
-                if resolution in attn_resolutions:
+                if resolution in attn_resolutions and not skip_attn:
                     layers.append(NonLocalBlock(in_channels))
             if i != 0:
                 layers.append(UpBlock(channels[i+1], channels[i+1]))
@@ -113,25 +120,31 @@ class Decoder(nn.Module):
 class VQModel3D(nn.Module):
     def __init__(self, in_channels,
                  latent_dim=256,
+                 channels=[64, 64, 128, 256],
                  num_embeddings=1024,
                  resolution=64,
+                 skip_attn=False,
                  use_checkpoint=False):
         super(VQModel3D, self).__init__()
 
         self.encoder = Encoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
+            channels=channels,
             resolution=resolution,
-            attn_resolutions=[resolution // 8],
+            attn_resolutions=[resolution // 4],
+            skip_attn=skip_attn,
             use_checkpoint=use_checkpoint
         )
 
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
-            resolution=resolution // 8,  # Assuming 4x downsampling in encoder
-            attn_resolutions=[resolution // 8],
-            use_checkpoint=use_checkpoint
+            channels=channels[::-1],
+            resolution=resolution // 4,  # Assuming 4x downsampling in encoder
+            attn_resolutions=[resolution // 4],
+            skip_attn=skip_attn,
+            use_checkpoint=use_checkpoint,
         )
 
         self.codebook = CodeBook(num_embeddings=num_embeddings, embedding_dim=latent_dim)
@@ -160,7 +173,7 @@ class VQModel3D(nn.Module):
         z_q, vq_loss, q_indices, num_codes = self.codebook(z_e)
         x_hat = self.decoder(z_q)
 
-        return x_hat, vq_loss, q_indices
+        return x_hat, vq_loss, q_indices, z_e
 
 
 class PatchGAN3D(nn.Module):
@@ -203,7 +216,13 @@ if __name__ == '__main__':
     patch_size = 64
     x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)  # Example input
 
-    model = VQModel3D(in_channels=1, latent_dim=256, resolution=patch_size, use_checkpoint=True).to(device)
+    channels = [64, 64, 128, 256]
+    model = VQModel3D(in_channels=1,
+                      latent_dim=256,
+                      channels=channels,
+                      resolution=patch_size,
+                      skip_attn=False,
+                      use_checkpoint=True).to(device)
 
     z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)

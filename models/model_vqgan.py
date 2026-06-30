@@ -128,6 +128,11 @@ class ModelVQGAN(ModelBase):
         self.define_G_scheduler()
         self.define_D_scheduler()
 
+    def update_learning_rate(self):
+        self.schedulers[0].step()
+        if self.current_step >= self.opt_train['D_start_iteration']:
+            self.schedulers[1].step()
+
     def define_wandb_run(self):
         self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
         self.model_artifact_G = wandb.Artifact(
@@ -158,10 +163,10 @@ class ModelVQGAN(ModelBase):
         self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss, self.codes = self.netG(self.vae_in)
+        self.E, self.vq_loss, self.codes, self.z_e = self.netG(self.vae_in)
 
     def netG_forward(self):
-        self.E, _, _ = self.netG(self.vae_in)
+        self.E, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
 
     def netD_forward(self, input):
         return self.netD(input)
@@ -183,7 +188,7 @@ class ModelVQGAN(ModelBase):
         return 0.8 * lambda_adv
 
     def optimize_parameters_amp(self, current_step, update=False):
-
+        self.current_step = current_step
         dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
         # optimize D
@@ -274,7 +279,7 @@ class ModelVQGAN(ModelBase):
             self.G_accum_count += 1
 
     def optimize_parameters(self, current_step, update=False):
-
+        self.current_step = current_step
         dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
 
         # optimize D

@@ -91,14 +91,17 @@ def define_G(opt, mode='train'):
         from models.VQGAN3D import VQModel3D as net
         netG = net(in_channels=opt_net['in_channels'],
                    latent_dim=opt_net['latent_dim'],
+                   channels=opt_net['channels'],
                    num_embeddings=opt_net['num_embeddings'],
                    resolution=opt['dataset_opt']['patch_size_hr'],
+                   skip_attn=opt_net['skip_attn'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
     elif model_arch == "RQVAE3D" or model_arch == "RQGAN3D":
         from models.RQVAE3D import RQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],
                    latent_dim=opt_net['latent_dim'],
+                   channels=opt_net['channels'],
                    quant_embed_dim=opt_net['quant_embed_dim'],  #
                    n_embed=opt_net['num_embeddings'],
                    n_rq_depth=opt_net['n_rq_depth'],
@@ -107,6 +110,24 @@ def define_G(opt, mode='train'):
                    decay=opt_net['decay'],
                    shared_codebook=opt_net['shared_codebook'],
                    restart_unused_codes=opt_net['restart_unused_codes'],
+                   skip_attn=opt_net['skip_attn'],
+                   use_checkpoint=opt_net['use_checkpoint'],
+                   )
+
+    elif model_arch == "DualRQVAE3D":
+        from models.RQVAE3D import DualRQVAE3D as net
+        netG = net(in_channels=opt_net['in_channels'],
+                   latent_dim=opt_net['latent_dim'],
+                   channels=opt_net['channels'],
+                   quant_embed_dim=opt_net['quant_embed_dim'],
+                   n_embed=opt_net['num_embeddings'],
+                   n_rq_depth=opt_net['n_rq_depth'],
+                   resolution=opt['dataset_opt']['patch_size_hr'],
+                   num_res_blocks=opt_net['num_res_blocks'],
+                   decay=opt_net['decay'],
+                   shared_codebook=opt_net['shared_codebook'],
+                   restart_unused_codes=opt_net['restart_unused_codes'],
+                   skip_attn=opt_net['skip_attn'],
                    use_checkpoint=opt_net['use_checkpoint'],
                    )
 
