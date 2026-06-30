@@ -299,8 +299,13 @@ class ModelDualVQVAE(ModelVQVAE):
     def current_visuals(self):
         out_dict = OrderedDict()
 
-        self.vq_forward()
-        self.vq_forward_star()
+        if self.mixed_precision is not None:
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                self.vq_forward()
+                self.vq_forward_star()
+        else:
+            self.vq_forward()
+            self.vq_forward_star()
 
         out_dict['L'] = self.L.detach()[0].float().cpu()
         out_dict['L_star'] = self.L_star.detach()[0].float().cpu()
