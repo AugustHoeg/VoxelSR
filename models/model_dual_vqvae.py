@@ -50,7 +50,8 @@ class ModelDualVQVAE(ModelVQVAE):
         self.star_accum_count = 0
         self.num_accum_steps_G = self.opt_train["num_accum_steps_G"]
         self.num_accum_steps_star = self.opt_train["num_accum_steps_G"]  # Assume same no. of accumulation steps
-        self.lambda_distill = self.opt_train.get("lambda_distill", 0.0)
+        self.lambda_distill = self.opt_train["lambda_distill"]
+        self.lambda_align = self.opt_train["lambda_align"]
 
         net = self._unwrap()
         star_prefixes = ('encoder_star.', 'pre_quant_conv_star.')
@@ -143,10 +144,10 @@ class ModelDualVQVAE(ModelVQVAE):
         self.vae_in = self.L  # kept for compatibility with inherited validation logging
 
     def vq_forward(self):
-        self.E, self.vq_loss, self.codes, self.z_e_down = self.netG(self.L)
+        self.E, self.vq_loss, self.codes, self.z_e_down, self.dists = self.netG(self.L)
 
     def vq_forward_star(self):
-        self.E_star, self.vq_loss_star, self.codes_star, self.z_e_star = self.netG(self.L_star, star_mode=True)
+        self.E_star, self.vq_loss_star, self.codes_star, self.z_e_star, self.dists_star = self.netG(self.L_star, star_mode=True)
 
     @staticmethod
     def get_code_match_rate(codes, codes_star):
@@ -216,10 +217,11 @@ class ModelDualVQVAE(ModelVQVAE):
                 recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
                 distill_loss = F.mse_loss(self.z_e_star, self.z_e_down.detach())
                 self.distill_train_loss = distill_loss.detach()
-                self.match_rate, self.match_rate_per_depth = self.get_code_match_rate(self.codes, self.codes_star)
-
-                self.star_loss = self.vq_loss_star + recon_loss_star + self.lambda_distill * distill_loss
+                code_align_loss = F.cross_entropy(-self.dists_star.permute(0, 4, 1, 2, 3, 5), self.codes.detach().long())
+                self.star_loss = self.vq_loss_star + recon_loss_star + self.lambda_distill * distill_loss + self.lambda_align * code_align_loss
                 self.star_loss = self.star_loss / self.num_accum_steps_star
+
+                self.match_rate, self.match_rate_per_depth = self.get_code_match_rate(self.codes, self.codes_star)
 
             self.star_train_loss = self.star_loss
             if self.opt["rank"] == 0:

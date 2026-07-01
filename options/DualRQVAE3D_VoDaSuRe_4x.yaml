@@ -52,6 +52,9 @@ train_opt:
     L1: 1.0
     LPIPS: 0.01
 
+  lambda_distill: 0  # Weight for feature distillation loss
+  lambda_align: 0.05  # Weight code alignment loss
+
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
