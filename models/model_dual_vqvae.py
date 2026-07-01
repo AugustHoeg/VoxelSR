@@ -5,8 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import wandb
-from torch.nn.parallel import DataParallel, DistributedDataParallel
-from torch.optim import Adam, AdamW
+from torch.nn.parallel import DistributedDataParallel
 from torchvision.utils import make_grid
 
 from loss_functions.loss_functions_simple import compute_generator_loss
@@ -32,53 +31,23 @@ class ModelDualVQVAE(ModelVQVAE):
     """
 
     # -------------------------------------------------------------------------
-    # Helpers
-    # -------------------------------------------------------------------------
-
-    def _unwrap(self):
-        net = self.netG
-        if isinstance(net, (DataParallel, DistributedDataParallel)):
-            net = net.module
-        return net
-
-    # -------------------------------------------------------------------------
     # Initialisation overrides
     # -------------------------------------------------------------------------
 
     def define_optimizer(self):
-        self.G_accum_count = 0
         self.star_accum_count = 0
-        self.num_accum_steps_G = self.opt_train["num_accum_steps_G"]
         self.num_accum_steps_star = self.opt_train["num_accum_steps_G"]  # Assume same no. of accumulation steps
         self.lambda_distill = self.opt_train["lambda_distill"]
         self.lambda_align = self.opt_train["lambda_align"]
 
-        net = self._unwrap()
-        star_prefixes = ('encoder_star.', 'pre_quant_conv_star.')
-        main_params, star_params = [], []
-        for name, p in net.named_parameters():
-            if any(name.startswith(pfx) for pfx in star_prefixes):
-                if p.requires_grad:
-                    star_params.append(p)
-            else:
-                if p.requires_grad:
-                    main_params.append(p)
+        main_params, star_params = self.get_bare_model(self.netG).split_optimizer_params()
 
         if self.opt['rank'] == 0:
             print(f"VQ model params: {sum(p.numel() for p in main_params):,}")
             print(f"E* params: {sum(p.numel() for p in star_params):,}")
 
-        if self.opt_train["G_optimizer_type"] == "adam":
-            self.G_optimizer = Adam(main_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
-            self.star_optimizer = Adam(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
-        elif self.opt_train["G_optimizer_type"] == "adamw":
-            self.G_optimizer = AdamW(main_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
-            self.star_optimizer = AdamW(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"],  betas=(0.9, 0.999))
-        else:
-            raise NotImplementedError(f"Optimizer [{self.opt_train['G_optimizer_type']}] is not implemented.")
-
-        self.G_train_grad_norm = torch.zeros(1)
-        self.star_train_grad_norm = torch.zeros(1)
+        self.define_G_optimizer(main_params)
+        self.define_star_optimizer(star_params)
 
     def define_gradscaler(self):
         self.gen_scaler = torch.amp.GradScaler("cuda")
@@ -86,13 +55,7 @@ class ModelDualVQVAE(ModelVQVAE):
 
     def define_scheduler(self):
         self.define_G_scheduler()
-        star_scheduler = self._build_scheduler(
-            self.star_optimizer,
-            milestones_key='G_scheduler_milestones',
-            gamma_key='G_scheduler_gamma',
-            warmup_steps_key='G_scheduler_warmup_steps',
-        )
-        self.schedulers.append(star_scheduler)
+        self.define_star_scheduler()
 
     # -------------------------------------------------------------------------
     # Checkpoint overrides — persist star optimiser and scaler alongside G
@@ -100,35 +63,26 @@ class ModelDualVQVAE(ModelVQVAE):
 
     def save_G(self, iter_label):
         super().save_G(iter_label)
-        self.save_optimizer(
-            self._run_dir("saved_optimizers"), self.star_optimizer, 'optimizerStar', iter_label
-        )
+        self.save_star_optimizer(iter_label)
         if self.mixed_precision is not None:
-            self.save_gradscaler(
-                self._run_dir("saved_gradscalers"), self.star_scaler, 'gradscalerStar', iter_label
-            )
+            self.save_star_gradscaler(iter_label)
 
     def load_optimizers(self, experiment_id=None):
-        super().load_optimizers(experiment_id)
         if self.opt['train_mode'] != 'resume':
             return
         eid = self._resolve_eid(experiment_id)
-        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerStar.h5")
-        if path is not None:
-            if self.opt['rank'] == 0:
-                print(f"Loading star optimizer [{self._short_path(path)}] ...")
-            self.load_optimizer(path, self.star_optimizer)
+        assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
+        self.opt['train_opt']['G_optimizer_reuse'] = True
+        self.load_G_optimizer(eid)
+        self.load_star_optimizer(eid)
 
     def load_gradscalers(self, experiment_id=None):
-        super().load_gradscalers(experiment_id)
         if self.opt['train_mode'] != 'resume':
             return
         eid = self._resolve_eid(experiment_id)
-        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerStar.h5")
-        if path is not None:
-            if self.opt['rank'] == 0:
-                print(f"Loading star gradscaler [{self._short_path(path)}] ...")
-            self.load_gradscaler(path, self.star_scaler)
+        assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
+        self.load_G_gradscaler(eid)
+        self.load_star_gradscaler(eid)
 
     # -------------------------------------------------------------------------
     # Data and forward passes
@@ -171,7 +125,8 @@ class ModelDualVQVAE(ModelVQVAE):
     # -------------------------------------------------------------------------
 
     def optimize_parameters_amp(self, current_step, update=False):
-        net = self._unwrap()
+
+        net = self.get_bare_model(self.netG)  # used to access model-level functions
 
         # ── Step 1: update E + D from downsampled LR ─────────────────────────
         with (torch.amp.autocast("cuda", dtype=self.mixed_precision)):
@@ -211,7 +166,7 @@ class ModelDualVQVAE(ModelVQVAE):
             self.G_accum_count += 1
 
         # ── Step 2: update E* from real LR ───────────────────────────────────
-        with (net.frozen_decoder()):
+        with net.frozen_decoder():
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
                 self.vq_forward_star()
                 # recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)

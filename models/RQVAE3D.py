@@ -512,6 +512,19 @@ class DualRQVAE3D(RQVAE3D):
             self.decoder.requires_grad_(True)
             self.post_quant_conv.requires_grad_(True)
 
+    def split_optimizer_params(self):
+        """Partition parameters into main (E/Q/D) and star (E*) groups."""
+        star_prefixes = ('encoder_star.', 'pre_quant_conv_star.')
+        main_params, star_params = [], []
+        for name, p in self.named_parameters():
+            if any(name.startswith(pfx) for pfx in star_prefixes):
+                if p.requires_grad:
+                    star_params.append(p)
+            else:
+                if p.requires_grad:
+                    main_params.append(p)
+        return main_params, star_params
+
     def encode_star(self, x):
         z_e = self.encoder_star(x)
         z_e = self.pre_quant_conv_star(z_e)

@@ -153,6 +153,15 @@ class ModelBase():
             print(f"Loading D optimizer [{self._short_path(path)}] ...")
         self.load_optimizer(path, self.D_optimizer)
 
+    def load_star_optimizer(self, eid):
+        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerStar.h5")
+        if path is None:
+            print("No star optimizer checkpoint found, skipping...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading star optimizer [{self._short_path(path)}] ...")
+        self.load_optimizer(path, self.star_optimizer)
+
     def load_optimizers(self, experiment_id=None):
         """Default: G only. GAN models override to also call load_D_optimizer()."""
         if self.opt['train_mode'] != 'resume':
@@ -214,6 +223,15 @@ class ModelBase():
             print(f"Loading D gradscaler [{self._short_path(path)}] ...")
         self.load_gradscaler(path, self.dis_scaler)
 
+    def load_star_gradscaler(self, eid):
+        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerStar.h5")
+        if path is None:
+            print("No star gradscaler checkpoint found, skipping...")
+            return
+        if self.opt['rank'] == 0:
+            print(f"Loading star gradscaler [{self._short_path(path)}] ...")
+        self.load_gradscaler(path, self.star_scaler)
+
     def load_gradscalers(self, experiment_id=None):
         """Default: G only. GAN models override to also call load_D_gradscaler()."""
         if self.opt['train_mode'] != 'resume':
@@ -241,6 +259,12 @@ class ModelBase():
         self.save_scheduler(self._run_dir("saved_schedulers"), self.schedulers[1], 'schedulerD', iter_label)
         if self.mixed_precision is not None:
             self.save_gradscaler(self._run_dir("saved_gradscalers"), self.dis_scaler, 'gradscalerD', iter_label)
+
+    def save_star_optimizer(self, iter_label):
+        self.save_optimizer(self._run_dir("saved_optimizers"), self.star_optimizer, 'optimizerStar', iter_label)
+
+    def save_star_gradscaler(self, iter_label):
+        self.save_gradscaler(self._run_dir("saved_gradscalers"), self.star_scaler, 'gradscalerStar', iter_label)
 
     def save(self, iter_label):
         """Default: G only. GAN models override to also call save_D()."""
@@ -307,24 +331,26 @@ class ModelBase():
     def define_loss(self):
         pass
 
-    def define_G_optimizer(self):
+    def define_G_optimizer(self, params=None):
         self.G_accum_count = 0
         self.num_accum_steps_G = self.opt_train["num_accum_steps_G"]
 
-        G_optim_params = []
-        for k, v in self.netG.named_parameters():
-            if v.requires_grad:
-                G_optim_params.append(v)
-            else:
-                if get_rank() == 0:
-                    print(f"Params [{k}] will not optimize.")
+        if params is None:
+            params = []
+            for k, v in self.netG.named_parameters():
+                if v.requires_grad:
+                    params.append(v)
+                else:
+                    if get_rank() == 0:
+                        print(f"Params [{k}] will not optimize.")
 
         if self.opt_train["G_optimizer_type"] == "adam":
-            self.G_optimizer = Adam(G_optim_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+            self.G_optimizer = Adam(params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
         elif self.opt_train["G_optimizer_type"] == "adamw":
-            self.G_optimizer = AdamW(G_optim_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+            self.G_optimizer = AdamW(params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
         else:
             raise NotImplementedError(f"Optimizer [{self.opt_train['G_optimizer_type']}] is not implemented.")
+        self.G_train_grad_norm = torch.zeros(1)
 
     def define_D_optimizer(self):
         self.D_accum_count = 0
@@ -336,6 +362,15 @@ class ModelBase():
             self.D_optimizer = AdamW(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=(0.9, 0.999))
         else:
             raise NotImplementedError(f"Optimizer [{self.opt_train['D_optimizer_type']}] is not implemented.")
+
+    def define_star_optimizer(self, star_params):
+        if self.opt_train["G_optimizer_type"] == "adam":
+            self.star_optimizer = Adam(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+        elif self.opt_train["G_optimizer_type"] == "adamw":
+            self.star_optimizer = AdamW(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+        else:
+            raise NotImplementedError(f"Optimizer [{self.opt_train['G_optimizer_type']}] is not implemented.")
+        self.star_train_grad_norm = torch.zeros(1)
 
     def define_optimizer(self):
         """Default: G only. GAN models override to also call define_D_optimizer()."""
@@ -409,6 +444,14 @@ class ModelBase():
             milestones_key='D_scheduler_milestones',
             gamma_key='D_scheduler_gamma',
             warmup_steps_key='D_warmup_steps'
+        ))
+
+    def define_star_scheduler(self):
+        self.schedulers.append(self._build_scheduler(
+            self.star_optimizer,
+            milestones_key='G_scheduler_milestones',
+            gamma_key='G_scheduler_gamma',
+            warmup_steps_key='G_scheduler_warmup_steps',
         ))
 
     def define_scheduler(self):
