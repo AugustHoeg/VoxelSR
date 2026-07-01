@@ -214,7 +214,9 @@ class ModelDualVQVAE(ModelVQVAE):
         with (net.frozen_decoder()):
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
                 self.vq_forward_star()
-                recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
+                # recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
+                with net.frozen_encoder():
+                    recon_loss_star = F.mse_loss(net.encode(self.E_star), self.z_e_down.detach())
                 distill_loss = F.mse_loss(self.z_e_star, self.z_e_down.detach())
                 self.distill_train_loss = distill_loss.detach()
                 code_align_loss = F.cross_entropy(-self.dists_star.permute(0, 4, 1, 2, 3, 5), self.codes.detach().long())

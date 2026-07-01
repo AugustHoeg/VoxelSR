@@ -18,7 +18,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001_align_0p05_distill_0p
+run_name: ${model_opt.model_architecture}_001_align_0p05_distill_0p_Eploss
 note: Note
 
 # GPU configuration

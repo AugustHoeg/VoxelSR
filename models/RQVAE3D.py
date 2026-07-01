@@ -456,9 +456,10 @@ class DualRQVAE3D(RQVAE3D):
     (target = downsampled LR) and optional pre-quant distillation.
     """
 
-    def __init__(self, in_channels=1, latent_dim=256, quant_embed_dim=256,
-                 n_embed=1024, n_rq_depth=4, resolution=64, num_res_blocks=2,
-                 channels=[64, 64, 128 ,256], decay=0.99, shared_codebook=False,
+    def __init__(self, in_channels=1, latent_dim=256, latent_dim_star=256,
+                 quant_embed_dim=256, n_embed=1024, n_rq_depth=4, resolution=64, num_res_blocks=2,
+                 num_res_blocks_star=2, channels=[64, 64, 128 ,256],
+                 channels_star=[64, 64, 128, 256], decay=0.99, shared_codebook=False,
                  restart_unused_codes=True, skip_attn=False, use_checkpoint=False):
         super().__init__(
             in_channels=in_channels, latent_dim=latent_dim,
@@ -475,15 +476,25 @@ class DualRQVAE3D(RQVAE3D):
 
         self.encoder_star = Encoder(
             image_channels=in_channels,
-            latent_dim=latent_dim,
-            num_res_blocks=num_res_blocks,
+            latent_dim=latent_dim_star,
+            num_res_blocks=num_res_blocks_star,
             resolution=resolution,
             attn_resolutions=[resolution // 4],
-            channels=channels,
+            channels=channels_star,
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
         )
-        self.pre_quant_conv_star = nn.Conv3d(latent_dim, quant_embed_dim, 1)
+        self.pre_quant_conv_star = nn.Conv3d(latent_dim_star, quant_embed_dim, 1)
+
+    @contextmanager
+    def frozen_encoder(self):
+        self.encoder.requires_grad_(False)
+        self.pre_quant_conv.requires_grad_(False)
+        try:
+            yield
+        finally:
+            self.encoder.requires_grad_(True)
+            self.pre_quant_conv.requires_grad_(True)
 
     @contextmanager
     def frozen_decoder(self):

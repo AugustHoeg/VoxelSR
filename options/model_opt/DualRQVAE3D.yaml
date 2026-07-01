@@ -9,9 +9,14 @@ netG:
   channels: [64, 128, 256]
   quant_embed_dim: 256
   num_embeddings: 1024
-
-  n_rq_depth: 4 # number of residual quantization steps
   num_res_blocks: 3
+  n_rq_depth: 4 # number of residual quantization steps
+
+  # Star encoder parameters
+  latent_dim_star: 256
+  channels_star: [64, 128, 256]
+  num_res_blocks_star: 3
+
   decay: 0.99  # EMA decay for codebook updates
   shared_codebook: false  # share one codebook across all RQ depths
   restart_unused_codes: true
