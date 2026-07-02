@@ -37,6 +37,8 @@ class ModelDualVQVAE(ModelVQVAE):
     def define_optimizer(self):
         self.star_accum_count = 0
         self.num_accum_steps_star = self.opt_train["num_accum_steps_G"]  # Assume same no. of accumulation steps
+        self.lambda_recon = self.opt_train["lambda_recon"]
+        self.lambda_feat = self.opt_train["lambda_feat"]
         self.lambda_distill = self.opt_train["lambda_distill"]
         self.lambda_align = self.opt_train["lambda_align"]
 
@@ -102,6 +104,43 @@ class ModelDualVQVAE(ModelVQVAE):
 
     def vq_forward_star(self):
         self.E_star, self.vq_loss_star, self.codes_star, self.z_e_star, self.dists_star = self.netG(self.L_star, star_mode=True)
+
+    def compute_code_align_loss(self):
+        """Differentiable per-depth code-alignment CE for E*.
+
+        The RQ bottleneck computes distances under ``@torch.no_grad`` and
+        detaches the residual, so ``self.dists_star`` carries no gradient to E*.
+        Here we recompute distances against the codebook weights, teacher-forcing
+        each depth's residual with E's codes so E*'s depth-d logits are scored
+        against the same residual as E's target.
+
+        """
+        q = self.get_bare_model(self.netG).quantizer
+        # (B, C, Dz, Dy, Dx) -> (B, Dz, Dy, Dx, C)
+        x = self.z_e_star.permute(0, 2, 3, 4, 1).contiguous()
+        spatial_shape = x.shape[:-1]           # (B, Dz, Dy, Dx)
+        C = x.shape[-1]
+
+        residual = x
+        logits_per_depth = []
+        codes_e = self.codes.detach().long()   # (B, Dz, Dy, Dx, n_rq_depth)
+
+        for d, cb in enumerate(q.codebooks):
+            w = cb.weight[:-1, :]                                        # (n_embed, C), no-grad
+            r_flat = residual.reshape(-1, C).to(w.dtype)
+            # Logits = -||r - e||^2. The ||r||^2 term is constant across n_embed
+            # and cancels inside log_softmax, so we omit it.
+            neg_dist_sq = 2.0 * (r_flat @ w.t()) - w.pow(2).sum(dim=1)   # (N, n_embed)
+            logits_per_depth.append(neg_dist_sq.reshape(*spatial_shape, -1))
+
+            # Teacher-forced residual for the next depth. Detach so gradient
+            # only flows through the current depth's logits.
+            chosen = w[codes_e[..., d]]                                  # (B, Dz, Dy, Dx, C)
+            residual = residual - chosen.detach()
+
+        logits = torch.stack(logits_per_depth, dim=-1)                   # (B, Dz, Dy, Dx, n_embed, n_rq_depth)
+        logits = logits.permute(0, 4, 1, 2, 3, 5)                        # (B, n_embed, Dz, Dy, Dx, n_rq_depth)
+        return F.cross_entropy(logits, codes_e)
 
     @staticmethod
     def get_code_match_rate(codes, codes_star):
@@ -169,15 +208,25 @@ class ModelDualVQVAE(ModelVQVAE):
         with net.frozen_decoder():
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
                 self.vq_forward_star()
-                # recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
-                with net.frozen_encoder():
-                    recon_loss_star = F.mse_loss(net.encode(self.E_star), self.z_e_down.detach())
-                distill_loss = F.mse_loss(self.z_e_star, self.z_e_down.detach())
-                self.distill_train_loss = distill_loss.detach()
-                code_align_loss = F.cross_entropy(-self.dists_star.permute(0, 4, 1, 2, 3, 5), self.codes.detach().long())
-                self.star_loss = self.vq_loss_star + recon_loss_star + self.lambda_distill * distill_loss + self.lambda_align * code_align_loss
-                self.star_loss = self.star_loss / self.num_accum_steps_star
+                self.star_loss = self.vq_loss_star
 
+                # Auxiliary losses for E* training. Controlled by lambda_* hyperparameters.
+                if self.lambda_recon > 0:
+                    recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
+                    self.star_loss += self.lambda_recon * recon_loss_star
+                if self.lambda_feat > 0:
+                    with net.frozen_encoder():
+                        feat_loss_star = F.mse_loss(net.encode(self.E_star), self.z_e_down.detach())
+                        self.star_loss += self.lambda_feat * feat_loss_star
+                if self.lambda_distill > 0:
+                    distill_loss = F.mse_loss(self.z_e_star, self.z_e_down.detach())
+                    self.star_loss += self.lambda_distill * distill_loss
+                if self.lambda_align > 0:
+                    code_align_loss = self.compute_code_align_loss()
+                    self.star_loss += self.lambda_align * code_align_loss
+                    assert code_align_loss.requires_grad, "code_align_loss has no grad path to E*"
+
+                self.star_loss = self.star_loss / self.num_accum_steps_star
                 self.match_rate, self.match_rate_per_depth = self.get_code_match_rate(self.codes, self.codes_star)
 
             self.star_train_loss = self.star_loss
@@ -245,8 +294,6 @@ class ModelDualVQVAE(ModelVQVAE):
 
         star_grad_norm = self.star_train_grad_norm.item() * self.num_accum_steps_star
         self.run.log({"step": current_step, "star_train_grad_norm": star_grad_norm})
-
-        self.run.log({"step": current_step, "distill_train_loss": self.distill_train_loss.item()})
 
         self.run.log({"step": current_step, "code_agreement_rate": self.match_rate.item()})
         for depth_idx, rate in enumerate(self.match_rate_per_depth):
