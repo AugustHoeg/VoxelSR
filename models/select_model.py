@@ -28,6 +28,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'dual_vqvae':
         from models.model_dual_vqvae import ModelDualVQVAE as M
 
+    elif model == 'dual_vqgan':
+        from models.model_dual_vqgan import ModelDualVQGAN as M
+
     elif model == 'transformer_vq':
         from models.model_vq_transformer import ModelTransformerVQ as M
 

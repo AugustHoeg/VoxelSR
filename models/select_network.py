@@ -114,7 +114,7 @@ def define_G(opt, mode='train'):
                    use_checkpoint=opt_net['use_checkpoint'],
                    )
 
-    elif model_arch == "DualRQVAE3D":
+    elif model_arch == "DualRQVAE3D" or model_arch == "DualRQGAN3D":
         from models.RQVAE3D import DualRQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],
                    latent_dim=opt_net['latent_dim'],
@@ -467,7 +467,16 @@ def define_D(opt, mode='train'):
 
     elif model_arch == "PatchGAN3D":  # PatchGAN Discriminator
         from models.VQGAN3D import PatchGAN3D as net
-        netD = net(in_channels=opt_net['in_channels'])
+        netD = net(in_channels=opt_net['in_channels'],
+                   ndf=opt_net['ndf'],
+                   n_layers=opt_net['n_layers'])
+
+    elif model_arch == "LatentMLPD3D":  # Per-position MLP D for pre-quant latents
+        from models.RQVAE3D import LatentMLPD3D as net
+        netD = net(in_channels=opt_net['in_channels'],
+                   ndf=opt_net['ndf'],
+                   n_layers=opt_net['n_layers'],
+                   use_spectral_norm=opt_net.get('use_spectral_norm', True))
 
     else:
         raise NotImplementedError('netD [{:s}] is not found.'.format(model_arch))

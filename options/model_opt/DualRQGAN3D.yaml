@@ -1,0 +1,42 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: dual_vqgan
+model_architecture: DualRQVAE3D
+netG:
+  net_type: DualRQVAE3D
+  description: "3D Residual Vector Quantized VAE (RQVAE3D)"
+  in_channels: 1
+  latent_dim: 256
+  channels: [64, 128, 256]
+  quant_embed_dim: 256
+  num_embeddings: 1024
+  num_res_blocks: 3
+  n_rq_depth: 4 # number of residual quantization steps
+
+  # Star encoder parameters
+  latent_dim_star: 256
+  channels_star: [64, 128, 256]
+  num_res_blocks_star: 3
+
+  decay: 0.99  # EMA decay for codebook updates
+  shared_codebook: false  # share one codebook across all RQ depths
+  restart_unused_codes: true
+  skip_attn: true  # skip non-local attention blocks
+  use_checkpoint: true
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.2
+
+netD:
+  net_type: LatentMLPD3D
+  description: "Per-position 1x1x1 MLP D on pre-quant latent (SN)"
+  in_channels: 256           # must equal quant_embed_dim of netG (z_e channel dim)
+  ndf: 256                   # width of the per-position MLP
+  n_layers: 6                # number of 1x1x1 conv layers
+  use_spectral_norm: true    # keep on; main GAN stabiliser here
+  use_checkpoint: false
+
+  # SN handles init internally; keep init_type=default so init_weights is a no-op.
+  init_type: default
+  init_bn_type: uniform      # ignored (no BN in this D)
+  init_gain: 0.1

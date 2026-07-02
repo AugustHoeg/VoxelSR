@@ -267,13 +267,13 @@ class MaskRQTransformer3Dv2(nn.Module):
         ])
 
         # Independent spatial and depth positional embeddings
-        self.pos_emb   = nn.Embedding(seq_len, embed_dim)
+        self.pos_emb = nn.Embedding(seq_len, embed_dim)
         self.depth_emb = nn.Embedding(n_rq_depth, embed_dim)
 
         # LR conditioning
         if lr_seq_len is not None:
             lr_in_dim = lr_embed_dim if lr_embed_dim is not None else embed_dim
-            self.lr_proj    = nn.Linear(lr_in_dim, embed_dim, bias=False)
+            self.lr_proj = nn.Linear(lr_in_dim, embed_dim, bias=False)
             self.lr_pos_emb = nn.Embedding(lr_seq_len, embed_dim)
         else:
             self.uncond_emb = nn.Embedding(1, embed_dim)
@@ -359,7 +359,7 @@ class MaskRQTransformer3Dv2(nn.Module):
             [self.tok_embs[d](codes[:, :, d]) for d in range(D)], dim=2
         )                                                                   # (B, L, D, E)
 
-        pos_emb   = self.pos_emb(torch.arange(L, device=codes.device))    # (L, E)
+        pos_emb = self.pos_emb(torch.arange(L, device=codes.device))    # (L, E)
         depth_emb = self.depth_emb(torch.arange(D, device=codes.device))  # (D, E)
 
         # Additive spatial and depth positional encodings, broadcast over the other axis
@@ -369,7 +369,7 @@ class MaskRQTransformer3Dv2(nn.Module):
         if lr_tokens is not None:
             lr_ctx, cond = self._prepare_lr_context(lr_tokens)
         else:
-            cond   = self.uncond_emb(torch.zeros(B, dtype=torch.long, device=codes.device))
+            cond = self.uncond_emb(torch.zeros(B, dtype=torch.long, device=codes.device))
             lr_ctx = None
 
         # Axial transformer — representation stays (B, L, D, E) throughout

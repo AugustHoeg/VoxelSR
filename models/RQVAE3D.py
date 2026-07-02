@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.distributed as dist
 from contextlib import contextmanager
 
-from gevent.testing import skipping
 from torch.nn import functional as F
 
 from models.VQGAN3D import Encoder, Decoder
@@ -202,7 +201,7 @@ class RQBottleneck3D(nn.Module):
         """
         residual = x.detach().clone()
         aggregated = torch.zeros_like(x)
-        quant_list, code_list, dists_list = [], [], []
+        quant_list, code_list = [], []
 
         for codebook in self.codebooks:
             quant, code, dists = codebook(residual)
@@ -210,11 +209,9 @@ class RQBottleneck3D(nn.Module):
             aggregated.add_(quant)  #
             quant_list.append(aggregated.clone())
             code_list.append(code.unsqueeze(-1))
-            dists_list.append(dists.unsqueeze(-1))
 
         codes = torch.cat(code_list, dim=-1)
-        dists = torch.cat(dists_list, dim=-1)
-        return quant_list, codes, dists
+        return quant_list, codes
 
 
     def compute_commitment_loss(self, x, quant_list):
@@ -239,13 +236,13 @@ class RQBottleneck3D(nn.Module):
             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
         """
         x_code = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Dz, Dy, Dx, C)
-        quant_list, codes, dists = self.quantize(x_code)
+        quant_list, codes = self.quantize(x_code)
         commitment_loss = self.compute_commitment_loss(x_code, quant_list)
 
         z_q_last = quant_list[-1]  # Aggregated quantized codes
         z_q = z_q_last.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, Dz, Dy, Dx)
         z_q = x + (z_q - x).detach()  # straight-through estimator
-        return z_q, commitment_loss, codes, dists
+        return z_q, commitment_loss, codes
 
 
     @torch.no_grad()
@@ -413,7 +410,7 @@ class RQVAE3D(nn.Module):
     def get_code(self, x):
         """Encode volume to discrete codes only (no stored intermediate tensors)."""
         z_e = self.encode(x)
-        _, _, code, _ = self.quantizer(z_e)
+        _, _, code = self.quantizer(z_e)
         return code
 
 
@@ -442,9 +439,9 @@ class RQVAE3D(nn.Module):
         """
 
         z_e = self.encode(x)
-        z_q, commitment_loss, codes, dists = self.quantizer(z_e)
+        z_q, commitment_loss, codes = self.quantizer(z_e)
         x_hat = self.decode(z_q)
-        return x_hat, commitment_loss, codes, z_e, dists
+        return x_hat, commitment_loss, codes, z_e
 
 
 class DualRQVAE3D(RQVAE3D):
@@ -543,14 +540,53 @@ class DualRQVAE3D(RQVAE3D):
             z_e = self.encode_star(x)
             was_training = self.quantizer.training
             self.quantizer.eval()
-            z_q, commitment_loss, codes, dists = self.quantizer(z_e)
+            z_q, commitment_loss, codes = self.quantizer(z_e)
             if was_training:
                 self.quantizer.train()
-            return self.decode(z_q), commitment_loss, codes, z_e, dists
+            return self.decode(z_q), commitment_loss, codes, z_e
         # main path
         z_e = self.encode(x)
-        z_q, commitment_loss, codes, dists = self.quantizer(z_e)
-        return self.decode(z_q), commitment_loss, codes, z_e, dists
+        z_q, commitment_loss, codes = self.quantizer(z_e)
+        return self.decode(z_q), commitment_loss, codes, z_e
+
+
+class LatentMLPD3D(nn.Module):
+    """
+    Latent-space discriminator for pre-quantization features (B, C, Dz, Dy, Dx).
+
+    Per-position MLP (implemented as 1x1x1 convs) followed by global average
+    pool and a scalar head. No spatial mixing — every latent position is scored
+    independently and the scores are averaged. Trades off the ability to detect
+    "individually plausible but jointly wrong" arrangements for stability and
+    robustness to tiny latent grids (e.g. 2^3), where a PatchGAN's 4x4x4
+    kernels do not fit.
+
+    Spectral norm on every learned Linear/Conv is the main GAN stabiliser here
+    and should stay on unless you have a specific reason to disable it.
+    """
+
+    def __init__(self, in_channels, ndf=256, n_layers=3, use_spectral_norm=True):
+        super().__init__()
+        from torch.nn.utils.parametrizations import spectral_norm
+
+        def sn(m):
+            return spectral_norm(m) if use_spectral_norm else m
+
+        layers = []
+        prev = in_channels
+        for _ in range(n_layers):
+            layers.append(sn(nn.Conv3d(prev, ndf, kernel_size=3, padding=1, bias=True)))
+            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            prev = ndf
+        self.trunk = nn.Sequential(*layers)
+        self.pool = nn.AdaptiveAvgPool3d(1)
+        self.head = sn(nn.Linear(ndf, 1))
+
+    def forward(self, x):
+        # x: (B, C, Dz, Dy, Dx) -> scalar per batch item
+        h = self.trunk(x)
+        h = self.pool(h).flatten(1)
+        return self.head(h).squeeze(-1)
 
 
 if __name__ == '__main__':
@@ -576,12 +612,11 @@ if __name__ == '__main__':
     model.train()
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
-    x_hat, loss, codes, z_e, dists = model(x)
+    x_hat, loss, codes, z_e = model(x)
 
     print(f"Input: {x.shape}")
     print(f"Output: {x_hat.shape}")
     print(f"Codes: {codes.shape} (spatial * n_rq_depth)")
-    print(f"Dists: {dists.shape}")
     print(f"Commitment loss:  {loss.item():.4f}")
 
     max_memory_reserved = torch.cuda.max_memory_reserved()

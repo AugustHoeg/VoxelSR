@@ -11,20 +11,20 @@ from torchvision.utils import make_grid
 
 from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
-from models.select_network import define_G
+from models.select_network import define_D, define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 
 
-class ModelDualVQVAE(ModelBase):
+class ModelDualVQGAN(ModelBase):
     """
-    Joint training of DualRQVAE3D.
+    Joint training of DualRQVAE3D w. adversarial supervision for E*
 
     Step 1 (main): x_down → E → Q (EMA updated) → D → recon_loss(x_down)
                    Updates: encoder, pre_quant_conv, decoder, post_quant_conv.
 
     Step 2 (star): x_star → E* → Q (eval, no EMA) → D (frozen grad) → recon_loss(x_down)
-                             + lambda_distill * ||E*(x_star) - sg[E(x_down)]||_2
+                             + lambda_adv * adv_loss
                    Updates: encoder_star, pre_quant_conv_star only.
 
     DDP note: both steps call self.netG(...) so DDP gradient sync hooks fire
@@ -37,13 +37,19 @@ class ModelDualVQVAE(ModelBase):
     # -------------------------------------------------------------------------
 
     def __init__(self, opt, mode='train', data_parallel=True):
-        super(ModelDualVQVAE, self).__init__(opt)
+        super(ModelDualVQGAN, self).__init__(opt)
         self.last_iteration = 0
         self.netG = define_G(opt, mode=mode)
         self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
+        if mode == "train":
+            self.netD = define_D(opt, mode=mode)
+            self.netD = self.model_to_device(self.netD, data_parallel=data_parallel, compile=False)
+            if self.opt_train["E_decay"] > 0:
+                self.netE = define_G(opt).to(self.device).eval()
 
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
+            print("Number of trainable parameters, D", utils_3D_image.numel(self.netD, only_trainable=True))
 
         self.update = False
 
@@ -55,9 +61,11 @@ class ModelDualVQVAE(ModelBase):
 
     def set_eval_mode(self):
         self.netG.eval()
+        self.netD.eval()
 
     def set_train_mode(self):
         self.netG.train()
+        self.netD.train()
 
     def init_test(self, experiment_id):
         self.load(experiment_id, mode='test')
@@ -69,6 +77,7 @@ class ModelDualVQVAE(ModelBase):
     def init_train(self):
         self.load()
         self.netG.train()
+        self.netD.train()
 
         self.define_loss()
         self.define_metrics()
@@ -93,6 +102,8 @@ class ModelDualVQVAE(ModelBase):
         else:
             assert eid is not None, 'Experiment ID required for test mode.'
         self.load_G(eid, mode)
+        if mode == 'train':
+            self.load_D(eid)
 
     def define_wandb_run(self):
         self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
@@ -101,18 +112,24 @@ class ModelDualVQVAE(ModelBase):
             description=self.opt['model_opt']['netG']['description'],
             metadata=OmegaConf.to_container(self.opt['model_opt']['netG'], resolve=True)
         )
+        self.model_artifact_D = wandb.Artifact(
+            "Discriminator", type=self.opt["model_opt"]["netD"]["net_type"],
+            description=self.opt["model_opt"]["netD"]["description"],
+            metadata=OmegaConf.to_container(self.opt["model_opt"]["netD"], resolve=True),
+        )
 
     def define_loss(self):
         self.build_loss_fn_dict()
         self.init_G_loss_trackers()
-
+        self.init_D_loss_trackers()
+        
         self.lambda_recon = self.opt_train["lambda_recon"]
         self.lambda_feat = self.opt_train["lambda_feat"]
         self.lambda_distill = self.opt_train["lambda_distill"]
         self.lambda_align = self.opt_train["lambda_align"]
+        self.lambda_adv = self.opt_train["lambda_adv"]
 
     def define_optimizer(self):
-
         main_params, star_params = self.get_bare_model(self.netG).split_optimizer_params()
 
         if self.opt['rank'] == 0:
@@ -121,14 +138,23 @@ class ModelDualVQVAE(ModelBase):
 
         self.define_G_optimizer(main_params)
         self.define_star_optimizer(star_params)
+        self.define_D_optimizer()
 
     def define_gradscaler(self):
-        self.gen_scaler = torch.amp.GradScaler("cuda")
+        self.define_G_gradscaler()
         self.star_scaler = torch.amp.GradScaler("cuda")
+        self.define_D_gradscaler()
 
     def define_scheduler(self):
         self.define_G_scheduler()
         self.define_star_scheduler()
+        self.define_D_scheduler()
+        
+    def update_learning_rate(self):
+        self.schedulers[0].step()  # step G
+        self.schedulers[1].step()  # step star
+        if self.current_step >= self.opt_train['D_start_iteration']:
+            self.schedulers[2].step()  # step D
 
     # -------------------------------------------------------------------------
     # Checkpoint overrides — persist star optimiser and scaler alongside G
@@ -136,6 +162,7 @@ class ModelDualVQVAE(ModelBase):
 
     def save(self, iter_label):
         self.save_G(iter_label)
+        self.save_D(iter_label)
         self.save_star_optimizer(iter_label)
         if self.mixed_precision is not None:
             self.save_star_gradscaler(iter_label)
@@ -148,6 +175,7 @@ class ModelDualVQVAE(ModelBase):
         self.opt['train_opt']['G_optimizer_reuse'] = True
         self.load_G_optimizer(eid)
         self.load_star_optimizer(eid)
+        self.load_D_optimizer(eid)
 
     def load_schedulers(self, experiment_id=None):
         if self.opt['train_mode'] != 'resume':
@@ -155,6 +183,7 @@ class ModelDualVQVAE(ModelBase):
         eid = self._resolve_eid(experiment_id)
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
         self.load_G_scheduler(eid)
+        self.load_D_scheduler(eid)
 
     def load_gradscalers(self, experiment_id=None):
         if self.opt['train_mode'] != 'resume':
@@ -163,6 +192,7 @@ class ModelDualVQVAE(ModelBase):
         assert eid is not None, "Pretrained experiment ID required for train_mode='resume'."
         self.load_G_gradscaler(eid)
         self.load_star_gradscaler(eid)
+        self.load_D_gradscaler(eid)
 
     # -------------------------------------------------------------------------
     # Data and forward passes
@@ -185,6 +215,9 @@ class ModelDualVQVAE(ModelBase):
 
     def netG_forward(self):
         self.E, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
+        
+    def netD_forward(self, input):
+        return self.netD(input)
 
     def compute_code_align_loss(self):
         """Differentiable per-depth code-alignment CE for E*.
@@ -245,10 +278,10 @@ class ModelDualVQVAE(ModelBase):
     # -------------------------------------------------------------------------
 
     def optimize_parameters_amp(self, current_step, update=False):
-
+        self.current_step = current_step
         net = self.get_bare_model(self.netG)  # used to access model-level functions
 
-        # ── Step 1: update E + D from downsampled LR ─────────────────────────
+        # ── Step 1: update VAE from downsampled LR ─────────────────────────
         with (torch.amp.autocast("cuda", dtype=self.mixed_precision)):
             self.vq_forward()
             recon_loss = compute_generator_loss(self.L, self.E, self.loss_fn_dict, self.loss_val_dict)
@@ -284,30 +317,80 @@ class ModelDualVQVAE(ModelBase):
             self.G_accum_count = 0
         else:
             self.G_accum_count += 1
+            
+        # ── Step 2: update discriminator D (supervision of E*) ───────────────────────────────────
 
-        # ── Step 2: update E* from real LR ───────────────────────────────────
-        with net.frozen_decoder():
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                self.vq_forward_star()
-                self.star_loss = self.vq_loss_star
+        dis_factor = 1.0 if current_step >= self.opt_train["D_start_iteration"] else 0.0
+        self.netD.requires_grad_(True)
 
-                # Auxiliary losses for E* training. Controlled by lambda_* hyperparameters.
-                if self.lambda_recon > 0:
-                    recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
-                    self.star_loss += self.lambda_recon * recon_loss_star
-                if self.lambda_feat > 0:
-                    with net.frozen_encoder():
-                        feat_loss_star = F.mse_loss(net.encode(self.E_star), self.z_e_down.detach())
-                        self.star_loss += self.lambda_feat * feat_loss_star
-                if self.lambda_distill > 0:
-                    distill_loss = F.mse_loss(self.z_e_star, self.z_e_down.detach())
-                    self.star_loss += self.lambda_distill * distill_loss
-                if self.lambda_align > 0:
-                    code_align_loss = self.compute_code_align_loss()
-                    self.star_loss += self.lambda_align * code_align_loss
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            with net.frozen_decoder():
+                self.vq_forward_star()  # Moved forward of E* to here for D loss computation
+            if dis_factor > 0.0:
+                self.prop_real = self.netD_forward(self.z_e_down.detach())
+                self.prop_fake = self.netD_forward(self.z_e_star.detach())
+                self.dis_loss = 0.5 * (torch.mean(F.relu(1.0 - self.prop_real)) + torch.mean(F.relu(1.0 + self.prop_fake)))
+                self.dis_loss = self.dis_loss / self.num_accum_steps_D
+            else:
+                self.dis_loss = torch.zeros(1, device=self.device)
 
-                self.star_loss = self.star_loss / self.num_accum_steps_star
-                self.match_rate, self.match_rate_per_depth = self.get_code_match_rate(self.codes, self.codes_star)
+        self.D_train_loss = self.dis_loss
+        if self.opt["rank"] == 0:
+            print("D train loss:", self.D_train_loss.item())
+
+        if dis_factor > 0.0:
+            self.D_update = ((self.D_accum_count + 1) % self.num_accum_steps_D) == 0 or update
+
+            if not self.D_update:
+                if isinstance(self.netD, DistributedDataParallel):
+                    with self.netD.no_sync():
+                        self.dis_scaler.scale(self.dis_loss).backward()
+                else:
+                    self.dis_scaler.scale(self.dis_loss).backward()
+            else:
+                self.dis_scaler.scale(self.dis_loss).backward()
+
+            if self.D_update:
+                D_clipgrad_max = self.opt_train["D_optimizer_clipgrad"]
+                if D_clipgrad_max > 0:
+                    self.dis_scaler.unscale_(self.D_optimizer)
+                    self.D_train_grad_norm = torch.nn.utils.clip_grad_norm_(
+                        self.netD.parameters(), max_norm=D_clipgrad_max, norm_type=2
+                    )
+                self.dis_scaler.step(self.D_optimizer)
+                self.dis_scaler.update()
+                self.D_optimizer.zero_grad()
+                self.D_accum_count = 0
+            else:
+                self.D_accum_count += 1
+
+        # ── Step 3: update E* from real LR ───────────────────────────────────
+        self.netD.requires_grad_(False)
+
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            self.star_loss = self.vq_loss_star
+
+            # Auxiliary losses for E* training. Controlled by lambda_* hyperparameters.
+            if self.lambda_recon > 0:
+                recon_loss_star = compute_generator_loss(self.L, self.E_star, self.loss_fn_dict, self.loss_val_dict)
+                self.star_loss += self.lambda_recon * recon_loss_star
+            if self.lambda_feat > 0:
+                with net.frozen_encoder():
+                    feat_loss_star = F.mse_loss(net.encode(self.E_star), self.z_e_down.detach())
+                    self.star_loss += self.lambda_feat * feat_loss_star
+            if self.lambda_distill > 0:
+                distill_loss = F.mse_loss(self.z_e_star, self.z_e_down.detach())
+                self.star_loss += self.lambda_distill * distill_loss
+            if self.lambda_align > 0:
+                code_align_loss = self.compute_code_align_loss()
+                self.star_loss += self.lambda_align * code_align_loss
+            if dis_factor > 0.0:
+                self.prop_fake = self.netD_forward(self.z_e_star)
+                adv_loss = -torch.mean(self.prop_fake)
+                self.star_loss += self.lambda_adv * adv_loss
+
+            self.star_loss = self.star_loss / self.num_accum_steps_star
+            self.match_rate, self.match_rate_per_depth = self.get_code_match_rate(self.codes, self.codes_star)
 
             self.star_train_loss = self.star_loss
             if self.opt["rank"] == 0:

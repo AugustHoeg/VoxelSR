@@ -484,11 +484,7 @@ class PixelUnshuffle3D(nn.Module):
             out_width, r
         )
 
-        x = x.permute(
-            0, 1,
-            3, 5, 7,
-            2, 4, 6
-        ).contiguous()
+        x = x.permute(0, 1, 3, 5, 7, 2, 4, 6).contiguous()
 
         x = x.view(
             batch_size,

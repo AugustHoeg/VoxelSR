@@ -213,7 +213,7 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    patch_size = 64
+    patch_size = 128
     x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)  # Example input
 
     channels = [64, 64, 128, 256]
@@ -221,7 +221,7 @@ if __name__ == '__main__':
                       latent_dim=256,
                       channels=channels,
                       resolution=patch_size,
-                      skip_attn=False,
+                      skip_attn=True,
                       use_checkpoint=True).to(device)
 
     z_e, z_q, vq_loss, q_indices = model.encode(x)

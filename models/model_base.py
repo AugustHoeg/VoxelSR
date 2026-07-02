@@ -364,6 +364,9 @@ class ModelBase():
             raise NotImplementedError(f"Optimizer [{self.opt_train['D_optimizer_type']}] is not implemented.")
 
     def define_star_optimizer(self, star_params):
+        self.star_accum_count = 0
+        self.num_accum_steps_star = self.opt_train["num_accum_steps_G"]  # Assume same no. of accumulation steps as G
+
         if self.opt_train["G_optimizer_type"] == "adam":
             self.star_optimizer = Adam(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
         elif self.opt_train["G_optimizer_type"] == "adamw":
