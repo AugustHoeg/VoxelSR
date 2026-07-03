@@ -467,9 +467,7 @@ def define_D(opt, mode='train'):
 
     elif model_arch == "PatchGAN3D":  # PatchGAN Discriminator
         from models.VQGAN3D import PatchGAN3D as net
-        netD = net(in_channels=opt_net['in_channels'],
-                   ndf=opt_net['ndf'],
-                   n_layers=opt_net['n_layers'])
+        netD = net(in_channels=opt_net['in_channels'])
 
     elif model_arch == "LatentMLPD3D":  # Per-position MLP D for pre-quant latents
         from models.RQVAE3D import LatentMLPD3D as net

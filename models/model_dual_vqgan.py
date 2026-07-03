@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import wandb
 from omegaconf import OmegaConf
-from torch.nn.parallel import DistributedDataParallel
+from torch.nn.parallel import DataParallel, DistributedDataParallel
 from torchvision.utils import make_grid
 
 from loss_functions.loss_functions_simple import compute_generator_loss
@@ -219,6 +219,16 @@ class ModelDualVQGAN(ModelBase):
     def netD_forward(self, input):
         return self.netD(input)
 
+    def calculate_lambda_star(self, star_loss, adv_loss):
+        net = self.netG.module if isinstance(self.netG, (DataParallel, DistributedDataParallel)) else self.netG
+        last_layer_weight = net.pre_quant_conv_star.weight
+        star_loss_grads = torch.autograd.grad(star_loss, last_layer_weight, retain_graph=True)[0]
+        adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
+
+        lambda_adv = torch.norm(star_loss_grads.float()) / (torch.norm(adv_loss_grads.float()) + 1e-4)
+        lambda_adv = torch.clamp(lambda_adv, 0, 1e4).detach()
+        return 0.8 * lambda_adv
+
     def compute_code_align_loss(self):
         """Differentiable per-depth code-alignment CE for E*.
 
@@ -327,8 +337,8 @@ class ModelDualVQGAN(ModelBase):
             with net.frozen_decoder():
                 self.vq_forward_star()  # Moved forward of E* to here for D loss computation
             if dis_factor > 0.0:
-                self.prop_real = self.netD_forward(self.z_e_down.detach())
-                self.prop_fake = self.netD_forward(self.z_e_star.detach())
+                self.prop_real = self.netD_forward(self.E.detach())
+                self.prop_fake = self.netD_forward(self.E_star.detach())
                 self.dis_loss = 0.5 * (torch.mean(F.relu(1.0 - self.prop_real)) + torch.mean(F.relu(1.0 + self.prop_fake)))
                 self.dis_loss = self.dis_loss / self.num_accum_steps_D
             else:
@@ -368,7 +378,7 @@ class ModelDualVQGAN(ModelBase):
         self.netD.requires_grad_(False)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.star_loss = self.vq_loss_star
+            self.star_loss = torch.tensor(0.0, device=self.device)
 
             # Auxiliary losses for E* training. Controlled by lambda_* hyperparameters.
             if self.lambda_recon > 0:
@@ -385,10 +395,12 @@ class ModelDualVQGAN(ModelBase):
                 code_align_loss = self.compute_code_align_loss()
                 self.star_loss += self.lambda_align * code_align_loss
             if dis_factor > 0.0:
-                self.prop_fake = self.netD_forward(self.z_e_star)
+                self.prop_fake = self.netD_forward(self.E_star)
                 adv_loss = -torch.mean(self.prop_fake)
+                self.lambda_adv = self.calculate_lambda_star(self.star_loss, adv_loss)
                 self.star_loss += self.lambda_adv * adv_loss
 
+            self.star_loss += self.vq_loss_star
             self.star_loss = self.star_loss / self.num_accum_steps_star
             self.match_rate, self.match_rate_per_depth = self.get_code_match_rate(self.codes, self.codes_star)
 
@@ -457,14 +469,20 @@ class ModelDualVQGAN(ModelBase):
     # -------------------------------------------------------------------------
 
     def record_train_log(self, current_step):
-        loss = self.G_train_loss.item() * self.num_accum_steps_G
-        self.run.log({"step": current_step, "G_train_loss": loss})
+        G_loss = self.G_train_loss.item() * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_loss": G_loss})
+
+        D_loss = self.D_train_loss.item() * self.num_accum_steps_D
+        self.run.log({"step": current_step, "D_train_loss": D_loss})
+
+        G_grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        self.run.log({"step": current_step, "G_train_grad_norm": G_grad_norm})
+
+        D_grad_norm = self.D_train_grad_norm.item() * self.num_accum_steps_D
+        self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
         star_loss = self.star_train_loss.item() * self.num_accum_steps_star
         self.run.log({"step": current_step, "star_train_loss": star_loss})
-
-        grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
-        self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
 
         star_grad_norm = self.star_train_grad_norm.item() * self.num_accum_steps_star
         self.run.log({"step": current_step, "star_train_grad_norm": star_grad_norm})

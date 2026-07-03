@@ -551,42 +551,22 @@ class DualRQVAE3D(RQVAE3D):
 
 
 class LatentMLPD3D(nn.Module):
-    """
-    Latent-space discriminator for pre-quantization features (B, C, Dz, Dy, Dx).
-
-    Per-position MLP (implemented as 1x1x1 convs) followed by global average
-    pool and a scalar head. No spatial mixing — every latent position is scored
-    independently and the scores are averaged. Trades off the ability to detect
-    "individually plausible but jointly wrong" arrangements for stability and
-    robustness to tiny latent grids (e.g. 2^3), where a PatchGAN's 4x4x4
-    kernels do not fit.
-
-    Spectral norm on every learned Linear/Conv is the main GAN stabiliser here
-    and should stay on unless you have a specific reason to disable it.
-    """
-
-    def __init__(self, in_channels, ndf=256, n_layers=3, use_spectral_norm=True):
+    def __init__(self, in_channels, ndf=256, n_layers=6, use_spectral_norm=True):
         super().__init__()
         from torch.nn.utils.parametrizations import spectral_norm
+        sn = spectral_norm if use_spectral_norm else (lambda m: m)
 
-        def sn(m):
-            return spectral_norm(m) if use_spectral_norm else m
-
-        layers = []
-        prev = in_channels
+        layers, prev = [], in_channels
         for _ in range(n_layers):
-            layers.append(sn(nn.Conv3d(prev, ndf, kernel_size=3, padding=1, bias=True)))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
+            layers += [sn(nn.Conv3d(prev, ndf, 3, padding=1, bias=True)),
+                       nn.LeakyReLU(0.2, inplace=True)]
             prev = ndf
         self.trunk = nn.Sequential(*layers)
-        self.pool = nn.AdaptiveAvgPool3d(1)
-        self.head = sn(nn.Linear(ndf, 1))
+        self.head  = sn(nn.Conv3d(ndf, 1, 1))  # per-position scalar map
 
     def forward(self, x):
-        # x: (B, C, Dz, Dy, Dx) -> scalar per batch item
-        h = self.trunk(x)
-        h = self.pool(h).flatten(1)
-        return self.head(h).squeeze(-1)
+        # (B, C, d, h, w) -> (B, d, h, w)
+        return self.head(self.trunk(x)).squeeze(1)
 
 
 if __name__ == '__main__':
