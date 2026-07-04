@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from models.VQVAE3D import CodeBook, DownBlock, GroupNorm, ResidualBlock, Swish, UpBlock
+from utils.utils_3D_image import numel
 
 
 class NonLocalBlock(nn.Module):
@@ -123,16 +124,19 @@ class VQModel3D(nn.Module):
                  channels=[64, 64, 128, 256],
                  num_embeddings=1024,
                  resolution=64,
+                 attn_resolutions=[16],
                  skip_attn=False,
                  use_checkpoint=False):
         super(VQModel3D, self).__init__()
+
+        down_factor = 2**(len(channels) - 2)
 
         self.encoder = Encoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
             channels=channels,
             resolution=resolution,
-            attn_resolutions=[resolution // 4],
+            attn_resolutions=attn_resolutions,
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint
         )
@@ -141,8 +145,8 @@ class VQModel3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             channels=channels[::-1],
-            resolution=resolution // 4,  # Assuming 4x downsampling in encoder
-            attn_resolutions=[resolution // 4],
+            resolution=resolution // down_factor,  # Assuming 4x downsampling in encoder
+            attn_resolutions=attn_resolutions,
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
         )
@@ -218,11 +222,14 @@ if __name__ == '__main__':
 
     channels = [64, 64, 128, 256]
     model = VQModel3D(in_channels=1,
-                      latent_dim=256,
+                      latent_dim=channels[-1],
                       channels=channels,
                       resolution=patch_size,
                       skip_attn=True,
+                      attn_resolutions=[16],
                       use_checkpoint=True).to(device)
+
+    print("Number of parameters, G", numel(model, only_trainable=True))
 
     z_e, z_q, vq_loss, q_indices = model.encode(x)
     x_hat = model.decode(z_q)

@@ -40,6 +40,37 @@ from models.MaskTransformer3D import (
 )
 
 
+# ── Large-batch-safe scaled dot-product attention ────────────────────────────
+
+def chunked_sdpa(q, k, v, attn_mask=None, dropout_p=0.):
+    """scaled_dot_product_attention that survives a very large batch dimension.
+
+    The fused SDPA CUDA kernels map the batch (and batch·heads) onto grid axes
+    that are hardware-capped at 65535. Depth attention reshapes to (B·L, heads,
+    D, hd), so at 32³ (L = 32768) even a batch of 2 overflows the grid and the
+    kernel aborts with "invalid configuration argument". Splitting the leading
+    dimension into safe chunks keeps every launch legal and is numerically
+    identical (each row attends only within itself).
+
+    q, k, v:   (Bh, heads, S, hd)
+    attn_mask: broadcastable to (Bh, heads, Sq, Sk); a leading dim of Bh is
+               sliced per-chunk, anything else is passed through unchanged.
+    """
+    Bh, heads = q.shape[0], q.shape[1]
+    # keep both `batch` and `batch·heads` comfortably below the 65535 grid limit
+    max_chunk = max(1, min(32768, 60000 // heads))
+    if Bh <= max_chunk:
+        return F.scaled_dot_product_attention(q, k, v, attn_mask=attn_mask, dropout_p=dropout_p)
+
+    mask_is_batched = attn_mask is not None and attn_mask.shape[0] == Bh
+    outs = []
+    for i in range(0, Bh, max_chunk):
+        sl = slice(i, i + max_chunk)
+        m = attn_mask[sl] if mask_is_batched else attn_mask
+        outs.append(F.scaled_dot_product_attention(q[sl], k[sl], v[sl], attn_mask=m, dropout_p=dropout_p))
+    return torch.cat(outs, dim=0)
+
+
 # ── Shared attention (unchanged from v1) ─────────────────────────────────────
 
 class AttentionRQ(nn.Module):
@@ -64,7 +95,7 @@ class AttentionRQ(nn.Module):
         xq = xq.view(B, L, self.n_heads, self.head_dim).transpose(1, 2)
         xk = xk.view(B, L, self.n_heads, self.head_dim).transpose(1, 2)
         xv = xv.view(B, L, self.n_heads, self.head_dim).transpose(1, 2)
-        out = F.scaled_dot_product_attention(
+        out = chunked_sdpa(
             xq, xk, xv,
             attn_mask=attn_mask,
             dropout_p=self.dropout if self.training else 0.,
@@ -387,37 +418,42 @@ class MaskRQTransformer3Dv2(nn.Module):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    hr_spatial = 8
+    # print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
+    print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
+    # print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
+
+    hr_spatial = 32
     lr_spatial = 8
     L_hr = hr_spatial ** 3
     L_lr = lr_spatial ** 3
     D = 4
     n_embed = 512
     lr_embed_dim = 256
+    use_checkpoint = True
 
     configs = {
         "tiny":  dict(embed_dim=256, body_depth=3,  head_depth=3, num_heads=4),
-        "small": dict(embed_dim=384, body_depth=4,  head_depth=4, num_heads=6),
-        "base":  dict(embed_dim=512, body_depth=6, head_depth=6, num_heads=8),
+        # "small": dict(embed_dim=384, body_depth=4,  head_depth=4, num_heads=6),
+        # "base":  dict(embed_dim=512, body_depth=6, head_depth=6, num_heads=8),
     }
 
     for name, cfg in configs.items():
+        L_lr = None
+        lr_embed_dim = None
+
         model = MaskRQTransformer3Dv2(
             seq_len=L_hr, n_rq_depth=D, n_embed=n_embed,
-            lr_seq_len=L_lr, lr_embed_dim=lr_embed_dim, dropout=0.1, **cfg,
+            lr_seq_len=L_lr, lr_embed_dim=lr_embed_dim, dropout=0.1, use_checkpoint=use_checkpoint, **cfg,
         ).to(device)
         param_count(f"MaskRQTransformer3Dv2-{name}", model)
 
         codes_5d = torch.randint(0, n_embed, (2, hr_spatial, hr_spatial, hr_spatial, D), device=device)
-        lr_emb   = torch.randn(2, L_lr, lr_embed_dim, device=device)
-        logits   = model(codes_5d, lr_tokens=lr_emb)
+        # lr_emb = torch.randn(2, L_lr, lr_embed_dim, device=device)
 
-        assert len(logits) == D
-        assert logits[0].shape == (2, L_hr, n_embed + 1), logits[0].shape
-        print(f"[{name}] forward ok — logits[0]: {logits[0].shape}")
+        with torch.cuda.amp.autocast(dtype=torch.bfloat16):
+            logits = model(codes_5d, lr_tokens=None)
 
-        schedule = model.axial_transformer.depth_schedule
-        n_placed = sum(1 for v in schedule if v >= 0)
-        assert n_placed == cfg["head_depth"], f"Expected {cfg['head_depth']} depth blocks, got {n_placed}"
-        print(f"[{name}] depth_schedule: {schedule}\n")
+    max_memory_reserved = torch.cuda.max_memory_reserved()
+    print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10**9, total_gpu_mem))

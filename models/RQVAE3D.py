@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from torch.nn import functional as F
 
 from models.VQGAN3D import Encoder, Decoder
-
+from utils.utils_3D_image import numel
 
 class VQEmbedding(nn.Embedding):
     """VQ embedding module with ema update."""
@@ -348,18 +348,21 @@ class RQVAE3D(nn.Module):
         shared_codebook=False,
         restart_unused_codes=True,
         skip_attn=False,
+        attn_resolutions=[16],
         use_checkpoint=False,
     ):
         super().__init__()
         self.n_rq_depth = n_rq_depth
         self.use_checkpoint = use_checkpoint
 
+        down_factor = 2**(len(channels) - 2)
+
         self.encoder = Encoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
             resolution=resolution,
-            attn_resolutions=[resolution // 4],
+            attn_resolutions=attn_resolutions,
             channels=channels,
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
@@ -378,8 +381,8 @@ class RQVAE3D(nn.Module):
             image_channels=in_channels,
             latent_dim=latent_dim,
             num_res_blocks=num_res_blocks,
-            resolution=resolution // 4,
-            attn_resolutions=[resolution // 4],
+            resolution=resolution // down_factor,
+            attn_resolutions=attn_resolutions,
             channels=channels[::-1],
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
@@ -574,20 +577,24 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    patch_size = 32
+    patch_size = 128
+
+    channels = [64, 64, 128, 256, 512]
 
     model = RQVAE3D(
         in_channels=1,
-        latent_dim=256,
-        channels=[64, 128, 256],
-        quant_embed_dim=256,
-        n_embed=1024,
-        n_rq_depth=4,
+        latent_dim=channels[-1],
+        channels=channels,
+        quant_embed_dim=channels[-1],
+        n_embed=2048,
+        n_rq_depth=8,
         resolution=patch_size,
-        num_res_blocks=4,
+        num_res_blocks=2,
         skip_attn=True,
         use_checkpoint=True,
     ).to(device)
+
+    print("Number of parameters, G", numel(model, only_trainable=True))
 
     model.train()
 
