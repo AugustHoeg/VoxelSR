@@ -7,7 +7,9 @@ from contextlib import contextmanager
 from torch.nn import functional as F
 
 # from models.VQGAN3D import Encoder, Decoder
-from models.basic_vae import Encoder, Decoder
+# from models.basic_vae import Encoder, Decoder
+from models.basic_vae import EncoderV2 as Encoder
+from models.basic_vae import DecoderV2 as Decoder
 from utils.utils_3D_image import numel
 
 class VQEmbedding(nn.Embedding):
@@ -441,12 +443,15 @@ class RQVAE3D(nn.Module):
             x_hat:           reconstructed volume  (B, C, D, H, W)
             commitment_loss: RQ commitment loss (scalar, for training)
             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
+            z_e:             pre-quantization latent (B, C, Dz, Dy, Dx)
+            frac_unique:     list[float] len n_rq_depth — fraction of unique codes
+                             used at each RQ depth this batch (diagnostic only)
         """
 
         z_e = self.encode(x)
         z_q, commitment_loss, codes, frac_unique = self.quantizer(z_e)
         x_hat = self.decode(z_q)
-        return x_hat, commitment_loss, codes, z_e
+        return x_hat, commitment_loss, codes, z_e, frac_unique
 
 
 class DualRQVAE3D(RQVAE3D):
@@ -540,6 +545,7 @@ class DualRQVAE3D(RQVAE3D):
                             commitment_loss: RQ commitment loss (scalar, for training)
                             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
                             z_e:             pre-quantization latent (B, C, Dz, Dy, Dx)
+                            frac_unique:     list[float] len n_rq_depth (diagnostic)
         """
         if star_mode:
             z_e = self.encode_star(x)
@@ -548,11 +554,11 @@ class DualRQVAE3D(RQVAE3D):
             z_q, commitment_loss, codes, frac_unique = self.quantizer(z_e)
             if was_training:
                 self.quantizer.train()
-            return self.decode(z_q), commitment_loss, codes, z_e
+            return self.decode(z_q), commitment_loss, codes, z_e, frac_unique
         # main path
         z_e = self.encode(x)
         z_q, commitment_loss, codes, frac_unique = self.quantizer(z_e)
-        return self.decode(z_q), commitment_loss, codes, z_e
+        return self.decode(z_q), commitment_loss, codes, z_e, frac_unique
 
 
 class LatentMLPD3D(nn.Module):
@@ -582,7 +588,7 @@ if __name__ == '__main__':
     patch_size = 128
 
     # channels = [64, 64, 128, 256, 512]
-    channels = [32, 64, 256, 512, 512]
+    channels = [64, 64, 256, 512, 512]
 
     model = RQVAE3D(
         in_channels=1,

@@ -10,8 +10,10 @@ input_type: 3D # Input type, 2D or 3D
 up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
-# Profile
+# Profile & Compile
 run_profile: false
+compile: true
+compile_mode: max-autotune  # default, reduce-overhead, max-autotune
 
 # WandB parameters
 wandb_mode: online

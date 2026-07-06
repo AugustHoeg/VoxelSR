@@ -114,7 +114,7 @@ class ModelMaskRQVSRT(ModelBase):
         """
         z_e = vq_model.encode(x)
         latent_shape = tuple(z_e.shape[2:])
-        _, _, codes = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
+        _, _, codes, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
         return codes, z_e, latent_shape
 
     def _flatten_lr_embeddings(self, z_lr: torch.Tensor) -> torch.Tensor:

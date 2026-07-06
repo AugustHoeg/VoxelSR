@@ -1,11 +1,15 @@
 import os
+from collections import OrderedDict
 
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn.functional as F
 import wandb
 from omegaconf import OmegaConf
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 from torch.optim import Adam, AdamW
+from torchvision.utils import make_grid
 
 from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
@@ -163,10 +167,10 @@ class ModelVQGAN(ModelBase):
         self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss, self.codes, self.z_e = self.netG(self.vae_in)
+        self.E, self.vq_loss, self.codes, self.z_e, self.frac_unique = self.netG(self.vae_in)
 
     def netG_forward(self):
-        self.E, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
+        self.E, _, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
 
     def netD_forward(self, input):
         return self.netD(input)
@@ -376,6 +380,9 @@ class ModelVQGAN(ModelBase):
         D_grad_norm = self.D_train_grad_norm.item() * self.num_accum_steps_D
         self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
+        for d, frac in enumerate(self.frac_unique):
+            self.run.log({"step": current_step, f"frac_unique_depth_{d}": frac})
+
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
 
@@ -460,6 +467,41 @@ class ModelVQGAN(ModelBase):
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
         compute_performance_metrics(self.E, self.vae_in, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+
+    def current_visuals(self):
+        out_dict = OrderedDict()
+        out_dict['H'] = self.H.detach()[0].float().cpu()
+        out_dict['E_vq'] = self.E.detach()[0].float().cpu()
+        net = self.get_bare_model(self.netG)
+        out_dict['E_no_vq'] = net.decode(self.z_e).detach()[0].float().cpu()
+        return out_dict
+
+    def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):
+        unnorm = self.opt['dataset_opt']['norm_type'] == 'znormalization'
+        slice_idx = img_dict['H'].shape[-1] // 2
+
+        E_vq_slice    = img_dict['E_vq'][:, :, :, slice_idx]
+        E_no_vq_slice = img_dict['E_no_vq'][:, :, :, slice_idx]
+        H_slice       = img_dict['H'][:, :, :, slice_idx]
+
+        row = torch.stack([E_vq_slice, E_no_vq_slice, H_slice])
+        grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)
+        grid_image = utils_3D_image.unnorm_and_rescale(grid, out_dtype, unnorm=unnorm)
+
+        figure_string = "VQGAN: %s, step %d: VQ Recon | No-VQ Recon | HR" % (
+            self.opt['model_opt']['model_architecture'], current_step
+        )
+
+        if self.opt['run_type'] == "HOME PC":
+            height, width = grid_image.shape[:2]
+            plt.figure(figsize=(4 * width / 100, 4 * height / 100), dpi=100)
+            plt.imshow(grid_image, vmin=0, vmax=255)
+            plt.title(figure_string)
+            plt.xticks([])
+            plt.yticks([])
+            plt.show()
+
+        wandb.log({"Comparisons training": wandb.Image(grid_image, caption=figure_string, mode="RGB")})
 
     def current_log(self):
         return self.log_dict
