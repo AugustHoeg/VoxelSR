@@ -391,6 +391,9 @@ if __name__ == '__main__':
         use_checkpoint=True,
     ).to(device)
 
+    # encoder = encoder.to(memory_format=torch.channels_last_3d)
+    # decoder = decoder.to(memory_format=torch.channels_last_3d)
+
     print("Encoder params:", numel(encoder, only_trainable=True))
     print("Decoder params:", numel(decoder, only_trainable=True))
 

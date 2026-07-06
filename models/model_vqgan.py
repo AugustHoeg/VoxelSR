@@ -380,8 +380,14 @@ class ModelVQGAN(ModelBase):
         D_grad_norm = self.D_train_grad_norm.item() * self.num_accum_steps_D
         self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
-        for d, frac in enumerate(self.frac_unique):
-            self.run.log({"step": current_step, f"frac_unique_depth_{d}": frac})
+        table = wandb.Table(
+            data=[[d, frac] for d, frac in enumerate(self.frac_unique)],
+            columns=["depth", "frac_unique"],
+        )
+        self.run.log({
+            "step": current_step,
+            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per RQ Depth"),
+        })
 
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
