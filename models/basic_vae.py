@@ -165,7 +165,7 @@ class EncoderV2(nn.Module):
         skip_attn=False,
         use_checkpoint=False,
     ):
-        super(Encoder, self).__init__()
+        super(EncoderV2, self).__init__()
         self.use_checkpoint = use_checkpoint
         layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
         for i in range(len(channels) - 1):
@@ -220,7 +220,7 @@ class DecoderV2(nn.Module):
         skip_attn=False,
         use_checkpoint=False,
     ):
-        super(Decoder, self).__init__()
+        super(DecoderV2, self).__init__()
         self.use_checkpoint = use_checkpoint
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
         layers.append(ResidualBlock(channels[0], channels[0]))
