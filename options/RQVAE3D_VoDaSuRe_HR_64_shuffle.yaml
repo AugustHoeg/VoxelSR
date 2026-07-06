@@ -13,7 +13,7 @@ vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 # Profile & Compile
 run_profile: false
 compile: true
-compile_mode: max-autotune  # default, reduce-overhead, max-autotune
+compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
 wandb_mode: online
