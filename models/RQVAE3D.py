@@ -6,7 +6,8 @@ from contextlib import contextmanager
 
 from torch.nn import functional as F
 
-from models.VQGAN3D import Encoder, Decoder
+# from models.VQGAN3D import Encoder, Decoder
+from models.basic_vae import Encoder, Decoder
 from utils.utils_3D_image import numel
 
 class VQEmbedding(nn.Embedding):
@@ -201,7 +202,7 @@ class RQBottleneck3D(nn.Module):
         """
         residual = x.detach().clone()
         aggregated = torch.zeros_like(x)
-        quant_list, code_list = [], []
+        quant_list, code_list, frac_unique_list = [], [], []
 
         for codebook in self.codebooks:
             quant, code, dists = codebook(residual)
@@ -209,9 +210,10 @@ class RQBottleneck3D(nn.Module):
             aggregated.add_(quant)  #
             quant_list.append(aggregated.clone())
             code_list.append(code.unsqueeze(-1))
+            frac_unique_list.append(code.unique().numel() / codebook.n_embed)
 
         codes = torch.cat(code_list, dim=-1)
-        return quant_list, codes
+        return quant_list, codes, frac_unique_list
 
 
     def compute_commitment_loss(self, x, quant_list):
@@ -236,13 +238,13 @@ class RQBottleneck3D(nn.Module):
             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
         """
         x_code = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Dz, Dy, Dx, C)
-        quant_list, codes = self.quantize(x_code)
+        quant_list, codes, frac_unique = self.quantize(x_code)
         commitment_loss = self.compute_commitment_loss(x_code, quant_list)
 
         z_q_last = quant_list[-1]  # Aggregated quantized codes
         z_q = z_q_last.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, Dz, Dy, Dx)
         z_q = x + (z_q - x).detach()  # straight-through estimator
-        return z_q, commitment_loss, codes
+        return z_q, commitment_loss, codes, frac_unique
 
 
     @torch.no_grad()
@@ -413,7 +415,7 @@ class RQVAE3D(nn.Module):
     def get_code(self, x):
         """Encode volume to discrete codes only (no stored intermediate tensors)."""
         z_e = self.encode(x)
-        _, _, code = self.quantizer(z_e)
+        _, _, code, _ = self.quantizer(z_e)
         return code
 
 
@@ -442,7 +444,7 @@ class RQVAE3D(nn.Module):
         """
 
         z_e = self.encode(x)
-        z_q, commitment_loss, codes = self.quantizer(z_e)
+        z_q, commitment_loss, codes, frac_unique = self.quantizer(z_e)
         x_hat = self.decode(z_q)
         return x_hat, commitment_loss, codes, z_e
 
@@ -543,13 +545,13 @@ class DualRQVAE3D(RQVAE3D):
             z_e = self.encode_star(x)
             was_training = self.quantizer.training
             self.quantizer.eval()
-            z_q, commitment_loss, codes = self.quantizer(z_e)
+            z_q, commitment_loss, codes, frac_unique = self.quantizer(z_e)
             if was_training:
                 self.quantizer.train()
             return self.decode(z_q), commitment_loss, codes, z_e
         # main path
         z_e = self.encode(x)
-        z_q, commitment_loss, codes = self.quantizer(z_e)
+        z_q, commitment_loss, codes, frac_unique = self.quantizer(z_e)
         return self.decode(z_q), commitment_loss, codes, z_e
 
 
@@ -579,14 +581,15 @@ if __name__ == '__main__':
 
     patch_size = 128
 
-    channels = [64, 64, 128, 256, 512]
+    # channels = [64, 64, 128, 256, 512]
+    channels = [32, 64, 256, 512, 512]
 
     model = RQVAE3D(
         in_channels=1,
         latent_dim=channels[-1],
         channels=channels,
         quant_embed_dim=channels[-1],
-        n_embed=2048,
+        n_embed=4096,
         n_rq_depth=8,
         resolution=patch_size,
         num_res_blocks=2,
