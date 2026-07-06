@@ -6,7 +6,7 @@ netG:
   description: "3D Residual Vector Quantized VAE (RQVAE3D)"
   in_channels: 1
   latent_dim: 512
-  channels: [32, 64, 256, 512, 512]
+  channels: [64, 64, 256, 512, 512]
   quant_embed_dim: 512
   num_embeddings: 4096
 
