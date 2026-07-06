@@ -21,10 +21,10 @@ class ModelGAN(ModelBase):
         super(ModelGAN, self).__init__(opt)
         self.last_iteration = 0
         self.netG = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
+        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel)
         if mode == 'train':
             self.netD = define_D(opt, mode=mode)
-            self.netD = self.model_to_device(self.netD, data_parallel=data_parallel, compile=False)
+            self.netD = self.model_to_device(self.netD, data_parallel=data_parallel)
             if self.opt_train['E_decay'] > 0:
                 self.netE = define_G(opt).to(self.device).eval()
 

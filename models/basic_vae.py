@@ -241,9 +241,9 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    patch_size = 128
+    patch_size = 64
     latent_dim = 512
-    channels = [32, 64, 256, 512, 512]
+    channels = [64, 64, 256, 512, 512]
     num_res_blocks = 2
     attn_resolutions = (16,)
 

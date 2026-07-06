@@ -424,8 +424,8 @@ if __name__ == "__main__":
     print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
     # print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
 
-    hr_spatial = 32
-    lr_spatial = 8
+    hr_spatial = 16
+    lr_spatial = 16
     L_hr = hr_spatial ** 3
     L_lr = lr_spatial ** 3
     D = 4

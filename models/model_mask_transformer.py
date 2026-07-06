@@ -40,7 +40,7 @@ class ModelMaskTransformer(ModelBase):
         self.last_iteration = 0
 
         self.netG = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
+        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel)
 
         self.num_embeddings = opt['model_opt']['netG']['num_embeddings']
         self.mask_schedule = opt['model_opt']['netG']['mask_schedule']

@@ -23,7 +23,7 @@ class ModelAESOP(ModelBase):
         # ------------------------------------
         self.last_iteration = 0
         self.netG = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel, compile=False)
+        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel)
 
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters", utils_3D_image.numel(self.netG, only_trainable=True))

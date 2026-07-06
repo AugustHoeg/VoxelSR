@@ -350,6 +350,8 @@ class SRBlock3D(nn.Module):
             weight = ICNR3D(self.pre_up_conv.weight, initializer=nn.init.normal_, upscale_factor=upscale_factor, mean=0.0, std=0.02)
             self.pre_up_conv.weight.data.copy_(weight)
 
+            self.shuffle0 = PixelShuffle3D(upscale_factor)
+
             if self.skip_act:
                 self.act0 = nn.Identity()
             else:
@@ -420,16 +422,7 @@ class SRBlock3D(nn.Module):
             x = self.pre_up_conv(x)
 
             # Pixelshuffle 3D
-            batch_size, channels, in_depth, in_height, in_width = x.size()
-            nOut = channels // self.upscale_factor ** 3
-
-            out_depth = in_depth * self.upscale_factor
-            out_height = in_height * self.upscale_factor
-            out_width = in_width * self.upscale_factor
-
-            x = x.contiguous().view(batch_size, nOut, self.upscale_factor, self.upscale_factor, self.upscale_factor, in_depth, in_height, in_width)
-            x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()
-            x = x.view(batch_size, nOut, out_depth, out_height, out_width)
+            x = self.shuffle0(x)
 
             # Activation after pixelshuffle
             out = self.act0(x)
@@ -489,6 +482,55 @@ class PixelUnshuffle3D(nn.Module):
         x = x.view(
             batch_size,
             channels * (r ** 3),
+            out_depth,
+            out_height,
+            out_width
+        )
+
+        return x
+
+
+class PixelShuffle3D(nn.Module):
+    def __init__(self, upscale_factor):
+        super(PixelShuffle3D, self).__init__()
+        self.upscale_factor = upscale_factor
+
+    def forward(self, x):
+        """
+        Args:
+            x: Tensor of shape (B, C * r^3, D, H, W)
+
+        Returns:
+            Tensor of shape
+            (B, C, D * r, H * r, W * r)
+        """
+        r = self.upscale_factor
+
+        batch_size, channels, in_depth, in_height, in_width = x.size()
+
+        assert channels % (r ** 3) == 0, "Number of channels must be divisible by upscale_factor^3"
+
+        nOut = channels // (r ** 3)
+
+        out_depth = in_depth * r
+        out_height = in_height * r
+        out_width = in_width * r
+
+        # Rearrange channel dimension into spatial blocks
+        x = x.contiguous().view(
+            batch_size,
+            nOut,
+            r, r, r,
+            in_depth,
+            in_height,
+            in_width
+        )
+
+        x = x.permute(0, 1, 5, 2, 6, 3, 7, 4).contiguous()
+
+        x = x.view(
+            batch_size,
+            nOut,
             out_depth,
             out_height,
             out_width

@@ -27,6 +27,8 @@ class ModelBase():
         self.opt_train = self.opt.get('train_opt', {})
         self.schedulers = []
         self.model_param_mismatch = False
+        self.compile = opt.get('compile', False)
+        self.compile_mode = opt.get('compile_mode', 'default')
 
     """
     # ----------------------------------------
@@ -630,15 +632,12 @@ class ModelBase():
             network = network.module
         return network
 
-    def model_to_device(self, network, data_parallel=True, compile=False):
+    def model_to_device(self, network, data_parallel=True):
         """Model to device. It also warps models with DistributedDataParallel or DataParallel.
         Args:
             network (nn.Module)
         """
         network = network.to(self.device)
-
-        if compile:
-            network = self.compile_network(network)
 
         if data_parallel:
             if self.opt['dist']:
@@ -654,6 +653,9 @@ class ModelBase():
 
         if self.opt['gpu_ids'] is None:
             network = network.module.to(self.device)
+
+        if self.compile:
+            network = self.compile_network(network, self.compile_mode)
 
         return network
 
