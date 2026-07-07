@@ -479,7 +479,12 @@ class ModelVQGAN(ModelBase):
         out_dict['H'] = self.H.detach()[0].float().cpu()
         out_dict['E_vq'] = self.E.detach()[0].float().cpu()
         net = self.get_bare_model(self.netG)
-        out_dict['E_no_vq'] = net.decode(self.z_e).detach()[0].float().cpu()
+        if self.mixed_precision is not None:
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                E_no_vq = net.decode(self.z_e)
+        else:
+            E_no_vq = net.decode(self.z_e)
+        out_dict['E_no_vq'] = E_no_vq.detach()[0].float().cpu()
         return out_dict
 
     def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):
