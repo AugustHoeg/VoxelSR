@@ -12,7 +12,7 @@ vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile & Compile
 run_profile: false
-compile: false
+compile: true # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
@@ -53,6 +53,8 @@ train_opt:
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
+
+  manual_seed: 8800 # 8400
 
 # Overwrite default dataset parameters
 dataset_opt:
