@@ -625,11 +625,11 @@ class ModelBase():
             return network
 
     def get_bare_model(self, network):
-        """Get bare model, especially under wrapping with
-        DistributedDataParallel or DataParallel.
-        """
+        """Recursively unwrap DataParallel, DDP, and torch.compile wrappers."""
         if isinstance(network, (DataParallel, DistributedDataParallel)):
-            network = network.module
+            return self.get_bare_model(network.module)
+        if hasattr(network, '_orig_mod'):  # torch.compile (OptimizedModule)
+            return self.get_bare_model(network._orig_mod)
         return network
 
     def model_to_device(self, network, data_parallel=True):
