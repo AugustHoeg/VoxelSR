@@ -50,6 +50,8 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
 
+  G_param_strict: false  # use non-strict as NonLocalblocks have different sequence lengths at 128
+
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
