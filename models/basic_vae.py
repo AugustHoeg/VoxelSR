@@ -457,7 +457,7 @@ if __name__ == '__main__':
     channels_dec = [512, 512, 256, 64, 64]
     num_res_blocks_enc = 2
     num_res_blocks_dec = 4
-    attn_resolutions = (16,)
+    attn_resolutions = (8,)
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)
 

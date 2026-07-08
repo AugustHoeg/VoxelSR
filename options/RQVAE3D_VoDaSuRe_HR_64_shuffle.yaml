@@ -54,7 +54,7 @@ train_opt:
     L1: 1.0
     LPIPS: 0.01
 
-  manual_seed: 8400 # 8400
+  manual_seed: 8800 # 8400
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -64,8 +64,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 24
-    num_load_workers: 16
+    dataloader_batch_size: 32
+    num_load_workers: 20
     persist_workers: true
     pin_memory: false
 
