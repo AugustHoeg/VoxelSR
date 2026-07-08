@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVAE3D_8x_shuffle                  # Default model config
+  - model_opt: RQVAE3D_8x_shuffle_128                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -20,7 +20,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_8x_shuffle
+run_name: ${model_opt.model_architecture}_000_8x_shuffle_128
 note: Note
 
 # GPU configuration
@@ -39,10 +39,10 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
+  iterations: 25000
   validation_iterations: 50
   checkpoint_test: 1000
-  checkpoint_save: 20000
+  checkpoint_save: 5000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
   num_accum_steps_G: 1
@@ -56,7 +56,7 @@ train_opt:
     L1: 1.0
     LPIPS: 0.01
 
-  manual_seed: 8800 # 8400
+  manual_seed: 8400 # 8400
 
 # Overwrite default dataset parameters
 dataset_opt:
