@@ -10,8 +10,10 @@ input_type: 3D # Input type, 2D or 3D
 up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
-# Profile
+# Profile & Compile
 run_profile: false
+compile: true # Enable PyTorch 2.0 compilation
+compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
 wandb_mode: online
@@ -22,7 +24,7 @@ run_name: ${model_opt.model_architecture}_000_8x_shuffle
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -32,7 +34,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  #
+  pretrained_experiment_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000024  #
   pretrained_netE: null
 
 # Overwrite default training parameters
@@ -51,6 +53,8 @@ train_opt:
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
+
+  manual_seed: 8800 # 8400
 
 # Overwrite default dataset parameters
 dataset_opt:
