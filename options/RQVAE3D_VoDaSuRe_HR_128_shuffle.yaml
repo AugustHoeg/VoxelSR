@@ -39,13 +39,13 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 25000
+  iterations: 20000
   validation_iterations: 50
   checkpoint_test: 1000
   checkpoint_save: 5000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
-  num_accum_steps_G: 1
+  num_accum_steps_G: 2
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
