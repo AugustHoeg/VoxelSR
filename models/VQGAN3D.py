@@ -43,6 +43,56 @@ class NonLocalBlock(nn.Module):
         return x + A
 
 
+class NonLocalBlockV2(nn.Module):
+    """Multi-head self-attention with QK-normalisation and Flash Attention.
+
+    Uses nn.Linear projections (cuBLAS GEMM) and a single spatial flatten so
+    the tensor never needs more than one permute/reshape before SDPA.
+    Note: weight shapes differ from the original Conv3d version, so old
+    checkpoints are not compatible (use strict=False and re-initialise).
+    """
+
+    def __init__(self, channels):
+        super().__init__()
+        num_heads = max(1, channels // 64)
+        assert channels % num_heads == 0, \
+            f"channels ({channels}) must be divisible by num_heads ({num_heads})"
+        self.num_heads = num_heads
+        self.head_dim = channels // num_heads
+
+        self.gn = GroupNorm(channels)
+        self.q = nn.Linear(channels, channels, bias=False)
+        self.k = nn.Linear(channels, channels, bias=False)
+        self.v = nn.Linear(channels, channels, bias=False)
+        self.proj_out = nn.Linear(channels, channels, bias=False)
+
+        self.q_norm = nn.LayerNorm(self.head_dim, elementwise_affine=False)
+        self.k_norm = nn.LayerNorm(self.head_dim, elementwise_affine=False)
+
+    def forward(self, x):
+        B, C, D, H, W = x.shape
+        N = D * H * W
+
+        # Flatten spatial dims: (B, C, D, H, W) -> (B, N, C) — single reshape
+        h_ = self.gn(x).permute(0, 2, 3, 4, 1).reshape(B, N, C)
+
+        # Project, split heads: (B, N, heads, head_dim) -> (B, heads, N, head_dim)
+        q = self.q(h_).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k(h_).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v(h_).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+
+        q = self.q_norm(q).to(v)
+        k = self.k_norm(k).to(v)
+
+        A = F.scaled_dot_product_attention(q, k, v)  # (B, heads, N, head_dim)
+
+        # Merge heads, restore spatial: (B, N, C) -> (B, C, D, H, W)
+        A = A.transpose(1, 2).reshape(B, N, C)
+        A = self.proj_out(A).reshape(B, D, H, W, C).permute(0, 4, 1, 2, 3)
+
+        return x + A
+
+
 def channel_schedule(base_channels, channel_mult):
     """Per-stage channel widths, e.g. base_channels=64, channel_mult=(1,1,2,4) -> [64,64,128,256]."""
     return [base_channels * m for m in channel_mult]

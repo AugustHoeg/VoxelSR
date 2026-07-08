@@ -4,10 +4,47 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from models.VQVAE3D import GroupNorm, ResidualBlock, Swish, DownBlock
-from models.VQGAN3D import NonLocalBlock
-from models.models_3D import PixelUnshuffle3D, SRBlock3D
+from models.VQGAN3D import NonLocalBlockV2 as NonLocalBlock
+from models.models_3D import PixelUnshuffle3D, SRBlock3D, PixelShuffle3D
 from utils.utils_3D_image import numel
 
+
+class ResidualAttnGroup(nn.Module):
+    def __init__(self, in_channels, out_channels, num_res_blocks=2, resolution=64, attn_resolutions=[16], skip_attn=False, downsample=False, use_checkpoint=False):
+        super().__init__()
+        
+        self.downsample = downsample
+        self.use_checkpoint = use_checkpoint
+        groups = 32 if in_channels % 32 == 0 else in_channels
+        layers = [ResidualBlock(in_channels, out_channels, num_groups=groups)]
+
+        for j in range(num_res_blocks - 1):
+            groups = 32 if out_channels % 32 == 0 else out_channels
+            layers.append(ResidualBlock(out_channels, out_channels, num_groups=groups))
+            if resolution in attn_resolutions and not skip_attn:
+                layers.append(NonLocalBlock(out_channels))
+        self.layers = nn.Sequential(*layers)
+                
+        if self.downsample:
+            self.conv_down = nn.Conv3d(out_channels, out_channels, 3, 2, 1)  # stride=2, spatial mixing
+            self.unshuffle = PixelUnshuffle3D(2)
+            self.reduce = nn.Linear(out_channels * 8, out_channels)  # pure channel mix — Linear > Conv3d 1×1
+
+    def forward(self, x):
+
+        if self.use_checkpoint:
+            x = checkpoint.checkpoint_sequential(self.layers, len(self.layers), x, use_reentrant=False)
+        else:
+            x = self.layers(x)
+
+        if self.downsample:
+            skip = self.unshuffle(x)                                   # (B, C*8, D/2, H/2, W/2)
+            B, C8, D, H, W = skip.shape
+            skip = self.reduce(skip.permute(0, 2, 3, 4, 1).reshape(B * D * H * W, C8))
+            skip = skip.reshape(B, D, H, W, -1).permute(0, 4, 1, 2, 3)  # (B, C, D/2, H/2, W/2)
+            x = self.conv_down(x) + skip
+
+        return x
 
 class EncoderUnShuffle(nn.Module):
     def __init__(self, in_channels=1, patch_size=4, pre_conv_dim=1, embed_dims=[64, 128, 256, 512], use_checkpoint=False):
@@ -188,7 +225,7 @@ class EncoderV2(nn.Module):
                 # layers.append(ResidualBlock(out_channels, out_channels, num_groups=groups))
                 resolution //= 2
             else:
-                layers.append(nn.Conv3d(in_channels, out_channels, 3, 1, 1))
+                layers.append(nn.Conv3d(out_channels, out_channels, 3, 1, 1))
             ###
 
         layers.append(ResidualBlock(channels[-1], channels[-1]))
@@ -208,7 +245,61 @@ class EncoderV2(nn.Module):
         return out
 
 
-class DecoderV2(nn.Module):
+class EncoderV3(nn.Module):
+    def __init__(
+        self,
+        image_channels=1,
+        latent_dim=512,
+        num_res_blocks=2,
+        resolution=128,
+        attn_resolutions=(16,),
+        channels=[64, 64, 256, 512, 512],
+        skip_attn=False,
+        use_checkpoint=False,
+    ):
+        super(EncoderV3, self).__init__()
+        self.use_checkpoint = use_checkpoint
+        layers = [nn.Conv3d(image_channels, channels[0], 3, 1, 1)]
+        for i in range(len(channels) - 1):
+            in_channels = channels[i]
+            out_channels = channels[i + 1]
+
+            down_factor = 1
+            if i != len(channels) - 2:
+                down_factor = 2
+
+            layers.append(
+                ResidualAttnGroup(
+                    in_channels,
+                    out_channels,
+                    num_res_blocks=num_res_blocks,
+                    resolution=resolution,
+                    attn_resolutions=attn_resolutions,
+                    skip_attn=skip_attn,
+                    downsample=True if down_factor > 1 else False,
+                    use_checkpoint=use_checkpoint,
+                )
+            )
+            resolution //= down_factor
+
+        layers.append(ResidualBlock(channels[-1], channels[-1]))
+        if not skip_attn:
+            layers.append(NonLocalBlock(channels[-1]))
+        layers.append(ResidualBlock(channels[-1], channels[-1]))
+        layers.append(GroupNorm(channels[-1]))
+        layers.append(Swish())
+        layers.append(nn.Conv3d(channels[-1], latent_dim, 3, 1, 1))
+        self.model = nn.Sequential(*layers)
+
+    def forward(self, x):
+        if self.use_checkpoint:
+            out = checkpoint.checkpoint_sequential(self.model, len(self.model), x, use_reentrant=False)
+        else:
+            out = self.model(x)
+        return out
+
+
+class DecoderV3(nn.Module):
     def __init__(
         self,
         image_channels=1,
@@ -220,7 +311,7 @@ class DecoderV2(nn.Module):
         skip_attn=False,
         use_checkpoint=False,
     ):
-        super(DecoderV2, self).__init__()
+        super(DecoderV3, self).__init__()
         self.use_checkpoint = use_checkpoint
         layers = [nn.Conv3d(latent_dim, channels[0], 3, 1, 1)]
         layers.append(ResidualBlock(channels[0], channels[0]))
@@ -243,12 +334,9 @@ class DecoderV2(nn.Module):
                         skip_act=True,
                     )
                 )
-                groups = 32 if out_channels % 32 == 0 else out_channels
-                # layers.append(ResidualBlock(in_channels, in_channels, num_groups=groups))
                 resolution *= 2
             else:
                 layers.append(nn.Conv3d(in_channels, in_channels, 3, 1, 1))
-            ###
 
             for j in range(num_res_blocks - 1):
                 if resolution in attn_resolutions and not skip_attn:
@@ -360,33 +448,38 @@ if __name__ == '__main__':
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
+    # print("Flash Attention:", torch.backends.cuda.flash_sdp_enabled())
+    print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
+
     patch_size = 64
-    latent_dim = 512
-    channels = [64, 64, 256, 512, 512]
-    num_res_blocks = 2
+    latent_dim = 768
+    channels_enc = [64, 64, 256, 512, 512]
+    channels_dec = [512, 512, 256, 64, 64]
+    num_res_blocks_enc = 2
+    num_res_blocks_dec = 4
     attn_resolutions = (16,)
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size).to(device)
 
-    encoder = EncoderV2(
+    encoder = EncoderV3(
         image_channels=1,
         latent_dim=latent_dim,
-        num_res_blocks=num_res_blocks,
+        num_res_blocks=num_res_blocks_enc,
         resolution=patch_size,
         attn_resolutions=attn_resolutions,
-        channels=channels,
+        channels=channels_enc,
         skip_attn=False,
         use_checkpoint=True,
     ).to(device)
 
-    down_factor = 2 ** (len(channels) - 2)
-    decoder = DecoderV2(
+    down_factor = 2 ** (len(channels_enc) - 2)
+    decoder = DecoderV3(
         image_channels=1,
         latent_dim=latent_dim,
-        num_res_blocks=num_res_blocks,
+        num_res_blocks=num_res_blocks_dec,
         resolution=patch_size // down_factor,
         attn_resolutions=attn_resolutions,
-        channels=channels[::-1],
+        channels=channels_dec,
         skip_attn=False,
         use_checkpoint=True,
     ).to(device)

@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVAE3D                  # Default model config
+  - model_opt: RQVAE3D_8x_shuffle_64                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -12,6 +12,8 @@ vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile
 run_profile: false
+compile: true # Enable PyTorch 2.0 compilation
+compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
 wandb_mode: offline

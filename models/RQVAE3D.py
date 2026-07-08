@@ -8,8 +8,8 @@ from torch.nn import functional as F
 
 # from models.VQGAN3D import Encoder, Decoder
 # from models.basic_vae import Encoder, Decoder
-from models.basic_vae import EncoderV2 as Encoder
-from models.basic_vae import DecoderV2 as Decoder
+from models.basic_vae import EncoderV3 as Encoder
+from models.basic_vae import DecoderV3 as Decoder
 from utils.utils_3D_image import numel
 
 class VQEmbedding(nn.Embedding):
@@ -341,13 +341,15 @@ class RQVAE3D(nn.Module):
     def __init__(
         self,
         in_channels=1,
-        latent_dim=256,
-        quant_embed_dim=256,  #
-        n_embed=1024,
-        n_rq_depth=4,
+        latent_dim=512,
+        quant_embed_dim=512,  #
+        n_embed=4096,
+        n_rq_depth=8,
         resolution=64,
-        num_res_blocks=2,
-        channels=[256, 128, 64, 64],
+        num_res_blocks_enc=2,
+        num_res_blocks_dec=2,
+        channels_enc=[64, 64, 256, 512, 512],
+        channels_dec=[512, 512, 256, 64, 64],
         decay=0.99,
         shared_codebook=False,
         restart_unused_codes=True,
@@ -359,15 +361,15 @@ class RQVAE3D(nn.Module):
         self.n_rq_depth = n_rq_depth
         self.use_checkpoint = use_checkpoint
 
-        down_factor = 2**(len(channels) - 2)
+        down_factor = 2**(len(channels_enc) - 2)
 
         self.encoder = Encoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
-            num_res_blocks=num_res_blocks,
+            num_res_blocks=num_res_blocks_enc,
             resolution=resolution,
             attn_resolutions=attn_resolutions,
-            channels=channels,
+            channels=channels_enc,
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
         )
@@ -384,10 +386,10 @@ class RQVAE3D(nn.Module):
         self.decoder = Decoder(
             image_channels=in_channels,
             latent_dim=latent_dim,
-            num_res_blocks=num_res_blocks,
+            num_res_blocks=num_res_blocks_dec,
             resolution=resolution // down_factor,
             attn_resolutions=attn_resolutions,
-            channels=channels[::-1],
+            channels=channels_dec,
             skip_attn=skip_attn,
             use_checkpoint=use_checkpoint,
         )
@@ -585,20 +587,25 @@ if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10**9 if torch.cuda.is_available() else 0
 
-    patch_size = 128
+    patch_size = 64
 
     # channels = [64, 64, 128, 256, 512]
-    channels = [64, 64, 256, 512, 512]
+    latent_dim = 768
+    quant_embed_dim = 768
+    channels_enc = [64, 64, 256, 512, 512]
+    channels_dec = [512, 512, 256, 64, 64]
 
     model = RQVAE3D(
         in_channels=1,
-        latent_dim=channels[-1],
-        channels=channels,
-        quant_embed_dim=channels[-1],
+        latent_dim=latent_dim,
+        channels_enc=channels_enc,
+        channels_dec=channels_dec,
+        quant_embed_dim=quant_embed_dim,
         n_embed=4096,
         n_rq_depth=8,
         resolution=patch_size,
-        num_res_blocks=2,
+        num_res_blocks_enc=2,
+        num_res_blocks_dec=4,
         skip_attn=True,
         use_checkpoint=True,
     ).to(device)
@@ -608,7 +615,7 @@ if __name__ == '__main__':
     model.train()
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
-    x_hat, loss, codes, z_e = model(x)
+    x_hat, loss, codes, z_e, frac_unique = model(x)
 
     print(f"Input: {x.shape}")
     print(f"Output: {x_hat.shape}")

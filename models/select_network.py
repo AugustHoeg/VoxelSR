@@ -101,12 +101,14 @@ def define_G(opt, mode='train'):
         from models.RQVAE3D import RQVAE3D as net
         netG = net(in_channels=opt_net['in_channels'],
                    latent_dim=opt_net['latent_dim'],
-                   channels=opt_net['channels'],
+                   channels_enc=opt_net['channels_enc'],
+                   channels_dec=opt_net['channels_dec'],
                    quant_embed_dim=opt_net['quant_embed_dim'],  #
                    n_embed=opt_net['num_embeddings'],
                    n_rq_depth=opt_net['n_rq_depth'],
                    resolution=opt['dataset_opt']['patch_size_hr'],
-                   num_res_blocks=opt_net['num_res_blocks'],
+                   num_res_blocks_enc=opt_net['num_res_blocks_enc'],
+                   num_res_blocks_dec=opt_net['num_res_blocks_dec'],
                    decay=opt_net['decay'],
                    shared_codebook=opt_net['shared_codebook'],
                    restart_unused_codes=opt_net['restart_unused_codes'],
