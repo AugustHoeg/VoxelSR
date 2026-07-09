@@ -208,13 +208,13 @@ class ModelDualVQGAN(ModelBase):
         self.vae_in = self.L  # kept for compatibility with inherited validation logging
 
     def vq_forward(self):
-        self.E, self.vq_loss, self.codes, self.z_e_down = self.netG(self.L)
+        self.E, self.vq_loss, self.codes, self.z_e_down, self.frac_unique = self.netG(self.L)
 
     def vq_forward_star(self):
-        self.E_star, self.vq_loss_star, self.codes_star, self.z_e_star = self.netG(self.L_star, star_mode=True)
+        self.E_star, self.vq_loss_star, self.codes_star, self.z_e_star, self.frac_unique_star = self.netG(self.L_star, star_mode=True)
 
     def netG_forward(self):
-        self.E, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
+        self.E, _, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
         
     def netD_forward(self, input):
         return self.netD(input)
@@ -491,6 +491,15 @@ class ModelDualVQGAN(ModelBase):
         for depth_idx, rate in enumerate(self.match_rate_per_depth):
             self.run.log({"step": current_step, f"code_agreement_rate_depth{depth_idx}": rate.item()})
 
+        table = wandb.Table(
+            data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique)],
+            columns=["depth", "frac_unique"],
+        )
+        self.run.log({
+            "step": current_step,
+            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per RQ Depth"),
+        })
+
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
 
@@ -525,17 +534,18 @@ class ModelDualVQGAN(ModelBase):
         return out_dict
 
     def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):
+        unnorm = self.opt['dataset_opt']['norm_type'] == 'znormalization'
         slice_idx = img_dict['L'].shape[-1] // 2
         E_slice = img_dict['E'][:, :, :, slice_idx]
+        L_slice = img_dict['L'][:, :, :, slice_idx]
         E_star_slice = img_dict['E_star'][:, :, :, slice_idx]
         L_star_slice = img_dict['L_star'][:, :, :, slice_idx]
-        L_slice = img_dict['L'][:, :, :, slice_idx]
 
         row = torch.stack([E_slice, L_slice, E_star_slice, L_star_slice])
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)
-        grid_image = utils_3D_image.unnorm_and_rescale(grid, out_dtype)
+        grid_image = utils_3D_image.unnorm_and_rescale(grid, out_dtype, unnorm=unnorm)
 
-        # Down recon, Down, REG recon, REG
+        # Down VQ recon | Down | REG VQ recon | REG
         figure_string = "%s: step %d" % (self.opt["model_opt"]["model_architecture"], current_step)
 
         if self.opt['run_type'] == "HOME PC":

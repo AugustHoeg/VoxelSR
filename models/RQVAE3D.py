@@ -212,7 +212,7 @@ class RQBottleneck3D(nn.Module):
             aggregated.add_(quant)  #
             quant_list.append(aggregated.clone())
             code_list.append(code.unsqueeze(-1))
-            frac_unique_list.append(code.unique().numel() / codebook.n_embed)
+            frac_unique_list.append(torch.bincount(code.reshape(-1), minlength=codebook.n_embed).count_nonzero() / codebook.n_embed)
 
         codes = torch.cat(code_list, dim=-1)
         return quant_list, codes, frac_unique_list
@@ -466,16 +466,19 @@ class DualRQVAE3D(RQVAE3D):
     """
 
     def __init__(self, in_channels=1, latent_dim=256, latent_dim_star=256,
-                 quant_embed_dim=256, n_embed=1024, n_rq_depth=4, resolution=64, num_res_blocks=2,
-                 num_res_blocks_star=2, channels=[64, 64, 128 ,256],
-                 channels_star=[64, 64, 128, 256], decay=0.99, shared_codebook=False,
-                 restart_unused_codes=True, skip_attn=False, use_checkpoint=False):
+                 quant_embed_dim=256, n_embed=1024, n_rq_depth=4, resolution=64,
+                 channels_enc=[64, 64, 128 ,256], num_res_blocks_enc=2, 
+                 channels_dec=[256, 128, 64, 64], num_res_blocks_dec=2, 
+                 channels_star=[64, 64, 128, 256], num_res_blocks_star=2, decay=0.99,                 
+                 shared_codebook=False, restart_unused_codes=True, skip_attn=False, use_checkpoint=False):
         super().__init__(
             in_channels=in_channels, latent_dim=latent_dim,
             quant_embed_dim=quant_embed_dim, n_embed=n_embed,
             n_rq_depth=n_rq_depth, resolution=resolution,
-            num_res_blocks=num_res_blocks,
-            channels=channels,
+            num_res_blocks_enc=num_res_blocks_enc,
+            num_res_blocks_dec=num_res_blocks_dec,
+            channels_enc=channels_enc,
+            channels_dec=channels_dec,
             decay=decay,
             shared_codebook=shared_codebook,
             restart_unused_codes=restart_unused_codes,
@@ -624,5 +627,42 @@ if __name__ == '__main__':
 
     max_memory_reserved = torch.cuda.max_memory_reserved()
     print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10**9, total_gpu_mem))
+
+    latent_dim = 256
+    quant_embed_dim = 256
+    channels_enc = [64, 64, 128, 256]
+    channels_dec = [256, 128, 64, 64]
+    channels_star = [64, 64, 128, 256]
+
+    model = DualRQVAE3D(
+        in_channels=1,
+        latent_dim=latent_dim,
+        channels_enc=channels_enc,
+        channels_dec=channels_dec,
+        channels_star=channels_star,
+        quant_embed_dim=quant_embed_dim,
+        n_embed=2048,
+        n_rq_depth=4,
+        resolution=patch_size,
+        num_res_blocks_enc=2,
+        num_res_blocks_dec=4,
+        num_res_blocks_star=8,
+        skip_attn=True,
+        use_checkpoint=True,
+    ).to(device)
+
+    print("Number of parameters, G", numel(model, only_trainable=True))
+
+    model.train()
+
+    patch_size_lr = 32
+    x_lr = torch.randn(1, 1, patch_size_lr, patch_size_lr, patch_size_lr, device=device)
+
+    x_hat, loss, codes, z_e, frac_unique = model(x_lr)
+
+    print(f"Input: {x_lr.shape}")
+    print(f"Output: {x_hat.shape}")
+    print(f"Codes: {codes.shape} (spatial * n_rq_depth)")
+    print(f"Commitment loss:  {loss.item():.4f}")
 
     print("Done")

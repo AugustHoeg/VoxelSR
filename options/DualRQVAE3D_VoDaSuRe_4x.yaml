@@ -16,9 +16,9 @@ run_profile: false
 # WandB parameters
 wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${vae_target}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_Dual_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001_align_0p05_v2
+run_name: ${model_opt.model_architecture}_001_align_0p05_v2_x4_shuffle
 note: Note
 
 # GPU configuration
@@ -38,19 +38,21 @@ path:
 # Overwrite default training parameters
 train_opt:
   iterations: 100000
-  validation_iterations: 500
-  checkpoint_test: 2500
+  validation_iterations: 50
+  checkpoint_test: 1000
   checkpoint_save: 20000
-  checkpoint_print: 2500
-  checkpoint_save_visuals: 2500
+  checkpoint_print: 1000
+  checkpoint_save_visuals: 1000
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
+  G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
-  G_warmup_steps: 0  # new
 
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
+
+  manual_seed: 8800 # 8400
 
   lambda_recon: 0  # Weight for reconstruction loss (same as for main loss)
   lambda_feat: 0  # Weight for feature loss of decoded E* features through E
@@ -65,8 +67,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 16
+    dataloader_batch_size: 32
+    num_load_workers: 20
     persist_workers: true
     pin_memory: false
 

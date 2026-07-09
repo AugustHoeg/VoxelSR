@@ -133,7 +133,7 @@ class ModelVQVAE(ModelBase):
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
 
         table = wandb.Table(
-            data=[[d, frac] for d, frac in enumerate(self.frac_unique)],
+            data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique)],
             columns=["depth", "frac_unique"],
         )
         self.run.log({

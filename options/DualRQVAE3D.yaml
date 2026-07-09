@@ -12,6 +12,8 @@ vae_target: LR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile
 run_profile: false
+compile: false # Enable PyTorch 2.0 compilation
+compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
 wandb_mode: offline
@@ -39,10 +41,10 @@ path:
 train_opt:
   iterations: 1000
   validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  checkpoint_test: 100
+  checkpoint_save: 100
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
