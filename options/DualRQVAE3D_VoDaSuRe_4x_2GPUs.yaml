@@ -23,8 +23,8 @@ note: Note
 
 # GPU configuration
 train_mode: "scratch"   # "scratch", "finetune" or "resume"
-gpu_ids: [0]
-dist: false
+gpu_ids: [0, 1]
+dist: true
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
@@ -67,8 +67,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 32
-    num_load_workers: 20
+    dataloader_batch_size: 16
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
