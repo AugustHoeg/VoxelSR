@@ -488,8 +488,6 @@ class ModelDualVQGAN(ModelBase):
         self.run.log({"step": current_step, "star_train_grad_norm": star_grad_norm})
 
         self.run.log({"step": current_step, "code_agreement_rate": self.match_rate.item()})
-        for depth_idx, rate in enumerate(self.match_rate_per_depth):
-            self.run.log({"step": current_step, f"code_agreement_rate_depth{depth_idx}": rate.item()})
 
         table = wandb.Table(
             data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique)],
