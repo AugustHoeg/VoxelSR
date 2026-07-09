@@ -67,7 +67,8 @@ class ModelMaskRQVSRT(ModelBase):
     def _load_vq_model(self, eid):
         opt_path = load_options_from_experiment_id(eid, root_dir="", file_type="yaml")
         opt_vq = OmegaConf.load(opt_path)
-        opt_vq['dist'] = False
+        opt_vq['dist'] = False  # Disable DDP on VQ
+        opt_vq['compile'] = False  # Disable overarching compile on VQ
 
         net = define_Model(opt_vq, mode='test', data_parallel=False)
         net.load(eid, mode='test')
@@ -83,6 +84,8 @@ class ModelMaskRQVSRT(ModelBase):
         )
         eid = self.opt["path"]["pretrained_hr_vqmodel_id"]
         self.vq_model_hr = self._load_vq_model(eid)
+        self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
+        self.vq_model_hr.decode_code = torch.compile(self.vq_model_hr.decode_code, mode="max-autotune-no-cudagraphs")
 
         assert self.num_embeddings == self.vq_model_hr.quantizer.codebooks[0].n_embed, (
             f"num_embeddings mismatch: transformer has {self.num_embeddings}, "
@@ -114,7 +117,7 @@ class ModelMaskRQVSRT(ModelBase):
         """
         z_e = vq_model.encode(x)
         latent_shape = tuple(z_e.shape[2:])
-        _, _, codes, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
+        _, _, codes, _, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
         return codes, z_e, latent_shape
 
     def _flatten_lr_embeddings(self, z_lr: torch.Tensor) -> torch.Tensor:
@@ -249,7 +252,7 @@ class ModelMaskRQVSRT(ModelBase):
     # Inference: iterative masked decoding over the 2D (L, D) grid
     # ----------------------------------------
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def sample_E(self, z_lr: torch.Tensor, n_steps: int = 12,
                  temperature: float = 1.0) -> torch.Tensor:
         """Generate volumes via 2D iterative masked token prediction.
@@ -310,7 +313,7 @@ class ModelMaskRQVSRT(ModelBase):
         codes = codes.clamp(0, self.num_embeddings - 1)
         return self.vq_model_hr.decode_code(codes)
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def sample_E_coarse_to_fine(self, z_lr: torch.Tensor, n_steps: int = 12,
                                  temperature: float = 1.0) -> torch.Tensor:
         """Generate volumes with explicit depth-ordered iterative decoding.
