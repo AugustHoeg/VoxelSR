@@ -1,0 +1,93 @@
+defaults:
+  - train_opt: train_VoDaSuRe          # Default training config
+  - dataset_opt: VoDaSuRe_OME          # Default dataset config
+  - model_opt: DualRQVAE3D                  # Default model config
+  - _self_  # Ensure compliance with Hydra 1.1
+
+# Main configuration
+task: superresolution
+input_type: 3D # Input type, 2D or 3D
+up_factor: 4  # upscaling factor
+vae_target: LR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
+
+# Profile
+run_profile: false
+
+# WandB parameters
+wandb_mode: online
+wandb_entity: null
+wandb_project: ${dataset_opt.name}_Dual_${vae_target}_${up_factor}x # <--- change project
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
+run_name: ${model_opt.model_architecture}_001_align_0p05_v2_x4_shuffle
+note: Note
+
+# GPU configuration
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
+gpu_ids: [0]
+dist: false
+cluster: DTU_HPC # DTU_HPC or TITANS
+
+save_model: true  # flag to save model
+save_time: 36  # Backup save of model after 35 hours
+
+path:
+  root: superresolution
+  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_netE: null
+
+# Overwrite default training parameters
+train_opt:
+  iterations: 100000
+  validation_iterations: 50
+  checkpoint_test: 1000
+  checkpoint_save: 20000
+  checkpoint_print: 1000
+  checkpoint_save_visuals: 1000
+  num_accum_steps_G: 1
+  G_optimizer_lr: 2e-4
+  G_optimizer_wd: 0
+  G_optimizer_clipgrad: 10
+
+  G_loss_weights:
+    L1: 1.0
+    LPIPS: 0.01
+
+  manual_seed: 8800 # 8400
+
+  lambda_recon: 0  # Weight for reconstruction loss (same as for main loss)
+  lambda_feat: 0  # Weight for feature loss of decoded E* features through E
+  lambda_distill: 0  # Weight for feature distillation loss between E* and E outputs
+  lambda_align: 0.05  # Weight code alignment loss
+
+# Overwrite default dataset parameters
+dataset_opt:
+  synthetic: true
+  patch_size: 32
+
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+
+  train_dataloader_params:
+    dataloader_batch_size: 32
+    num_load_workers: 20
+    persist_workers: true
+    pin_memory: false
+
+  test_dataloader_params:
+    dataloader_batch_size: 4
+    num_load_workers: 4
+    persist_workers: true
+    pin_memory: false
+
+# Hydra configuration
+hydra:
+  run:
+    dir: .  # Prevents Hydra from changing the working directory
+  job:
+    chdir: False  # Prevents changing working directory
+  output_subdir: null  # Prevents automatic output directory creation
+  sweep:
+    dir: .  # Keeps sweep results in the current directory
+  job_logging:
+    disable_existing_loggers: False  # Allows you to control logging manually
+
+#config_path: ${hydra:runtime.config_sources}
