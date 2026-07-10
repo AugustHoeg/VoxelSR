@@ -30,7 +30,7 @@ dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
-save_time: 35  # Backup save of model after 35 hours
+save_time: 46  # Backup save of model after 35 hours
 
 path:
   root: superresolution
