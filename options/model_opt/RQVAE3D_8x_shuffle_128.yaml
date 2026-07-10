@@ -14,7 +14,7 @@ netG:
   num_embeddings: 4096
 
   n_rq_depth: 8 # number of residual quantization steps
-  decay: 0.99  # EMA decay for codebook updates
+  decay: 0.999  # EMA decay for codebook updates (increased from 0.99 to 0.999 for better finetuning stability)
   shared_codebook: false  # share one codebook across all RQ depths
   restart_unused_codes: true
   attn_resolutions: [16]
