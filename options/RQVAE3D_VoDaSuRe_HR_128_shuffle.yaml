@@ -20,7 +20,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_8x_shuffle_128
+run_name: ${model_opt.model_architecture}_000_8x_shuffle_128_finetune
 note: Note
 
 # GPU configuration
@@ -30,33 +30,34 @@ dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
-save_time: 36  # Backup save of model after 35 hours
+save_time: 35  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000024  #
+  pretrained_experiment_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000032  #
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 20000
+  iterations: 10000
   validation_iterations: 50
   checkpoint_test: 1000
   checkpoint_save: 5000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
-  num_accum_steps_G: 3
-  G_optimizer_lr: 2e-4
+  num_accum_steps_G: 4
+  G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
 
+  G_warmup_steps: 1000
   G_param_strict: false  # use non-strict as NonLocalblocks have different sequence lengths at 128
 
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
 
-  manual_seed: 8400 # 8400
+  manual_seed: 8900 # 8800, 8400
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -67,7 +68,7 @@ dataset_opt:
 
   train_dataloader_params:
     dataloader_batch_size: 4
-    num_load_workers: 8
+    num_load_workers: 12
     persist_workers: true
     pin_memory: false
 
