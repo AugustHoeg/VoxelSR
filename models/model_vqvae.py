@@ -129,7 +129,7 @@ class ModelVQVAE(ModelBase):
         loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": loss})
 
-        grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
 
         table = wandb.Table(

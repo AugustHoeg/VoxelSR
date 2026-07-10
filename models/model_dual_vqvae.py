@@ -380,10 +380,10 @@ class ModelDualVQVAE(ModelBase):
         star_loss = self.star_train_loss.item() * self.num_accum_steps_star
         self.run.log({"step": current_step, "star_train_loss": star_loss})
 
-        grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
 
-        star_grad_norm = self.star_train_grad_norm.item() * self.num_accum_steps_star
+        star_grad_norm = self.star_train_grad_norm.item()
         self.run.log({"step": current_step, "star_train_grad_norm": star_grad_norm})
 
         self.run.log({"step": current_step, "code_agreement_rate": self.match_rate.item()})

@@ -475,16 +475,16 @@ class ModelDualVQGAN(ModelBase):
         D_loss = self.D_train_loss.item() * self.num_accum_steps_D
         self.run.log({"step": current_step, "D_train_loss": D_loss})
 
-        G_grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        G_grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": G_grad_norm})
 
-        D_grad_norm = self.D_train_grad_norm.item() * self.num_accum_steps_D
+        D_grad_norm = self.D_train_grad_norm.item()
         self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
         star_loss = self.star_train_loss.item() * self.num_accum_steps_star
         self.run.log({"step": current_step, "star_train_loss": star_loss})
 
-        star_grad_norm = self.star_train_grad_norm.item() * self.num_accum_steps_star
+        star_grad_norm = self.star_train_grad_norm.item()
         self.run.log({"step": current_step, "star_train_grad_norm": star_grad_norm})
 
         self.run.log({"step": current_step, "code_agreement_rate": self.match_rate.item()})

@@ -318,10 +318,10 @@ class ModelRaGAN(ModelBase):
         D_loss = self.D_train_loss.item() * self.num_accum_steps_D
         self.run.log({"step": current_step, "D_train_loss": D_loss})
 
-        G_grad_norm = self.G_train_grad_norm.item() * self.num_accum_steps_G
+        G_grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": G_grad_norm})
 
-        D_grad_norm = self.D_train_grad_norm.item() * self.num_accum_steps_D
+        D_grad_norm = self.D_train_grad_norm.item()
         self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
         if self.opt_train['E_decay'] > 0:
