@@ -457,7 +457,7 @@ class ModelMaskRQVSRT(ModelBase):
 
         z_lr = self._flatten_lr_embeddings(z_lr)       # (B, N_lr, C)
 
-        masked_codes, mask = self._mask_tokens_coarse_to_fine(codes)   # (B,dz,dy,dx,D), (B,L,D)
+        masked_codes, mask = self._mask_tokens_rq(codes)   # (B,dz,dy,dx,D), (B,L,D)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
@@ -505,7 +505,7 @@ class ModelMaskRQVSRT(ModelBase):
 
         z_lr = self._flatten_lr_embeddings(z_lr)       # (B, N_lr, C)
 
-        masked_codes, mask = self._mask_tokens_coarse_to_fine(codes)   # (B,dz,dy,dx,D), (B,L,D)
+        masked_codes, mask = self._mask_tokens_rq(codes)   # (B,dz,dy,dx,D), (B,L,D)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
 
         logits = self.netG(masked_codes, z_lr)         # list[D × (B, L, V)]
@@ -551,7 +551,7 @@ class ModelMaskRQVSRT(ModelBase):
 
         z_lr = self._flatten_lr_embeddings(z_lr)
 
-        masked_codes, mask = self._mask_tokens_coarse_to_fine(codes)
+        masked_codes, mask = self._mask_tokens_rq(codes)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
 
         logits = self.netG(masked_codes, z_lr)
@@ -567,7 +567,7 @@ class ModelMaskRQVSRT(ModelBase):
 
         z_lr = self._flatten_lr_embeddings(z_lr)
 
-        masked_codes, mask = self._mask_tokens_coarse_to_fine(codes)
+        masked_codes, mask = self._mask_tokens_rq(codes)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
