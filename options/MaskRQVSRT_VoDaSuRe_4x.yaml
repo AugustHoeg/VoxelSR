@@ -13,11 +13,11 @@ up_factor: 4  # upscaling factor
 run_profile: false
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_RQVSRT_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000
+run_name: ${model_opt.model_architecture}_000_uncond
 note: Note
 
 # GPU configuration
@@ -39,10 +39,10 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 10000
-  validation_iterations: 500
+  iterations: 100000
+  validation_iterations: 50
   checkpoint_test: 1000
-  checkpoint_save: 1000
+  checkpoint_save: 20000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
   num_accum_steps_G: 1
@@ -58,7 +58,7 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
+    dataloader_batch_size: 32
     num_load_workers: 24
     persist_workers: true
     pin_memory: false
