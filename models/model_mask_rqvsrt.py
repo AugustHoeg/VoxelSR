@@ -44,11 +44,15 @@ class ModelMaskRQVSRT(ModelBase):
         # Controls how much extra masking deeper RQ depths receive (0 = uniform, 1 = depth D-1 always fully masked)
         self.depth_mask_scale = opt['model_opt']['netG'].get('depth_mask_scale', 0.25)
 
+        # Unconditional generation: no LR VQ model, no LR encoding, transformer sees lr_tokens=None
+        self.unconditional = opt['model_opt']['netG'].get('lr_seq_len', None) is None
+
         self.mask_token_id = self.num_embeddings  # reuses the +1 tok_emb slot (never a prediction target)
 
         self.vq_model_hr = None
         self.vq_model_lr = None
         self.latent_shape_hr = None
+        self.latent_shape_lr = None
 
         self.update = False
         self.early_stop = False
@@ -93,6 +97,8 @@ class ModelMaskRQVSRT(ModelBase):
         )
 
     def load_lr_vq_model(self):
+        if self.unconditional:
+            return
         assert "pretrained_lr_vqmodel_id" in self.opt["path"], (
             "Must specify pretrained_lr_vqmodel_id in path for ModelMaskRQVSRT."
         )
@@ -253,17 +259,19 @@ class ModelMaskRQVSRT(ModelBase):
     # ----------------------------------------
 
     @torch.inference_mode()
-    def sample_E(self, z_lr: torch.Tensor, n_steps: int = 12,
-                 temperature: float = 1.0) -> torch.Tensor:
+    def sample_E(self, z_lr: torch.Tensor = None, n_steps: int = 12,
+                 temperature: float = 1.0, batch_size: int = None) -> torch.Tensor:
         """Generate volumes via 2D iterative masked token prediction.
 
         At each of n_steps iterations the transformer predicts all (L×D) tokens
         and the t most confident currently-masked tokens are revealed.
 
         Args:
-            z_lr:        (B, N_lr, C) flattened LR encoder embeddings
+            z_lr:        (B, N_lr, C) flattened LR encoder embeddings, or None
+                         for unconditional generation
             n_steps:     refinement iterations
             temperature: softmax temperature (lower = sharper predictions)
+            batch_size:  required when z_lr is None; ignored otherwise
         Returns:
             x_sampled: (B, C, D, H, W) reconstructed HR volume
         """
@@ -271,7 +279,11 @@ class ModelMaskRQVSRT(ModelBase):
         dz, dy, dx = self.latent_shape_hr
         L = dz * dy * dx
         D = self.n_rq_depth
-        B = z_lr.shape[0]
+        if z_lr is not None:
+            B = z_lr.shape[0]
+        else:
+            assert batch_size is not None, "batch_size must be provided when z_lr is None."
+            B = batch_size
 
         # Start fully masked
         codes = torch.full((B, dz, dy, dx, D), self.mask_token_id, dtype=torch.long, device=self.device)
@@ -314,8 +326,8 @@ class ModelMaskRQVSRT(ModelBase):
         return self.vq_model_hr.decode_code(codes)
 
     @torch.inference_mode()
-    def sample_E_coarse_to_fine(self, z_lr: torch.Tensor, n_steps: int = 12,
-                                 temperature: float = 1.0) -> torch.Tensor:
+    def sample_E_coarse_to_fine(self, z_lr: torch.Tensor = None, n_steps: int = 12,
+                                 temperature: float = 1.0, batch_size: int = None) -> torch.Tensor:
         """Generate volumes with explicit depth-ordered iterative decoding.
 
         n_steps are divided evenly across D depths.  Within each depth's
@@ -324,9 +336,11 @@ class ModelMaskRQVSRT(ModelBase):
         begin, matching the training distribution of _mask_tokens_coarse_to_fine.
 
         Args:
-            z_lr:        (B, N_lr, C) flattened LR encoder embeddings
+            z_lr:        (B, N_lr, C) flattened LR encoder embeddings, or None
+                         for unconditional generation
             n_steps:     total refinement iterations (split evenly across D depths)
             temperature: softmax temperature
+            batch_size:  required when z_lr is None; ignored otherwise
         Returns:
             x_sampled: (B, C, D, H, W) reconstructed HR volume
         """
@@ -334,7 +348,11 @@ class ModelMaskRQVSRT(ModelBase):
         dz, dy, dx = self.latent_shape_hr
         L = dz * dy * dx
         D = self.n_rq_depth
-        B = z_lr.shape[0]
+        if z_lr is not None:
+            B = z_lr.shape[0]
+        else:
+            assert batch_size is not None, "batch_size must be provided when z_lr is None."
+            B = batch_size
 
         codes = torch.full((B, dz, dy, dx, D), self.mask_token_id, dtype=torch.long, device=self.device)
         mask = torch.ones(B, L, D, dtype=torch.bool, device=self.device)
@@ -446,16 +464,21 @@ class ModelMaskRQVSRT(ModelBase):
 
     def feed_data(self, data):
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
-        self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
+        if self.unconditional:
+            self.L = None
+        else:
+            self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
 
     def optimize_parameters_amp(self, current_step, update=False):
         codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
-        if self.latent_shape_lr != self.latent_shape_hr:
-            z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-
-        z_lr = self._flatten_lr_embeddings(z_lr)       # (B, N_lr, C)
+        if self.unconditional:
+            z_lr = None
+        else:
+            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            if self.latent_shape_lr != self.latent_shape_hr:
+                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
+            z_lr = self._flatten_lr_embeddings(z_lr)   # (B, N_lr, C)
 
         masked_codes, mask = self._mask_tokens_rq(codes)   # (B,dz,dy,dx,D), (B,L,D)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
@@ -498,12 +521,14 @@ class ModelMaskRQVSRT(ModelBase):
 
     def optimize_parameters(self, current_step, update=False):
         codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
-        if self.latent_shape_lr != self.latent_shape_hr:
-            z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-
-        z_lr = self._flatten_lr_embeddings(z_lr)       # (B, N_lr, C)
+        if self.unconditional:
+            z_lr = None
+        else:
+            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            if self.latent_shape_lr != self.latent_shape_hr:
+                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
+            z_lr = self._flatten_lr_embeddings(z_lr)   # (B, N_lr, C)
 
         masked_codes, mask = self._mask_tokens_rq(codes)   # (B,dz,dy,dx,D), (B,L,D)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
@@ -544,12 +569,14 @@ class ModelMaskRQVSRT(ModelBase):
 
     def validation(self):
         codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
-        if self.latent_shape_lr != self.latent_shape_hr:
-            z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-
-        z_lr = self._flatten_lr_embeddings(z_lr)
+        if self.unconditional:
+            z_lr = None
+        else:
+            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            if self.latent_shape_lr != self.latent_shape_hr:
+                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
+            z_lr = self._flatten_lr_embeddings(z_lr)
 
         masked_codes, mask = self._mask_tokens_rq(codes)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
@@ -560,12 +587,14 @@ class ModelMaskRQVSRT(ModelBase):
 
     def validation_amp(self):
         codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
-        if self.latent_shape_lr != self.latent_shape_hr:
-            z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-
-        z_lr = self._flatten_lr_embeddings(z_lr)
+        if self.unconditional:
+            z_lr = None
+        else:
+            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            if self.latent_shape_lr != self.latent_shape_hr:
+                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
+            z_lr = self._flatten_lr_embeddings(z_lr)
 
         masked_codes, mask = self._mask_tokens_rq(codes)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
@@ -589,15 +618,17 @@ class ModelMaskRQVSRT(ModelBase):
         out_dict = OrderedDict()
 
         codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
-        if self.latent_shape_lr != self.latent_shape_hr:
-            z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-
-        z_lr = self._flatten_lr_embeddings(z_lr)
+        if self.unconditional:
+            z_lr = None
+        else:
+            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            if self.latent_shape_lr != self.latent_shape_hr:
+                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
+            z_lr = self._flatten_lr_embeddings(z_lr)
 
         E_vq = self.vq_model_hr.decode_code(codes)
-        E = self.sample_E(z_lr)
+        E = self.sample_E(z_lr, batch_size=self.H.shape[0])
 
         out_dict['H'] = self.H.detach()[0].float().cpu()
         out_dict['E_vq'] = E_vq.detach()[0].float().cpu()
