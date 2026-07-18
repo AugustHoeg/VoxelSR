@@ -429,6 +429,17 @@ class ModelMaskRQVSRT(ModelBase):
     def define_visual_eval(self):
         pass
 
+    def center_crop_latents(self, latents, target_shape):
+
+        """Center crop latents to target shape (D, H, W)"""
+
+        dz, dy, dx = latents.shape[-3:]
+        td, th, tw = target_shape
+        start_d = (dz - td) // 2
+        start_h = (dy - th) // 2
+        start_w = (dx - tw) // 2
+        return latents[..., start_d:start_d + td, start_h:start_h + th, start_w:start_w + tw]
+
     # ----------------------------------------
     # Training
     # ----------------------------------------
@@ -439,7 +450,11 @@ class ModelMaskRQVSRT(ModelBase):
 
     def optimize_parameters_amp(self, current_step, update=False):
         codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        _, z_lr, _ = self.encode_to_indices(self.L, self.vq_model_lr)
+        _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+
+        if self.latent_shape_lr != self.latent_shape_hr:
+            z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
+
         z_lr = self._flatten_lr_embeddings(z_lr)       # (B, N_lr, C)
 
         masked_codes, mask = self._mask_tokens_coarse_to_fine(codes)   # (B,dz,dy,dx,D), (B,L,D)

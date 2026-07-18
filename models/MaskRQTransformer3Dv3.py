@@ -152,7 +152,7 @@ class WindowAttention3D(nn.Module):
         else:
             attn_bias = rel_bias
 
-        out = chunked_sdpa(
+        out = F.scaled_dot_product_attention(
             q, k, v, attn_mask=attn_bias,
             dropout_p=self.attn_drop if self.training else 0.,
         )
@@ -479,7 +479,7 @@ class MaskRQTransformer3Dv3(nn.Module):
             [self.tok_embs[d](codes[:, :, d]) for d in range(D)], dim=2
         )                                                                   # (B, L, D, E)
 
-        pos_emb   = self.pos_emb(torch.arange(L, device=codes.device))      # (L, E)
+        pos_emb = self.pos_emb(torch.arange(L, device=codes.device))      # (L, E)
         depth_emb = self.depth_emb(torch.arange(D, device=codes.device))    # (D, E)
 
         # Additive spatial and depth positional encodings, broadcast over the other axis
@@ -515,23 +515,23 @@ if __name__ == "__main__":
 
     hr_spatial = 16
     lr_spatial = 16
-    window_size = 8
+    window_size = 16
     L_hr = hr_spatial ** 3
     L_lr = lr_spatial ** 3
-    D = 4
-    n_embed = 512
+    D = 8
+    n_embed = 4096
     lr_embed_dim = 256
     use_checkpoint = True
 
     configs = {
-        "tiny":  dict(embed_dim=512, body_depth=3, head_depth=3, num_heads=4),
+        "tiny":  dict(embed_dim=512, body_depth=4, head_depth=4, num_heads=4),
         #"small": dict(embed_dim=384, body_depth=4, head_depth=4, num_heads=6),
         #"base":  dict(embed_dim=512, body_depth=6, head_depth=6, num_heads=8),
     }
 
     for name, cfg in configs.items():
-        L_lr = None
-        lr_embed_dim = None
+        #L_lr = None
+        #lr_embed_dim = None
 
         model = MaskRQTransformer3Dv3(
             seq_len=L_hr, n_rq_depth=D, n_embed=n_embed,
@@ -541,10 +541,9 @@ if __name__ == "__main__":
         param_count(f"MaskRQTransformer3Dv3-{name}", model)
 
         codes_5d = torch.randint(0, n_embed, (2, hr_spatial, hr_spatial, hr_spatial, D), device=device)
-        # lr_emb   = torch.randn(2, L_lr, lr_embed_dim, device=device)
+        lr_emb = torch.randn(2, L_lr, lr_embed_dim, device=device)
 
-        with torch.cuda.amp.autocast(dtype=torch.bfloat16):
-            logits = model(codes_5d, lr_tokens=None)
+        logits = model(codes_5d, lr_tokens=lr_emb)
 
     max_memory_reserved = torch.cuda.max_memory_reserved()
     print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10**9, total_gpu_mem))

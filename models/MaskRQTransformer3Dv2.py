@@ -424,24 +424,22 @@ if __name__ == "__main__":
     print("Mem Efficient  :", torch.backends.cuda.mem_efficient_sdp_enabled())
     # print("Math SDP       :", torch.backends.cuda.math_sdp_enabled())
 
-    hr_spatial = 16
-    lr_spatial = 16
+    hr_spatial = 8
+    lr_spatial = 8
     L_hr = hr_spatial ** 3
     L_lr = lr_spatial ** 3
-    D = 4
-    n_embed = 512
+    D = 8
+    n_embed = 4096
     lr_embed_dim = 256
     use_checkpoint = True
 
     configs = {
-        "tiny":  dict(embed_dim=256, body_depth=3,  head_depth=3, num_heads=4),
+        "tiny":  dict(embed_dim=768, body_depth=4, head_depth=4, num_heads=4),
         # "small": dict(embed_dim=384, body_depth=4,  head_depth=4, num_heads=6),
         # "base":  dict(embed_dim=512, body_depth=6, head_depth=6, num_heads=8),
     }
 
     for name, cfg in configs.items():
-        L_lr = None
-        lr_embed_dim = None
 
         model = MaskRQTransformer3Dv2(
             seq_len=L_hr, n_rq_depth=D, n_embed=n_embed,
@@ -450,10 +448,9 @@ if __name__ == "__main__":
         param_count(f"MaskRQTransformer3Dv2-{name}", model)
 
         codes_5d = torch.randint(0, n_embed, (2, hr_spatial, hr_spatial, hr_spatial, D), device=device)
-        # lr_emb = torch.randn(2, L_lr, lr_embed_dim, device=device)
+        lr_emb = torch.randn(2, L_lr, lr_embed_dim, device=device)
 
-        with torch.cuda.amp.autocast(dtype=torch.bfloat16):
-            logits = model(codes_5d, lr_tokens=None)
+        logits = model(codes_5d, lr_tokens=lr_emb)
 
     max_memory_reserved = torch.cuda.max_memory_reserved()
     print("Maximum memory reserved: %0.3f Gb / %0.3f Gb" % (max_memory_reserved / 10**9, total_gpu_mem))
