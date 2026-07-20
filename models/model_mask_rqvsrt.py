@@ -88,8 +88,8 @@ class ModelMaskRQVSRT(ModelBase):
         )
         eid = self.opt["path"]["pretrained_hr_vqmodel_id"]
         self.vq_model_hr = self._load_vq_model(eid)
-        self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
-        self.vq_model_hr.decode_code = torch.compile(self.vq_model_hr.decode_code, mode="max-autotune-no-cudagraphs")
+        #Todo #self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
+        #Todo self.vq_model_hr.decode_code = torch.compile(self.vq_model_hr.decode_code, mode="max-autotune-no-cudagraphs")
 
         assert self.num_embeddings == self.vq_model_hr.quantizer.codebooks[0].n_embed, (
             f"num_embeddings mismatch: transformer has {self.num_embeddings}, "
@@ -250,7 +250,7 @@ class ModelMaskRQVSRT(ModelBase):
 
         logits_flat  = logits_stack.reshape(B * L * D, V)
         targets_flat = codes_flat.reshape(B * L * D)
-        mask_flat    = mask.reshape(B * L * D)
+        mask_flat = mask.reshape(B * L * D)
 
         return F.cross_entropy(logits_flat[mask_flat], targets_flat[mask_flat])
 
@@ -470,12 +470,14 @@ class ModelMaskRQVSRT(ModelBase):
             self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
 
     def optimize_parameters_amp(self, current_step, update=False):
-        codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
 
         if self.unconditional:
             z_lr = None
         else:
-            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
             if self.latent_shape_lr != self.latent_shape_hr:
                 z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
             z_lr = self._flatten_lr_embeddings(z_lr)   # (B, N_lr, C)
@@ -586,12 +588,14 @@ class ModelMaskRQVSRT(ModelBase):
         self.G_valid_loss += self.gen_loss
 
     def validation_amp(self):
-        codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
 
         if self.unconditional:
             z_lr = None
         else:
-            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
             if self.latent_shape_lr != self.latent_shape_hr:
                 z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
             z_lr = self._flatten_lr_embeddings(z_lr)
@@ -617,18 +621,31 @@ class ModelMaskRQVSRT(ModelBase):
     def current_visuals(self):
         out_dict = OrderedDict()
 
-        codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-
+        if self.mixed_precision is not None:
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+        else:
+            codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+            
         if self.unconditional:
             z_lr = None
         else:
-            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            if self.mixed_precision is not None:
+                with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                    _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            else:
+                _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
             if self.latent_shape_lr != self.latent_shape_hr:
                 z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
             z_lr = self._flatten_lr_embeddings(z_lr)
 
-        E_vq = self.vq_model_hr.decode_code(codes)
-        E = self.sample_E(z_lr, batch_size=self.H.shape[0])
+        if self.mixed_precision is not None:
+            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+                E_vq = self.vq_model_hr.decode_code(codes)
+                E = self.sample_E(z_lr, batch_size=self.H.shape[0])
+        else:
+            E_vq = self.vq_model_hr.decode_code(codes)
+            E = self.sample_E(z_lr, batch_size=self.H.shape[0])
 
         out_dict['H'] = self.H.detach()[0].float().cpu()
         out_dict['E_vq'] = E_vq.detach()[0].float().cpu()

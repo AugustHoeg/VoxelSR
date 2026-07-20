@@ -251,7 +251,6 @@ class RQBottleneck3D(nn.Module):
 
     @torch.no_grad()
     def embed_code(self, code):
-        assert code.shape[1:] == self.code_shape
 
         code_slices = torch.chunk(code, chunks=code.shape[-1], dim=-1)
 

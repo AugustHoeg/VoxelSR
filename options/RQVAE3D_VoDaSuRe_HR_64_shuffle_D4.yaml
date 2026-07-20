@@ -1,15 +1,16 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: MaskRQTransformer3Dv2                  # Default model config
+  - model_opt: RQVAE3D_8x_shuffle_64_D4                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
 up_factor: 4  # upscaling factor
+vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
-# Profile
+# Profile & Compile
 run_profile: false
 compile: true # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
@@ -17,9 +18,9 @@ compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotu
 # WandB parameters
 wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_RQVSRT_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_uncond
+run_name: ${model_opt.model_architecture}_000_8x_shuffle_64
 note: Note
 
 # GPU configuration
@@ -29,28 +30,31 @@ dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
-save_time: 36  # Backup save of model after 35 hours
+save_time: 70  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null
+  pretrained_experiment_id: null  #
   pretrained_netE: null
-
-  pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000032
-  pretrained_lr_vqmodel_id: DualRQVAE3D_VoDaSuRe_4x_v2_VoDaSuRe_OME_ID000052
 
 # Overwrite default training parameters
 train_opt:
   iterations: 100000
   validation_iterations: 50
   checkpoint_test: 1000
-  checkpoint_save: 20000
+  checkpoint_save: 10000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+
+  G_loss_weights:
+    L1: 1.0
+    LPIPS: 0.01
+
+  manual_seed: 8800 # 8400
 
 # Overwrite default dataset parameters
 dataset_opt:
@@ -60,13 +64,13 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 16
+    dataloader_batch_size: 32
+    num_load_workers: 20
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
+    dataloader_batch_size: 8
     num_load_workers: 4
     persist_workers: true
     pin_memory: false

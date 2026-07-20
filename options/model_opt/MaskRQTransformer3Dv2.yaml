@@ -6,7 +6,7 @@ netG:
   net_type: MaskRQTransformer3Dv2
   description: "Axial-attention RQ + MaskGIT with coarse-to-fine depth masking"
   mask_schedule: arccos          # arccos | cosine | linear | square
-  depth_mask_scale: 0.25         # extra masking boost for finer depths (0 = uniform, 1 = depth D-1 always fully masked)
+  depth_mask_scale: 0         # extra masking boost for finer depths (0 = uniform, 1 = depth D-1 always fully masked)
 
   num_embeddings: 4096           # codebook size; must match the HR VQ model
   n_rq_depth: 8                  # RQ depth; must match the HR VQ model
