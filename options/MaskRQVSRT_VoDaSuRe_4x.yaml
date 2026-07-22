@@ -11,7 +11,7 @@ up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
-compile: true # Enable PyTorch 2.0 compilation
+compile: false # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
