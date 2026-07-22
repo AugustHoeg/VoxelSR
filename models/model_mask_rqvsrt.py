@@ -88,8 +88,8 @@ class ModelMaskRQVSRT(ModelBase):
         )
         eid = self.opt["path"]["pretrained_hr_vqmodel_id"]
         self.vq_model_hr = self._load_vq_model(eid)
-        #Todo #self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
-        #Todo self.vq_model_hr.decode_code = torch.compile(self.vq_model_hr.decode_code, mode="max-autotune-no-cudagraphs")
+        self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
+        self.vq_model_hr.decode_code = torch.compile(self.vq_model_hr.decode_code, mode="max-autotune-no-cudagraphs")
 
         assert self.num_embeddings == self.vq_model_hr.quantizer.codebooks[0].n_embed, (
             f"num_embeddings mismatch: transformer has {self.num_embeddings}, "
