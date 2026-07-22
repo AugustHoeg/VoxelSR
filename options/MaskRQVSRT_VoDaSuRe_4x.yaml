@@ -11,7 +11,7 @@ up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
-compile: false # Enable PyTorch 2.0 compilation
+compile: true # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
@@ -19,7 +19,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_RQVSRT_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_uncond
+run_name: ${model_opt.model_architecture}_000_uncond_D8
 note: Note
 
 # GPU configuration
@@ -36,7 +36,7 @@ path:
   pretrained_experiment_id: null
   pretrained_netE: null
 
-  pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_D4_VoDaSuRe_OME_ID000035
+  pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000032
   pretrained_lr_vqmodel_id: DualRQVAE3D_VoDaSuRe_4x_v2_VoDaSuRe_OME_ID000052
 
 # Overwrite default training parameters
@@ -60,8 +60,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 8
-    num_load_workers: 16
+    dataloader_batch_size: 32
+    num_load_workers: 32
     persist_workers: true
     pin_memory: false
 
