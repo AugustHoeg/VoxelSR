@@ -36,7 +36,7 @@ path:
   pretrained_experiment_id: null
   pretrained_netE: null
 
-  pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000032
+  pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_D4_VoDaSuRe_OME_ID000035
   pretrained_lr_vqmodel_id: DualRQVAE3D_VoDaSuRe_4x_v2_VoDaSuRe_OME_ID000052
 
 # Overwrite default training parameters
