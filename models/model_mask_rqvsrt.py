@@ -45,7 +45,7 @@ class ModelMaskRQVSRT(ModelBase):
         self.depth_mask_scale = opt['model_opt']['netG'].get('depth_mask_scale', 0.25)
 
         # Unconditional generation: no LR VQ model, no LR encoding, transformer sees lr_tokens=None
-        self.unconditional = opt['model_opt']['netG'].get('lr_seq_len', None) is None
+        self.unconditional = opt['model_opt']['netG'].get('lr_input_len', None) is None
 
         self.mask_token_id = self.num_embeddings  # reuses the +1 tok_emb slot (never a prediction target)
 
@@ -99,13 +99,11 @@ class ModelMaskRQVSRT(ModelBase):
         )
 
     def load_lr_vq_model(self):
-        if self.unconditional:
-            return
-        assert "pretrained_lr_vqmodel_id" in self.opt["path"], (
-            "Must specify pretrained_lr_vqmodel_id in path for ModelMaskRQVSRT."
-        )
-        eid = self.opt["path"]["pretrained_lr_vqmodel_id"]
-        self.vq_model_lr = self._load_vq_model(eid)
+        self.vq_model_lr = None
+        if "pretrained_lr_vqmodel_id" in self.opt["path"]:
+            if self.opt["path"]["pretrained_lr_vqmodel_id"] is not None:
+                eid = self.opt["path"]["pretrained_lr_vqmodel_id"]
+                self.vq_model_lr = self._load_vq_model(eid)
 
     # ----------------------------------------
     # Encoding / decoding (VQ models always frozen)
@@ -483,11 +481,9 @@ class ModelMaskRQVSRT(ModelBase):
         if self.unconditional:
             z_lr = None
         else:
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
-            if self.latent_shape_lr != self.latent_shape_hr:
-                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-            z_lr = self._flatten_lr_embeddings(z_lr)   # (B, N_lr, C)
+            z_lr = self.L
+            # with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            #     _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
         masked_codes, mask = self._mask_tokens_rq(codes)   # (B,dz,dy,dx,D), (B,L,D)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
@@ -534,10 +530,8 @@ class ModelMaskRQVSRT(ModelBase):
         if self.unconditional:
             z_lr = None
         else:
-            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
-            if self.latent_shape_lr != self.latent_shape_hr:
-                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-            z_lr = self._flatten_lr_embeddings(z_lr)   # (B, N_lr, C)
+            z_lr = self.L
+            # _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
         masked_codes, mask = self._mask_tokens_rq(codes)   # (B,dz,dy,dx,D), (B,L,D)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
@@ -582,10 +576,8 @@ class ModelMaskRQVSRT(ModelBase):
         if self.unconditional:
             z_lr = None
         else:
-            _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
-            if self.latent_shape_lr != self.latent_shape_hr:
-                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-            z_lr = self._flatten_lr_embeddings(z_lr)
+            z_lr = self.L
+            # _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
         masked_codes, mask = self._mask_tokens_rq(codes)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
@@ -601,11 +593,9 @@ class ModelMaskRQVSRT(ModelBase):
         if self.unconditional:
             z_lr = None
         else:
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
-            if self.latent_shape_lr != self.latent_shape_hr:
-                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-            z_lr = self._flatten_lr_embeddings(z_lr)
+            z_lr = self.L
+            # with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            #     _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
         masked_codes, mask = self._mask_tokens_rq(codes)
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
@@ -637,14 +627,12 @@ class ModelMaskRQVSRT(ModelBase):
         if self.unconditional:
             z_lr = None
         else:
-            if self.mixed_precision is not None:
-                with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                    _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
-            else:
-                _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
-            if self.latent_shape_lr != self.latent_shape_hr:
-                z_lr = self.center_crop_latents(z_lr, self.latent_shape_hr)
-            z_lr = self._flatten_lr_embeddings(z_lr)
+            z_lr = self.L
+            # if self.mixed_precision is not None:
+            #     with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            #         _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
+            # else:
+            #     _, z_lr, self.latent_shape_lr = self.encode_to_indices(self.L, self.vq_model_lr)
 
         if self.mixed_precision is not None:
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):

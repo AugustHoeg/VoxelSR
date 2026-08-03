@@ -37,7 +37,7 @@ path:
   pretrained_netE: null
 
   pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000032
-  pretrained_lr_vqmodel_id: DualRQVAE3D_VoDaSuRe_4x_v2_VoDaSuRe_OME_ID000052
+  pretrained_lr_vqmodel_id: null # DualRQVAE3D_VoDaSuRe_4x_v2_VoDaSuRe_OME_ID000052
 
 # Overwrite default training parameters
 train_opt:
@@ -50,7 +50,7 @@ train_opt:
   num_accum_steps_G: 1
   G_optimizer_lr: 2e-4
   G_optimizer_wd: 0
-  G_optimizer_clipgrad: 10
+  G_optimizer_clipgrad: 2
 
 # Overwrite default dataset parameters
 dataset_opt:

@@ -38,6 +38,7 @@ import torch.utils.checkpoint as checkpoint
 from models.MaskTransformer3D import (
     FeedForward, QKNorm, RMSNorm, AdaNorm, CrossAttention, modulate, param_count,
 )
+from models.models_3D import PixelUnshuffle3D
 
 
 # ── Large-batch-safe scaled dot-product attention ────────────────────────────
@@ -279,16 +280,16 @@ class MaskRQTransformer3Dv2(nn.Module):
         num_heads=8,
         mlp_ratio=4,
         dropout=0.,
-        lr_seq_len=None,
-        lr_embed_dim=None,
+        lr_input_len=None,
+        lr_down_factor=1,
+        lr_input_dim=None,
         use_checkpoint=False,
     ):
         super().__init__()
-        self.seq_len    = seq_len
+        self.seq_len = seq_len
         self.n_rq_depth = n_rq_depth
-        self.embed_dim  = embed_dim
-        self.n_embed    = n_embed
-        self.lr_seq_len = lr_seq_len
+        self.embed_dim = embed_dim
+        self.n_embed = n_embed
 
         mlp_dim = int(embed_dim * mlp_ratio)
 
@@ -302,10 +303,12 @@ class MaskRQTransformer3Dv2(nn.Module):
         self.depth_emb = nn.Embedding(n_rq_depth, embed_dim)
 
         # LR conditioning
-        if lr_seq_len is not None:
-            lr_in_dim = lr_embed_dim if lr_embed_dim is not None else embed_dim
-            self.lr_proj = nn.Linear(lr_in_dim, embed_dim, bias=False)
-            self.lr_pos_emb = nn.Embedding(lr_seq_len, embed_dim)
+        if lr_input_len is not None:
+            self.lr_seq_len = lr_input_len // lr_down_factor**3
+            self.lr_down = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
+            lr_in_dim = lr_input_dim * lr_down_factor**3 if lr_input_dim is not None else embed_dim
+            self.lr_proj = nn.Conv3d(lr_in_dim, embed_dim, kernel_size=1, padding=0, stride=1, bias=False)
+            self.lr_pos_emb = nn.Embedding(self.lr_seq_len, embed_dim)
         else:
             self.uncond_emb = nn.Embedding(1, embed_dim)
 
@@ -318,7 +321,7 @@ class MaskRQTransformer3Dv2(nn.Module):
             mlp_dim=mlp_dim,
             dropout=dropout,
             use_checkpoint=use_checkpoint,
-            use_cross_attn=lr_seq_len is not None,
+            use_cross_attn=self.lr_seq_len is not None,
         )
         self.out_norm = AdaNorm(x_dim=embed_dim, y_dim=embed_dim)
 
@@ -366,8 +369,10 @@ class MaskRQTransformer3Dv2(nn.Module):
 
     def _prepare_lr_context(self, lr_tokens: torch.Tensor):
         """lr_tokens: (B, N_lr, lr_embed_dim) → (lr_ctx (B,N_lr,E), cond (B,E))"""
-        lr_pos = torch.arange(lr_tokens.shape[1], device=lr_tokens.device)
-        lr_ctx = self.lr_proj(lr_tokens) + self.lr_pos_emb(lr_pos)
+        lr_tokens = self.lr_down(lr_tokens)
+        b, c, d, h, w = lr_tokens.shape
+        lr_pos = torch.arange(d*h*w, device=lr_tokens.device)
+        lr_ctx = self.lr_proj(lr_tokens).view(b, self.embed_dim, d*h*w).transpose(1, 2) + self.lr_pos_emb(lr_pos)
         return lr_ctx, lr_ctx.mean(dim=1)
 
     # ── Forward ───────────────────────────────────────────────────────────────
@@ -430,7 +435,7 @@ if __name__ == "__main__":
     L_lr = lr_spatial ** 3
     D = 8
     n_embed = 4096
-    lr_embed_dim = 256
+    lr_input_dim = 32
     use_checkpoint = True
 
     configs = {
@@ -442,13 +447,20 @@ if __name__ == "__main__":
     for name, cfg in configs.items():
 
         model = MaskRQTransformer3Dv2(
-            seq_len=L_hr, n_rq_depth=D, n_embed=n_embed,
-            lr_seq_len=L_lr, lr_embed_dim=lr_embed_dim, dropout=0.1, use_checkpoint=use_checkpoint, **cfg,
+            seq_len=L_hr,
+            n_rq_depth=D,
+            n_embed=n_embed,
+            lr_input_len=L_lr,
+            lr_input_dim=lr_input_dim,
+            dropout=0.1,
+            lr_down_factor=2,
+            use_checkpoint=use_checkpoint,
+            **cfg,
         ).to(device)
         param_count(f"MaskRQTransformer3Dv2-{name}", model)
 
         codes_5d = torch.randint(0, n_embed, (2, hr_spatial, hr_spatial, hr_spatial, D), device=device)
-        lr_emb = torch.randn(2, L_lr, lr_embed_dim, device=device)
+        lr_emb = torch.randn(2, lr_input_dim, lr_spatial, lr_spatial, lr_spatial, device=device)
 
         logits = model(codes_5d, lr_tokens=lr_emb)
 

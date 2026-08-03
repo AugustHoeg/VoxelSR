@@ -75,8 +75,9 @@ def define_G(opt, mode='train'):
             num_heads=opt_net['num_heads'],
             mlp_ratio=opt_net.get('mlp_ratio', 4),
             dropout=opt_net.get('dropout', 0.0),
-            lr_seq_len=opt_net.get('lr_seq_len', None),
-            lr_embed_dim=opt_net.get('lr_embed_dim', None),
+            lr_input_len=opt_net.get('lr_input_len', None),
+            lr_input_dim=opt_net.get('lr_input_dim', None),
+            lr_down_factor=opt_net.get('lr_down_factor', 1),
             use_checkpoint=opt_net.get('use_checkpoint', False),
         )
 
