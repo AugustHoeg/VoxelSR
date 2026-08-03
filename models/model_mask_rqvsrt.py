@@ -128,6 +128,14 @@ class ModelMaskRQVSRT(ModelBase):
         _, _, codes, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
         return codes, z_e, latent_shape
 
+    @torch.no_grad()
+    def decode_to_image(self, codes: torch.Tensor, vq_model: torch.nn.Module):
+        """Decode RQ codes to a volume via the frozen VQ decoder.
+        """
+        z_q = vq_model.embed_code(codes)
+        return vq_model.decode(z_q)
+
+
     def _flatten_lr_embeddings(self, z_lr: torch.Tensor) -> torch.Tensor:
         """Reshape LR encoder output (B, C, Dz, Dy, Dx) → (B, N_lr, C)."""
         B, C = z_lr.shape[:2]
@@ -168,7 +176,7 @@ class ModelMaskRQVSRT(ModelBase):
         mask_ratio = self._get_mask_ratios(r)                           # (B,)
 
         noise = torch.rand(B, L, D, device=codes.device)
-        mask  = noise < mask_ratio[:, None, None]                       # (B, L, D)
+        mask = noise < mask_ratio[:, None, None]                       # (B, L, D)
 
         codes_flat = codes.reshape(B, L, D).clone()
         codes_flat[mask] = self.mask_token_id
@@ -466,10 +474,7 @@ class ModelMaskRQVSRT(ModelBase):
 
     def feed_data(self, data):
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
-        if self.unconditional:
-            self.L = None
-        else:
-            self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
+        self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
 
     def optimize_parameters_amp(self, current_step, update=False):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
@@ -679,3 +684,37 @@ class ModelMaskRQVSRT(ModelBase):
             plt.show()
 
         wandb.log({"Comparisons training": wandb.Image(grid_image, caption=figure_string, mode="RGB")})
+
+
+    def test_plot_vq(self, img_H, img_L, img_VQ):
+
+        # to use:
+        # self.test_plot_vq(self.H.detach().cpu(), self.L.detach().cpu(), self.vq_model_hr.decode_code(codes).float().detach().cpu())
+
+        size_hr = img_H.shape[-1]
+        size_lr = img_L.shape[-1]
+        batch_size = len(img_H)
+
+        plt.figure(figsize=(2 * batch_size, 6))  # wider figure for multiple samples
+
+        for i in range(batch_size):
+            # Plot HR slice
+            plt.subplot(3, batch_size, i + 1)
+            plt.imshow(img_H[i, 0, :, :, size_hr // 2], cmap="gray", vmin=0.0, vmax=1.0)
+            plt.title(f"HR #{i}")
+            plt.axis("off")
+
+            # Plot LR slice
+            plt.subplot(3, batch_size, batch_size + i + 1)
+            plt.imshow(img_L[i, 0, :, :, size_lr // 2], cmap="gray", vmin=0.0, vmax=1.0)
+            plt.title(f"LR #{i}")
+            plt.axis("off")
+
+            # Plot recon slice
+            plt.subplot(3, batch_size, 2 * batch_size + i + 1)
+            plt.imshow(img_VQ[i, 0, :, :, size_hr // 2], cmap="gray", vmin=0.0, vmax=1.0)
+            plt.title(f"HR VQ #{i}")
+            plt.axis("off")
+
+        plt.tight_layout()
+        plt.show()
