@@ -126,6 +126,7 @@ class ModelMaskRQVSRT(ModelBase):
         _, _, codes, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
         return codes, z_e, latent_shape
 
+
     @torch.no_grad()
     def decode_to_image(self, codes: torch.Tensor, vq_model: torch.nn.Module):
         """Decode RQ codes to a volume via the frozen VQ decoder.
@@ -256,7 +257,7 @@ class ModelMaskRQVSRT(ModelBase):
         logits_stack = torch.stack(logits, dim=2)
         B, L, D, V = logits_stack.shape
 
-        logits_flat  = logits_stack.reshape(B * L * D, V)
+        logits_flat = logits_stack.reshape(B * L * D, V)
         targets_flat = codes_flat.reshape(B * L * D)
         mask_flat = mask.reshape(B * L * D)
 

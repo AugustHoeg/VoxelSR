@@ -46,6 +46,24 @@ def define_G(opt, mode='train'):
             dropout=opt_net.get('dropout', 0.0),
             is_causal=opt_net.get('is_causal', True),
         )
+        
+    elif model_arch == "RQTransformer3D":
+        from models.RQTransformer3D import RQTransformer3D as net
+        netG = net(
+            seq_len=opt_net['seq_len'],
+            n_rq_depth=opt_net['n_rq_depth'],
+            embed_dim=opt_net['embed_dim'],
+            n_embed=opt_net['num_embeddings'],
+            body_depth=opt_net['body_depth'],
+            head_depth=opt_net['head_depth'],
+            num_heads=opt_net['num_heads'],
+            mlp_ratio=opt_net.get('mlp_ratio', 4),
+            dropout=opt_net.get('dropout', 0.0),
+            lr_input_len=opt_net.get('lr_input_len', None),
+            lr_input_dim=opt_net.get('lr_input_dim', None),
+            lr_down_factor=opt_net.get('lr_down_factor', 1),
+            use_checkpoint=opt_net.get('use_checkpoint', False),
+        )
 
     elif model_arch == "MaskTransformer3D":
         from models.MaskTransformer3D import MaskTransformer3D as net

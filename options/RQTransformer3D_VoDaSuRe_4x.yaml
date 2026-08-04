@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: MaskRQTransformer3Dv2                  # Default model config
+  - model_opt: RQTransformer3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -11,13 +11,13 @@ up_factor: 4  # upscaling factor
 
 # Profile
 run_profile: false
-compile: true # Enable PyTorch 2.0 compilation
+compile: false # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_RQVSRT_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
 run_name: ${model_opt.model_architecture}_000_no_lr_vq_D8
 note: Note
@@ -33,7 +33,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null
+  pretrained_experiment_id: null  # "mDCSRN_ID000000"
   pretrained_netE: null
 
   pretrained_hr_vqmodel_id: RQVAE3D_VoDaSuRe_HR_64_shuffle_VoDaSuRe_OME_ID000032
@@ -60,8 +60,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 16
+    dataloader_batch_size: 4
+    num_load_workers: 8
     persist_workers: true
     pin_memory: false
 
