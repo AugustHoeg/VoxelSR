@@ -63,6 +63,9 @@ def define_G(opt, mode='train'):
             lr_input_dim=opt_net.get('lr_input_dim', None),
             lr_down_factor=opt_net.get('lr_down_factor', 1),
             use_checkpoint=opt_net.get('use_checkpoint', False),
+            head_emb_vqvae=opt_net.get('head_emb_vqvae', False),
+            cumsum_depth_ctx=opt_net.get('cumsum_depth_ctx', False),
+            input_embed_dim=opt_net.get('input_embed_dim', None),
         )
 
     elif model_arch == "MaskTransformer3D":

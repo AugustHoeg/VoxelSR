@@ -214,6 +214,9 @@ class RQTransformer3D(nn.Module):
         lr_input_dim=None,
         lr_down_factor=1,
         use_checkpoint=False,
+        head_emb_vqvae=False,
+        cumsum_depth_ctx=False,
+        input_embed_dim=None,
     ):
         super().__init__()
         self.seq_len = seq_len
@@ -221,6 +224,17 @@ class RQTransformer3D(nn.Module):
         self.embed_dim = embed_dim
         self.n_embed = n_embed       # mask token id (same for all depths)
         self.lr_input_len = lr_input_len
+
+        # Use frozen RQVAE codebook vectors (cumsum optional) in place of the learned
+        # per-depth tok_embs. Requires code_vectors at forward() and code_emb_fn at sample().
+        self.head_emb_vqvae = head_emb_vqvae
+        self.cumsum_depth_ctx = bool(cumsum_depth_ctx) and head_emb_vqvae
+        if head_emb_vqvae:
+            assert input_embed_dim is not None, (
+                "input_embed_dim (RQVAE codebook vector dim) must be set when head_emb_vqvae=True."
+            )
+            self.input_embed_dim = input_embed_dim
+            self.head_mlp = nn.Linear(input_embed_dim, embed_dim)
 
         mlp_dim = int(embed_dim * mlp_ratio)
 
@@ -371,21 +385,40 @@ class RQTransformer3D(nn.Module):
         spatial_ctx = self.body_norm(spatial_ctx, cond)
         return spatial_ctx, tok_stack, cond, lr_ctx
 
-    def _head_forward(self, spatial_ctx: torch.Tensor, tok_stack: torch.Tensor):
-        """Causal depth transformer, teacher-forced with tok_stack[:, :, :-1, :].
+    def _depth_input(self, tok_stack: torch.Tensor, code_vectors: torch.Tensor = None) -> torch.Tensor:
+        """Build the per-depth token stream fed to the head.
+        Args:
+            tok_stack:    (B, L, D, embed_dim) — used when head_emb_vqvae=False
+            code_vectors: (B, L, D, input_embed_dim) — required when head_emb_vqvae=True
+        Returns:
+            (B, L, D, embed_dim) per-(position, depth) token embeddings
+        """
+        if not self.head_emb_vqvae:
+            return tok_stack
+        assert code_vectors is not None, (
+            "code_vectors must be provided when head_emb_vqvae=True"
+        )
+        if self.cumsum_depth_ctx:
+            code_vectors = code_vectors.cumsum(dim=2)     # partial-recon at each depth
+        return self.head_mlp(code_vectors)                # (B, L, D, embed_dim)
+
+    def _head_forward(self, spatial_ctx: torch.Tensor, depth_input: torch.Tensor):
+        """Causal depth transformer, teacher-forced with depth_input[:, :, :-1, :].
 
         Args:
-            spatial_ctx: (B, L, E)         — body output, used as SOS + AdaLN cond
-            tok_stack:   (B, L, D, E)      — per-depth token embeddings (from body)
+            spatial_ctx: (B, L, embed_dim)      — body output, used as SOS + AdaLN cond
+            depth_input: (B, L, D, embed_dim)   — per-depth head input tokens
+                                                  (from _depth_input; either tok_stack or
+                                                  MLP-projected codebook vectors)
         Returns:
             logits: list[D × (B, L, n_embed + 1)]
         """
-        B, L, D, _ = tok_stack.shape
+        B, L, D, _ = depth_input.shape
         depth_emb = self.depth_emb(torch.arange(D, device=spatial_ctx.device))  # (D, E)
 
-        # [SOS = spatial_ctx | code_0 | ... | code_{D-2}]  → predict code_0..code_{D-1}
+        # [SOS = spatial_ctx | dep_0 | ... | dep_{D-2}]  → predict code_0..code_{D-1}
         sos = spatial_ctx.view(B, L, 1, -1)
-        depth_ctx = torch.cat([sos, tok_stack[:, :, :-1, :]], dim=2) + depth_emb
+        depth_ctx = torch.cat([sos, depth_input[:, :, :-1, :]], dim=2) + depth_emb
         depth_ctx = depth_ctx.reshape(B * L, D, -1)
 
         cond_head = spatial_ctx.reshape(B * L, -1)
@@ -395,11 +428,14 @@ class RQTransformer3D(nn.Module):
         head_out = self.head_norm(head_out).reshape(B, L, D, -1)
         return [self.heads[d](head_out[:, :, d, :]) for d in range(D)]
 
-    def forward(self, codes: torch.Tensor, lr_tokens: torch.Tensor = None):
+    def forward(self, codes: torch.Tensor, lr_tokens: torch.Tensor = None,
+                code_vectors: torch.Tensor = None):
         """
         Args:
-            codes:     (B, d, h, w, D) int64
-            lr_tokens: (B, C_lr, Dz, Dy, Dx) pre-encoded LR embeddings, or None.
+            codes:        (B, d, h, w, D) int64
+            lr_tokens:    (B, C_lr, Dz, Dy, Dx) pre-encoded LR embeddings, or None.
+            code_vectors: (B, L, D, input_embed_dim) frozen RQVAE codebook vectors —
+                          required iff head_emb_vqvae=True; ignored otherwise.
         Returns:
             logits: list of D tensors, each (B, L, n_embed + 1)
                     logits[d] predicts code at depth d given spatial_ctx + codes 0..d-1.
@@ -410,7 +446,8 @@ class RQTransformer3D(nn.Module):
         codes_flat = codes.reshape(B, L, D)
 
         spatial_ctx, tok_stack, _, _ = self._body_forward(codes_flat, lr_tokens)
-        return self._head_forward(spatial_ctx, tok_stack)
+        depth_input = self._depth_input(tok_stack, code_vectors)
+        return self._head_forward(spatial_ctx, depth_input)
 
     # ── Autoregressive sampling ───────────────────────────────────────────────
 
@@ -421,6 +458,7 @@ class RQTransformer3D(nn.Module):
         batch_size: int = 1,
         temperature: float = 1.0,
         top_k: int = None,
+        code_emb_fn = None,
     ) -> torch.Tensor:
         """Raster-scan spatial AR + causal depth AR generation (kakaobrain style).
 
@@ -436,9 +474,17 @@ class RQTransformer3D(nn.Module):
             batch_size:  used only when lr_tokens is None.
             temperature: softmax temperature (higher = more random).
             top_k:       if set, restrict to top-k logits before sampling.
+            code_emb_fn: callable(codes: (..., D) int64) → (..., D, input_embed_dim)
+                         yielding frozen RQVAE codebook vectors per depth. Required
+                         iff head_emb_vqvae=True; ignored otherwise.
         Returns:
             codes: (B, L, D) int64 — sampled RQ codes in raster order.
         """
+        if self.head_emb_vqvae:
+            assert code_emb_fn is not None, (
+                "code_emb_fn is required when head_emb_vqvae=True "
+                "(pass e.g. vq_model.quantizer.embed_code_with_depth wrapped to stack on dim=-2)."
+            )
         device = self.pos_emb.weight.device
         B = lr_tokens.shape[0] if lr_tokens is not None else batch_size
         L, D, V = self.seq_len, self.n_rq_depth, self.n_embed
@@ -467,7 +513,17 @@ class RQTransformer3D(nn.Module):
                 codes_flat[:, s, d] = sampled
 
                 if d + 1 < D:
-                    new_tok = self.tok_embs[d](sampled).unsqueeze(1) + depth_emb[d+1:d+2]
+                    if self.head_emb_vqvae:
+                        # Look up frozen codebook vectors for position s up to and including depth d,
+                        # then take cumulative sum and project with MLP. Matches _depth_input semantics.
+                        cv_s = code_emb_fn(codes_flat[:, s:s+1, :])[:, 0, :, :]   # (B, D, input_embed_dim)
+                        if self.cumsum_depth_ctx:
+                            vec = cv_s[:, :d+1, :].sum(dim=1)                     # (B, input_embed_dim)
+                        else:
+                            vec = cv_s[:, d, :]                                   # (B, input_embed_dim)
+                        new_tok = self.head_mlp(vec).unsqueeze(1) + depth_emb[d+1:d+2]
+                    else:
+                        new_tok = self.tok_embs[d](sampled).unsqueeze(1) + depth_emb[d+1:d+2]
                     head_input = torch.cat([head_input, new_tok], dim=1)
 
         return codes_flat

@@ -21,6 +21,10 @@ netG:
   dropout: 0.1
   use_checkpoint: true
 
+  head_emb_vqvae: true    # Use frozen RQVAE codebook vectors as the per-depth head tokens
+  cumsum_depth_ctx: true  # enable cumulative sum along depth of the frozen RQVAE codebook vectors
+  input_embed_dim: 768     # e.g. quant_embed_dim of RQVAE3D
+
   init_type: default             # model uses its own _init_weights(); external init is skipped
   init_bn_type: uniform
   init_gain: 0.2

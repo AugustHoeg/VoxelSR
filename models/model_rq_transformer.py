@@ -127,6 +127,20 @@ class ModelTransformerRQ(ModelBase):
         B, C = z_lr.shape[:2]
         return z_lr.view(B, C, -1).permute(0, 2, 1)
 
+    def _needs_code_vectors(self) -> bool:
+        return getattr(self.get_bare_model(self.netG), 'head_emb_vqvae', False)
+
+    def _get_code_vectors(self, codes: torch.Tensor) -> torch.Tensor:
+        """Look up frozen RQVAE per-depth codebook vectors for `codes`.
+
+        Args:
+            codes: (..., D) int64 — any shape ending in the RQ depth axis.
+        Returns:
+            (..., D, input_embed_dim) codebook vectors (stacked, no cumsum).
+        """
+        embs = self.vq_model_hr.quantizer.embed_code_with_depth(codes)  # list[D × (..., input_embed_dim)]
+        return torch.stack(embs, dim=-2)
+
 
     @torch.inference_mode()
     def sample_E(self, z_lr: torch.Tensor = None, batch_size: int = None,
@@ -151,9 +165,11 @@ class ModelTransformerRQ(ModelBase):
             assert batch_size is not None, "batch_size must be provided when z_lr is None."
             B = batch_size
 
-        gpt = self.get_bare_model(self.netG)
-        codes_flat = gpt.sample(lr_tokens=z_lr, batch_size=B,
-                                temperature=temperature, top_k=top_k)   # (B, L, D)
+        transformer = self.get_bare_model(self.netG)
+        code_emb_fn = self._get_code_vectors if self._needs_code_vectors() else None
+        codes_flat = transformer.sample(lr_tokens=z_lr, batch_size=B,
+                                temperature=temperature, top_k=top_k,
+                                code_emb_fn=code_emb_fn)                # (B, L, D)
         codes = codes_flat.reshape(B, dz, dy, dx, D).clamp(0, self.num_embeddings - 1)
         return self.vq_model_hr.decode_code(codes)
 
@@ -232,9 +248,10 @@ class ModelTransformerRQ(ModelBase):
             z_lr = self.L
 
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
+        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            logits = self.netG(codes, z_lr)                              # list[D × (B, L, V)]
+            logits = self.netG(codes, z_lr, code_vectors=code_vectors)   # list[D × (B, L, V)]
             self.gen_loss = self._rq_loss(logits, codes_flat) / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -275,8 +292,9 @@ class ModelTransformerRQ(ModelBase):
             z_lr = self.L
 
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
+        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
 
-        logits = self.netG(codes, z_lr)                                  # list[D × (B, L, V)]
+        logits = self.netG(codes, z_lr, code_vectors=code_vectors)       # list[D × (B, L, V)]
         self.gen_loss = self._rq_loss(logits, codes_flat) / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -317,8 +335,9 @@ class ModelTransformerRQ(ModelBase):
         codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
         z_lr = None if self.unconditional else self.L
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
+        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
 
-        logits = self.netG(codes, z_lr)
+        logits = self.netG(codes, z_lr, code_vectors=code_vectors)
         self.gen_loss = self._rq_loss(logits, codes_flat)
         self.G_valid_loss += self.gen_loss
 
@@ -327,9 +346,10 @@ class ModelTransformerRQ(ModelBase):
             codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
         z_lr = None if self.unconditional else self.L
         codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
+        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            logits = self.netG(codes, z_lr)
+            logits = self.netG(codes, z_lr, code_vectors=code_vectors)
             self.gen_loss = self._rq_loss(logits, codes_flat)
         self.G_valid_loss += self.gen_loss
 
