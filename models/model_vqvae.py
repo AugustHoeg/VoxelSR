@@ -192,9 +192,9 @@ class ModelVQVAE(ModelBase):
         unnorm = self.opt['dataset_opt']['norm_type'] == 'znormalization'
         slice_idx = img_dict['H'].shape[-1] // 2
 
-        E_vq_slice    = img_dict['E_vq'][:, :, :, slice_idx]
+        E_vq_slice = img_dict['E_vq'][:, :, :, slice_idx]
         E_no_vq_slice = img_dict['E_no_vq'][:, :, :, slice_idx]
-        H_slice       = img_dict['H'][:, :, :, slice_idx]
+        H_slice = img_dict['H'][:, :, :, slice_idx]
 
         row = torch.stack([E_vq_slice, E_no_vq_slice, H_slice])
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)
