@@ -540,11 +540,12 @@ if __name__ == "__main__":
     L_lr = lr_spatial**3
     D = 8
     n_embed = 4096
-    lr_input_dim = 32
+    lr_input_dim = 1
+    lr_down_factor = 2
     use_checkpoint = True
 
     configs = {
-        "tiny":  dict(embed_dim=768, body_depth=4, head_depth=4, num_heads=4),
+        "tiny":  dict(embed_dim=768, body_depth=12, head_depth=4, num_heads=12),
         # "small": dict(embed_dim=384, body_depth=4,  head_depth=4, num_heads=6),
         # "base":  dict(embed_dim=512, body_depth=6, head_depth=6, num_heads=8),
     }
@@ -558,7 +559,7 @@ if __name__ == "__main__":
             lr_input_len=L_lr,
             lr_input_dim=lr_input_dim,
             dropout=0.1,
-            lr_down_factor=2,
+            lr_down_factor=lr_down_factor,
             use_checkpoint=use_checkpoint,
             **cfg,
         ).to(device)

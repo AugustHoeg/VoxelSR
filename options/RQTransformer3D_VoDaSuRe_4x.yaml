@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQTransformer3D                  # Default model config
+  - model_opt: RQTransformer3D_225M                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -19,7 +19,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_RQVSRT_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_RQ_AR_no_lr_vq_D8_head_emb
+run_name: ${model_opt.model_architecture}_000_RQ_AR_no_lr_vq_D8_head_emb_225M
 note: Note
 
 # GPU configuration
@@ -60,8 +60,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 16
+    dataloader_batch_size: 32 # 16
+    num_load_workers: 32 # 16
     persist_workers: true
     pin_memory: false
 

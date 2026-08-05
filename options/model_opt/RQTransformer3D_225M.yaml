@@ -1,0 +1,30 @@
+## @package _global_
+model: transformer_rq
+model_architecture: RQTransformer3D
+
+netG:
+  net_type: RQTransformer3D
+  description: "RQTransformer3D"
+
+  num_embeddings: 4096           # codebook size; must match the HR VQ model
+  n_rq_depth: 8                  # RQ depth; must match the HR VQ model
+  seq_len: 512                   # HR latent spatial token count (Dz*Dy*Dx after VQ encoding)
+  lr_input_len: 4096             # LR latent spatial token count
+  lr_input_dim: 1                # channel dim of LR VQ encoder output (quant_embed_dim)
+  lr_down_factor: 2              # downsampling factor for LR input before projection to embed_dim
+
+  embed_dim: 768
+  body_depth: 12                 # number of SpatialBlocks
+  head_depth: 4                  # number of DepthBlocks interleaved among body_depth
+  num_heads: 12                  # must evenly divide embed_dim
+  mlp_ratio: 4
+  dropout: 0.1
+  use_checkpoint: true
+
+  head_emb_vqvae: true    # Use frozen RQVAE codebook vectors as the per-depth head tokens
+  cumsum_depth_ctx: true  # enable cumulative sum along depth of the frozen RQVAE codebook vectors
+  input_embed_dim: 768     # e.g. quant_embed_dim of RQVAE3D
+
+  init_type: default             # model uses its own _init_weights(); external init is skipped
+  init_bn_type: uniform
+  init_gain: 0.2
