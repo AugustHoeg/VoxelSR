@@ -196,9 +196,9 @@ class MultiScaleBottleneck3D(nn.Module):
                             + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta)
                             + F.mse_loss(f_hat, f_no_grad))
 
-            # diagnostic: codebook usage this scale
+            # diagnostic: codebook usage this scale (0-dim tensor, matches RQVAE3D)
             frac_unique_list.append(
-                idx.unique().numel() / self.vocab_size
+                torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero() / self.vocab_size
             )
 
         mean_vq_loss = mean_vq_loss / self.K
