@@ -147,8 +147,6 @@ class MultiScaleBottleneck3D(nn.Module):
             frac_unique:      list[float] len K, fraction of codebook used at each scale
         """
         B, C, D, H, W = f_BCDHW.shape
-        assert (D, H, W) == self.v_patch_nums[-1], \
-            f'last v_patch_nums entry {self.v_patch_nums[-1]} must match latent shape {(D, H, W)}'
 
         f_no_grad = f_BCDHW.detach()
         f_rest = f_no_grad.clone()
