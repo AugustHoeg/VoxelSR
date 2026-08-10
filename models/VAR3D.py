@@ -96,21 +96,20 @@ class VAR3D(nn.Module):
         self.K = len(self.patch_nums)
         self.scale_lens = [pd * ph * pw for (pd, ph, pw) in self.patch_nums]
         self.L = sum(self.scale_lens)
-        offs = [0]
-        for l in self.scale_lens:
-            offs.append(offs[-1] + l)
-        self.begin_ends = list(zip(offs[:-1], offs[1:]))  # [(0, l_0), (l_0, l_0+l_1), ...]
+        cur = 0
+        self.begin_ends = []
+        for i, pn in enumerate(v_patch_nums):
+            self.begin_ends.append((cur, cur + pn ** 3))  # [(0, l_0), (l_0, l_0+l_1), ...]
+            cur += pn ** 3
 
         # ---- word embedding for continuous next-scale features ----
         # Fed with x_BLCv_wo_first_l from MSVQVAE3D.quantizer.idxBl_to_var_input.
-        self.word_embed = nn.Linear(Cvae, embed_dim, bias=False)
+        self.word_embed = nn.Linear(Cvae, embed_dim)
 
         # ---- pos + level embeddings ----
         self.pos_1LC = nn.Parameter(torch.zeros(1, self.L, embed_dim))
         self.lvl_embed = nn.Embedding(self.K, embed_dim)
-        scale_ids = torch.repeat_interleave(
-            torch.arange(self.K), torch.tensor(self.scale_lens),
-        )
+        scale_ids = torch.repeat_interleave(torch.arange(self.K), torch.tensor(self.scale_lens))
         self.register_buffer('scale_ids', scale_ids, persistent=False)
 
         # ---- block-causal attention mask (L, L) ----
@@ -123,8 +122,6 @@ class VAR3D(nn.Module):
         # ---- LR conditioning ----
         self.has_lr = (lr_input_dim is not None) and (lr_input_len is not None)
         if self.has_lr:
-            assert lr_input_len % (lr_down_factor ** 3) == 0, \
-                'lr_input_len must be divisible by lr_down_factor**3'
             self.lr_seq_len = lr_input_len // (lr_down_factor ** 3)
             self.lr_down = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
             lr_in_dim = lr_input_dim * (lr_down_factor ** 3)
@@ -146,7 +143,7 @@ class VAR3D(nn.Module):
 
         # ---- output ----
         self.head_norm = AdaNorm(x_dim=embed_dim, y_dim=embed_dim)
-        self.head = nn.Linear(embed_dim, vocab_size, bias=False)
+        self.head = nn.Linear(embed_dim, vocab_size)
 
         self._init_weights()
 
@@ -194,7 +191,7 @@ class VAR3D(nn.Module):
         else:
             cond = self.uncond_emb(torch.zeros(B, dtype=torch.long, device=device))
             lr_ctx = None
-        sos_block = cond[:, None, :].expand(-1, l_0, -1)
+        sos_block = cond.unsqueeze(1).expand(B, l_0, -1)
         return sos_block, cond, lr_ctx
 
     # ─────────────────────────── training forward ───────────────────────────
@@ -221,16 +218,17 @@ class VAR3D(nn.Module):
             raise ValueError('Provide at least one of x_BLCv_wo_first_l or lr_tokens.')
         device = self.pos_1LC.device
 
-        sos_block, cond, lr_ctx = self._get_sos_cond(lr_tokens, B, device)
+        with torch.amp.autocast("cuda", enabled=False):
+            sos_block, cond, lr_ctx = self._get_sos_cond(lr_tokens, B, device)
 
-        if x_BLCv_wo_first_l is not None:
-            scale_blocks = self.word_embed(x_BLCv_wo_first_l)   # (B, L - l_0, E)
-            x = torch.cat([sos_block, scale_blocks], dim=1)     # (B, L, E)
-        else:
-            x = sos_block                                        # (B, l_0, E)
+            if x_BLCv_wo_first_l is not None:
+                scale_blocks = self.word_embed(x_BLCv_wo_first_l)  # (B, L - l_0, E)
+                x = torch.cat([sos_block, scale_blocks], dim=1)  # (B, L, E)
+            else:
+                x = sos_block                                        # (B, l_0, E)
 
-        cur_len = x.shape[1]
-        x = x + self.pos_1LC[:, :cur_len, :] + self.lvl_embed(self.scale_ids[:cur_len]).unsqueeze(0)
+            cur_len = x.shape[1]
+            x = x + self.pos_1LC[:, :cur_len, :] + self.lvl_embed(self.scale_ids[:cur_len]).unsqueeze(0)
 
         mask = self.block_causal_mask[:cur_len, :cur_len]
         h = self.trunk(x, cond=cond, lr_tokens=lr_ctx, attn_mask=mask)
@@ -254,6 +252,10 @@ class VAR3D(nn.Module):
         (KV-cache to reduce this is a TODO.)
 
         Returns list[LongTensor(B, l_k)] suitable for MSVQVAE3D.decode_multiscale.
+
+        AMP: wrap the call in `torch.amp.autocast("cuda", dtype=...)` to get
+        AMP speedup on the transformer trunk. Embedding assembly, logit
+        sampling, and the token-feedback path stay in FP32 internally.
         """
         device = self.pos_1LC.device
         B = lr_tokens.shape[0] if lr_tokens is not None else batch_size
@@ -262,8 +264,9 @@ class VAR3D(nn.Module):
         assert [_as_dhw(pn) for pn in quantizer.v_patch_nums] == self.patch_nums, \
             'quantizer.v_patch_nums must match VAR3D.patch_nums'
 
-        sos_block, cond, lr_ctx = self._get_sos_cond(lr_tokens, B, device)
-        x = sos_block                                              # (B, l_0, E)
+        with torch.amp.autocast("cuda", enabled=False):
+            sos_block, cond, lr_ctx = self._get_sos_cond(lr_tokens, B, device)
+            x = sos_block                                              # (B, l_0, E)
 
         D, H, W = self.patch_nums[-1]
         C = self.Cvae
@@ -273,21 +276,19 @@ class VAR3D(nn.Module):
 
         for si in range(self.K):
             cur_len = x.shape[1]
-            x_in = (
-                x
-                + self.pos_1LC[:, :cur_len, :]
-                + self.lvl_embed(self.scale_ids[:cur_len]).unsqueeze(0)
-            )
+            with torch.amp.autocast("cuda", enabled=False):
+                x_in = x + self.pos_1LC[:, :cur_len, :] + self.lvl_embed(self.scale_ids[:cur_len]).unsqueeze(0)
             mask = self.block_causal_mask[:cur_len, :cur_len]
 
+            # Trunk + head under caller's autocast (heavy compute).
             h = self.trunk(x_in, cond=cond, lr_tokens=lr_ctx, attn_mask=mask)
             h = self.head_norm(h, cond)
-            logits = self.head(h)                                  # (B, cur_len, V)
+            logits = self.head(h).float()                          # sampling below assumes FP32
 
             b_si, e_si = self.begin_ends[si]
             logits_si = logits[:, b_si:e_si, :]                    # (B, l_si, V)
 
-            # ---- sampling: temperature, top_k, top_p ----
+            # ---- sampling: temperature, top_k, top_p (all FP32 via logits.float() above) ----
             logits_si = logits_si / max(temperature, 1e-6)
             if top_k is not None:
                 v, _ = torch.topk(logits_si, min(top_k, logits_si.size(-1)), dim=-1)
@@ -311,17 +312,16 @@ class VAR3D(nn.Module):
             ms_idx.append(idx_si)
 
             if si < self.K - 1:
-                # decode this scale's tokens, roll into f_hat, downsample to next scale
-                pd, ph, pw = self.patch_nums[si]
-                h_BCDHW = (
-                    quantizer.codebook.embed(idx_si.view(B, pd, ph, pw))
-                    .permute(0, 4, 1, 2, 3).contiguous()           # (B, C, pd, ph, pw)
-                )
-                f_hat, next_cond = quantizer.get_next_autoregressive_input(si, f_hat, h_BCDHW)
-                # (B, C, pd_n, ph_n, pw_n) -> (B, l_{si+1}, C)
-                next_flat = next_cond.reshape(B, C, -1).transpose(1, 2)
-                new_block = self.word_embed(next_flat)             # (B, l_{si+1}, E)
-                x = torch.cat([x, new_block], dim=1)
+                # Token feedback: codebook embed + Phi refine + word_embed kept in FP32
+                # to match MSVQVAE3D's bottleneck expectations.
+                with torch.amp.autocast("cuda", enabled=False):
+                    pd, ph, pw = self.patch_nums[si]
+                    h_BCDHW = quantizer.codebook.embed(idx_si.view(B, pd, ph, pw)).float().permute(0, 4, 1, 2, 3).contiguous()       # (B, C, pd, ph, pw)
+                    f_hat, next_cond = quantizer.get_next_autoregressive_input(si, f_hat, h_BCDHW)
+                    # (B, C, pd_n, ph_n, pw_n) -> (B, l_{si+1}, C)
+                    next_flat = next_cond.reshape(B, C, -1).transpose(1, 2)
+                    new_block = self.word_embed(next_flat)         # (B, l_{si+1}, E)
+                    x = torch.cat([x, new_block], dim=1)
 
         return ms_idx
 

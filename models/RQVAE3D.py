@@ -76,7 +76,7 @@ class VQEmbedding(nn.Embedding):
     def _update_buffers(self, vectors, idxs):
         n_embed, embed_dim = self.weight.shape[0] - 1, self.weight.shape[-1]
 
-        vectors = vectors.reshape(-1, embed_dim)
+        vectors = vectors.float().reshape(-1, embed_dim)
         idxs = idxs.reshape(-1)
 
         n_vectors = vectors.shape[0]
@@ -239,13 +239,15 @@ class RQBottleneck3D(nn.Module):
             commitment_loss: scalar training loss for encoder alignment
             codes:           (B, Dz, Dy, Dx, n_rq_depth) LongTensor
         """
-        x_code = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Dz, Dy, Dx, C)
-        quant_list, codes, frac_unique = self.quantize(x_code)
-        commitment_loss = self.compute_commitment_loss(x_code, quant_list)
+        x = x.float()
+        with torch.amp.autocast("cuda", enabled=False):
+            x_code = x.permute(0, 2, 3, 4, 1).contiguous()  # (B, Dz, Dy, Dx, C)
+            quant_list, codes, frac_unique = self.quantize(x_code)
+            commitment_loss = self.compute_commitment_loss(x_code, quant_list)
 
-        z_q_last = quant_list[-1]  # Aggregated quantized codes
-        z_q = z_q_last.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, Dz, Dy, Dx)
-        z_q = x + (z_q - x).detach()  # straight-through estimator
+            z_q_last = quant_list[-1]  # Aggregated quantized codes
+            z_q = z_q_last.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, Dz, Dy, Dx)
+            z_q = x + (z_q - x).detach()  # straight-through estimator
         return z_q, commitment_loss, codes, frac_unique
 
 

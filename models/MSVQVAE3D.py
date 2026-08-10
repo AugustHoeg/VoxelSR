@@ -148,61 +148,64 @@ class MultiScaleBottleneck3D(nn.Module):
         """
         B, C, D, H, W = f_BCDHW.shape
 
+        f_BCDHW = f_BCDHW.float()
         f_no_grad = f_BCDHW.detach()
         f_rest = f_no_grad.clone()
         f_hat = torch.zeros_like(f_rest)
 
-        mean_vq_loss = f_BCDHW.new_zeros(())
-        frac_unique_list: List[float] = []
+        with torch.amp.autocast("cuda", enabled=False):
+            mean_vq_loss = f_BCDHW.new_zeros(())
+            frac_unique_list: List[float] = []
 
-        for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
-            is_last = (si == self.K - 1)
+            for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
+                is_last = (si == self.K - 1)
 
-            # 1) downsample residual to this scale
-            rest_ds = f_rest if is_last else F.interpolate(f_rest, size=(pd, ph, pw), mode='area')
+                # 1) downsample residual to this scale
+                rest_ds = f_rest if is_last else F.interpolate(f_rest, size=(pd, ph, pw), mode='area')
 
-            # 2) shared-codebook nearest-neighbour lookup (channel-last)
-            rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()   # (B, pd, ph, pw, C)
-            if self.using_znorm:
-                # cosine variant: normalize inputs and codebook rows
-                normed = F.normalize(rest_dhwc, dim=-1)
-                E = F.normalize(self.codebook.weight[:-1, :], dim=-1)  # exclude padding row
-                logits = normed.reshape(-1, C) @ E.t()                 # (N, V)
-                idx = logits.argmax(dim=-1).view(B, pd, ph, pw)
-                embeds = self.codebook.embed(idx)                      # (B, pd, ph, pw, C)
-                # EMA update path when training
-                if self.training and self.codebook.ema:
-                    self.codebook._update_buffers(rest_dhwc, idx)
-                    self.codebook._update_embedding()
-            else:
-                embeds, idx, _ = self.codebook(rest_dhwc)              # L2 lookup + EMA inside
+                # 2) shared-codebook nearest-neighbour lookup (channel-last)
+                rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()   # (B, pd, ph, pw, C)
+                if self.using_znorm:
+                    # cosine variant: normalize inputs and codebook rows
+                    normed = F.normalize(rest_dhwc, dim=-1)
+                    E = F.normalize(self.codebook.weight[:-1, :], dim=-1)  # exclude padding row
+                    logits = normed.reshape(-1, C) @ E.t()                 # (N, V)
+                    idx = logits.argmax(dim=-1).view(B, pd, ph, pw)
+                    embeds = self.codebook.embed(idx)                      # (B, pd, ph, pw, C)
+                    # EMA update path when training
+                    if self.training and self.codebook.ema:
+                        self.codebook._update_buffers(rest_dhwc, idx)
+                        self.codebook._update_embedding()
+                else:
+                    embeds, idx, _ = self.codebook(rest_dhwc)              # L2 lookup + EMA inside
 
-            # 3) upsample chosen embeddings back to full (D, H, W)
-            h = embeds.permute(0, 4, 1, 2, 3).contiguous()             # (B, C, pd, ph, pw)
-            if not is_last:
-                h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
+                # 3) upsample chosen embeddings back to full (D, H, W)
+                h = embeds.permute(0, 4, 1, 2, 3).contiguous()             # (B, C, pd, ph, pw)
+                if not is_last:
+                    h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
 
-            # 4) scale-indexed Phi refine
-            h = self.quant_resi[si / max(self.K - 1, 1)](h)
+                # 4) scale-indexed Phi refine
+                h = self.quant_resi[si / max(self.K - 1, 1)](h)
 
-            # 5) accumulate + peel residual
-            f_hat = f_hat + h
-            f_rest = f_rest - h
+                # 5) accumulate + peel residual
+                f_hat = f_hat + h
+                f_rest = f_rest - h
 
-            # per-scale commitment loss (both directions, as in VAR)
-            mean_vq_loss = (mean_vq_loss
-                            + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta)
-                            + F.mse_loss(f_hat, f_no_grad))
+                # per-scale commitment loss (both directions, as in VAR)
+                mean_vq_loss = (mean_vq_loss
+                                + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta)
+                                + F.mse_loss(f_hat, f_no_grad))
 
-            # diagnostic: codebook usage this scale (0-dim tensor, matches RQVAE3D)
-            frac_unique_list.append(
-                torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero() / self.vocab_size
-            )
+                # diagnostic: codebook usage this scale (0-dim tensor, matches RQVAE3D)
+                frac_unique_list.append(
+                    torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero() / self.vocab_size
+                )
 
-        mean_vq_loss = mean_vq_loss / self.K
+            mean_vq_loss = mean_vq_loss / self.K
 
-        # straight-through
-        f_hat = (f_hat.data - f_no_grad).add_(f_BCDHW)
+            # straight-through
+            f_hat = (f_hat.data - f_no_grad).add_(f_BCDHW)
+
         return f_hat, mean_vq_loss, frac_unique_list
 
     # ---------------------------------------------------------------
@@ -221,25 +224,30 @@ class MultiScaleBottleneck3D(nn.Module):
           - to_fhat=False : list[LongTensor(B, pd*ph*pw)]  flat token maps per scale
         """
         B, C, D, H, W = f_BCDHW.shape
+
+        f_BCDHW = f_BCDHW.float()
         f_rest = f_BCDHW.detach().clone()
         f_hat = torch.zeros_like(f_rest)
-        patches = [_as_dhw(pn) for pn in (v_patch_nums or self.v_patch_nums)]
-        assert patches[-1] == (D, H, W)
 
-        out: List[torch.Tensor] = []
-        for si, (pd, ph, pw) in enumerate(patches):
-            is_last = (si == len(patches) - 1)
-            rest_ds = f_rest if is_last else F.interpolate(f_rest, size=(pd, ph, pw), mode='area')
-            rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()
-            idx, _ = self.codebook.find_nearest_embedding(rest_dhwc)   # (B, pd, ph, pw)
-            embeds = self.codebook.embed(idx)                          # (B, pd, ph, pw, C)
-            h = embeds.permute(0, 4, 1, 2, 3).contiguous()
-            if not is_last:
-                h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
-            h = self.quant_resi[si / max(len(patches) - 1, 1)](h)
-            f_hat = f_hat + h
-            f_rest = f_rest - h
-            out.append(f_hat.clone() if to_fhat else idx.reshape(B, pd * ph * pw))
+        with torch.amp.autocast("cuda", enabled=False):
+            patches = [_as_dhw(pn) for pn in (v_patch_nums or self.v_patch_nums)]
+            assert patches[-1] == (D, H, W)
+
+            out: List[torch.Tensor] = []
+            for si, (pd, ph, pw) in enumerate(patches):
+                is_last = (si == len(patches) - 1)
+                rest_ds = f_rest if is_last else F.interpolate(f_rest, size=(pd, ph, pw), mode='area')
+                rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()
+                idx, _ = self.codebook.find_nearest_embedding(rest_dhwc)   # (B, pd, ph, pw)
+                embeds = self.codebook.embed(idx)                          # (B, pd, ph, pw, C)
+                h = embeds.permute(0, 4, 1, 2, 3).contiguous()
+                if not is_last:
+                    h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
+                h = self.quant_resi[si / max(len(patches) - 1, 1)](h)
+                f_hat = f_hat + h
+                f_rest = f_rest - h
+                out.append(f_hat.clone() if to_fhat else idx.reshape(B, pd * ph * pw))
+
         return out
 
     @torch.no_grad()
@@ -252,40 +260,44 @@ class MultiScaleBottleneck3D(nn.Module):
         B = gt_ms_idx_Bl[0].shape[0]
         C = self.Cvae
         D, H, W = self.v_patch_nums[-1]
-        f_hat = gt_ms_idx_Bl[0].new_zeros(B, C, D, H, W, dtype=torch.float32)
-        next_scales = []
-        for si in range(self.K - 1):
-            pd, ph, pw = self.v_patch_nums[si]
-            idx = gt_ms_idx_Bl[si].view(B, pd, ph, pw)
-            h = self.codebook.embed(idx).permute(0, 4, 1, 2, 3).contiguous()
-            h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
-            f_hat = f_hat + self.quant_resi[si / max(self.K - 1, 1)](h)
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = gt_ms_idx_Bl[0].new_zeros(B, C, D, H, W, dtype=torch.float32)
+            next_scales = []
+            for si in range(self.K - 1):
+                pd, ph, pw = self.v_patch_nums[si]
+                idx = gt_ms_idx_Bl[si].view(B, pd, ph, pw)
+                h = self.codebook.embed(idx).permute(0, 4, 1, 2, 3).contiguous()
+                h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
+                f_hat = f_hat + self.quant_resi[si / max(self.K - 1, 1)](h)
 
-            pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
-            next_scales.append(
-                F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode='area')
-                 .reshape(B, C, -1).transpose(1, 2)                    # (B, l_{s+1}, C)
-            )
+                pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
+                next_scales.append(
+                    F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode='area')
+                     .reshape(B, C, -1).transpose(1, 2)                    # (B, l_{s+1}, C)
+                )
         return torch.cat(next_scales, dim=1) if next_scales else None
 
     @torch.no_grad()
     def get_next_autoregressive_input(
-        self, si: int, f_hat: torch.Tensor, h_BCDHW: torch.Tensor,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, si: int, f_hat, h_BCDHW) -> Tuple[torch.Tensor, torch.Tensor]:
         """Inference-time: refine sampled h, add to running f_hat, return next-scale conditioning."""
         D, H, W = self.v_patch_nums[-1]
         is_last = (si == self.K - 1)
-        if not is_last:
-            h = self.quant_resi[si / max(self.K - 1, 1)](
-                F.interpolate(h_BCDHW, size=(D, H, W), mode='trilinear', align_corners=False)
-            )
-            f_hat = f_hat + h
-            pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
-            return f_hat, F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode='area')
-        else:
-            h = self.quant_resi[si / max(self.K - 1, 1)](h_BCDHW)
-            f_hat = f_hat + h
-            return f_hat, f_hat
+
+        f_hat = f_hat.float()
+        h_BCDHW = h_BCDHW.float()
+        with torch.amp.autocast("cuda", enabled=False):
+            if not is_last:
+                h = self.quant_resi[si / max(self.K - 1, 1)](
+                    F.interpolate(h_BCDHW, size=(D, H, W), mode='trilinear', align_corners=False)
+                )
+                f_hat = f_hat + h
+                pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
+                return f_hat, F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode='area')
+            else:
+                h = self.quant_resi[si / max(self.K - 1, 1)](h_BCDHW)
+                f_hat = f_hat + h
+                return f_hat, f_hat
 
     def extra_repr(self) -> str:
         return (f'v_patch_nums={self.v_patch_nums}, K={self.K}, znorm={self.using_znorm}, '
@@ -403,17 +415,24 @@ class MSVQVAE3D(nn.Module):
 
     @torch.no_grad()
     def decode_multiscale(self, ms_idx_Bl: List[torch.Tensor]):
-        """Decode list of per-scale token maps back to a volume."""
+        """Decode list of per-scale token maps back to a volume.
+
+        The codebook lookup, Phi refine, and residual accumulation run in FP32
+        for numerical stability. The subsequent decoder call inherits the
+        caller's autocast context, so wrap the call in
+        `torch.amp.autocast("cuda", dtype=...)` to get AMP speedup on decode.
+        """
         B = ms_idx_Bl[0].shape[0]
         D, H, W = self.quantizer.v_patch_nums[-1]
-        f_hat = ms_idx_Bl[0].new_zeros(B, self.quantizer.Cvae, D, H, W, dtype=torch.float32)
-        for si, idx_Bl in enumerate(ms_idx_Bl):
-            pd, ph, pw = self.quantizer.v_patch_nums[si]
-            idx = idx_Bl.view(B, pd, ph, pw)
-            h = self.quantizer.codebook.embed(idx).permute(0, 4, 1, 2, 3).contiguous()
-            if (pd, ph, pw) != (D, H, W):
-                h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
-            f_hat = f_hat + self.quantizer.quant_resi[si / max(self.quantizer.K - 1, 1)](h)
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = ms_idx_Bl[0].new_zeros(B, self.quantizer.Cvae, D, H, W, dtype=torch.float32)
+            for si, idx_Bl in enumerate(ms_idx_Bl):
+                pd, ph, pw = self.quantizer.v_patch_nums[si]
+                idx = idx_Bl.view(B, pd, ph, pw)
+                h = self.quantizer.codebook.embed(idx).float().permute(0, 4, 1, 2, 3).contiguous()
+                if (pd, ph, pw) != (D, H, W):
+                    h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
+                f_hat = f_hat + self.quantizer.quant_resi[si / max(self.quantizer.K - 1, 1)](h)
         return self.decode(f_hat).clamp_(-1, 1)
 
 
