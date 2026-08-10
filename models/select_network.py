@@ -191,6 +191,7 @@ def define_G(opt, mode='train'):
                    quant_resi=opt_net["quant_resi"],
                    share_quant_resi=opt_net["share_quant_resi"],
                    using_znorm=opt_net["using_znorm"],
+                   eini=opt_net['eini'],
                    quant_embed_dim=opt_net["quant_embed_dim"],  #
                    n_embed=opt_net["num_embeddings"],
                    resolution=opt["dataset_opt"]["patch_size_hr"],

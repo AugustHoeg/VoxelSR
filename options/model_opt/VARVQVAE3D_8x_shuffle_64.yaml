@@ -17,6 +17,7 @@ netG:
   quant_resi: 0.5
   share_quant_resi: 4
   using_znorm: true
+  eini: 0.2
 
   decay: 0.99  # EMA decay for codebook updates
   restart_unused_codes: true
