@@ -181,6 +181,25 @@ def define_G(opt, mode='train'):
                    use_checkpoint=opt_net["use_checkpoint"],
         )
 
+    elif model_arch == "VARVQVAE3D":
+        from models.VARVQVAE3D import VARVQVAE3D as net
+        netG = net(in_channels=opt_net["in_channels"],
+                   latent_dim=opt_net["latent_dim"],
+                   channels_enc=opt_net["channels_enc"],
+                   channels_dec=opt_net["channels_dec"],
+                   v_patch_nums=opt_net["v_patch_nums"],
+                   quant_resi=opt_net["quant_resi"],
+                   share_quant_resi=opt_net["share_quant_resi"],
+                   using_znorm=opt_net["using_znorm"],
+                   quant_embed_dim=opt_net["quant_embed_dim"],  #
+                   n_embed=opt_net["num_embeddings"],
+                   resolution=opt["dataset_opt"]["patch_size_hr"],
+                   num_res_blocks_enc=opt_net["num_res_blocks_enc"],
+                   num_res_blocks_dec=opt_net["num_res_blocks_dec"],
+                   skip_attn=opt_net["skip_attn"],
+                   use_checkpoint=opt_net["use_checkpoint"],
+            )
+
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],
