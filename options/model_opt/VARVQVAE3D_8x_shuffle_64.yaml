@@ -16,7 +16,7 @@ netG:
   v_patch_nums : [1, 2, 3, 4, 6, 8]   # -> 828 tokens per volume
   quant_resi: 0.5
   share_quant_resi: 4
-  using_znorm: false
+  using_znorm: true
 
   decay: 0.99  # EMA decay for codebook updates
   restart_unused_codes: true
