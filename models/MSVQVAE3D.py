@@ -102,6 +102,8 @@ class MultiScaleBottleneck3D(nn.Module):
         ema: bool = True,
         decay: float = 0.99,
         restart_unused_codes: bool = True,
+        restart_clamp_factor: float = 1.0,
+        skip_update_over: Optional[float] = None,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -132,6 +134,8 @@ class MultiScaleBottleneck3D(nn.Module):
             ema=ema,
             decay=decay,
             restart_unused_codes=restart_unused_codes,
+            restart_clamp_factor=restart_clamp_factor,
+            skip_update_over=skip_update_over,
         )
 
     # ---------------------------------------------------------------
@@ -341,6 +345,8 @@ class MSVQVAE3D(nn.Module):
         ema: bool = True,
         decay: float = 0.99,
         restart_unused_codes: bool = True,
+        restart_clamp_factor: float = 1.0,
+        skip_update_over: Optional[float] = None,
         # encoder/decoder
         skip_attn: bool = True,
         attn_resolutions=[16],
@@ -392,6 +398,8 @@ class MSVQVAE3D(nn.Module):
             ema=ema,
             decay=decay,
             restart_unused_codes=restart_unused_codes,
+            restart_clamp_factor=restart_clamp_factor,
+            skip_update_over=skip_update_over,
         )
 
     def encode(self, x):

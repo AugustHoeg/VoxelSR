@@ -15,14 +15,20 @@ from utils.utils_3D_image import numel
 class VQEmbedding(nn.Embedding):
     """VQ embedding module with ema update."""
 
-    def __init__(self, n_embed, embed_dim, ema=True, decay=0.99, restart_unused_codes=True, eps=1e-5):
+    def __init__(self, n_embed, embed_dim, ema=True, decay=0.99, restart_unused_codes=True, eps=1e-4,
+                 restart_clamp_factor=1.0, skip_update_over=None):
         super().__init__(n_embed + 1, embed_dim, padding_idx=n_embed)
 
         self.ema = ema
         self.decay = decay
-        self.eps = eps
+        self.eps = eps                                  # raised 1e-5 -> 1e-4
         self.restart_unused_codes = restart_unused_codes
         self.n_embed = n_embed
+
+        # Clamp the L2 norm of restarted codes to median norm of currently-used codes.
+        self.restart_clamp_factor = restart_clamp_factor
+        # Skip the EMA + restart write for that batch if the magnitude of the input vectors is larger than this threshold.
+        self.skip_update_over = skip_update_over
 
         if self.ema:
             _ = [p.requires_grad_(False) for p in self.parameters()]
@@ -79,6 +85,10 @@ class VQEmbedding(nn.Embedding):
         vectors = vectors.float().reshape(-1, embed_dim)
         idxs = idxs.reshape(-1)
 
+        # Skip EMA + restart if vectors magnitude is larger than skip_update_over
+        if self.skip_update_over is not None and vectors.abs().max() > self.skip_update_over:
+            return
+
         n_vectors = vectors.shape[0]
         n_total_embed = n_embed
 
@@ -101,6 +111,15 @@ class VQEmbedding(nn.Embedding):
             n_vectors = vectors.shape[0]
             _vectors_random = vectors[torch.randperm(n_vectors, device=vectors.device)][:n_embed]
 
+            # Clamp restarted-code magnitude to the scale of the live codebook
+            if self.restart_clamp_factor > 0:
+                used = self.cluster_size_ema >= 1
+                ref_rows = self.weight[:-1][used] if used.any() else vectors
+                ref_norm = ref_rows.norm(dim=1).median() * self.restart_clamp_factor
+                rand_norm = _vectors_random.norm(dim=1, keepdim=True)
+                scale = (ref_norm / rand_norm.clamp_min(self.eps)).clamp_max(1.0)
+                _vectors_random = _vectors_random * scale
+
             if dist.is_initialized():
                 dist.broadcast(_vectors_random, 0)
 
@@ -115,6 +134,7 @@ class VQEmbedding(nn.Embedding):
         n_embed = self.weight.shape[0] - 1
         n = self.cluster_size_ema.sum()
         normalized_cluster_size = n * (self.cluster_size_ema + self.eps) / (n + n_embed * self.eps)
+        normalized_cluster_size = normalized_cluster_size.clamp_min(self.eps)  # Added clamp of demon
         self.weight[:-1, :] = self.embed_ema / normalized_cluster_size.reshape(-1, 1)
 
 
