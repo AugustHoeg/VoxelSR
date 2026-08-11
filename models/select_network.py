@@ -177,6 +177,8 @@ def define_G(opt, mode='train'):
                    num_res_blocks_dec=opt_net["num_res_blocks_dec"],
                    decay=opt_net["decay"],
                    restart_unused_codes=opt_net["restart_unused_codes"],
+                   restart_clamp_factor=opt_net["restart_clamp_factor"],
+                   skip_update_over=opt_net["skip_update_over"],
                    skip_attn=opt_net["skip_attn"],
                    use_checkpoint=opt_net["use_checkpoint"],
         )

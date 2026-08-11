@@ -20,6 +20,9 @@ netG:
 
   decay: 0.99  # EMA decay for codebook updates
   restart_unused_codes: true
+  restart_clamp_factor: 1.0
+  skip_update_over: null  # skip codebook update if vector magnitude is above this threshold
+
   attn_resolutions: [8]
   skip_attn: false
   use_checkpoint: true
