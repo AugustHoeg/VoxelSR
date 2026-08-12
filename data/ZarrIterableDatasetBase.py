@@ -145,40 +145,33 @@ def extract_patch_levels_prealloc(data, group_pair, patch_size=(32, 32, 32), pat
     return out_dict
 
 
-def extract_patch_levels_prealloc_v2(data, group_pair, patch_size=(32, 32, 32), patch_size_hr=(128, 128, 128), f=4, metadata=None):
-    volume_L = data[group_pair['L']]
-    volume_H = data[group_pair['H']]
-    volume_H_L = data[f"{group_pair['H'][:-1]}{int(np.sqrt(f))}"]
+def extract_patch_levels_prealloc_v2(data, group_pair, patch_size=(32, 32, 32), patch_size_hr=(128, 128, 128), f=4, metadata=None, resample_empty=True):
+    volume_L = data[group_pair["L"]]
+    volume_H = data[group_pair["H"]]
 
     patch_size_lr = np.floor_divide(patch_size_hr, f)
-
     valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size_lr), (1, 1, 1))
-    c0, c1, c2 = np.random.randint(0, valid_shape) + patch_size_lr // 2
-    C0, C1, C2 = np.multiply((c0, c1, c2), f)
 
     # Create an empty cube filled with zeros
-    patch_L = np.zeros(patch_size, dtype=volume_L.dtype)
-    patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
+    # Resample LR cube until a non-zero patch is found:
+    patch_valid = False
+    while not patch_valid:
+        c0, c1, c2 = np.random.randint(0, valid_shape) + patch_size_lr // 2
+        patch_L = np.zeros(patch_size, dtype=volume_L.dtype)
+        patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
+        patch_valid = patch_L.any() if resample_empty else True # Check if the patch contains any non-zero values
+
+    C0, C1, C2 = np.multiply((c0, c1, c2), f)
     patch_H = np.zeros(patch_size_hr, dtype=volume_H.dtype)
     patch_H = sample(volume_H, patch_H, center=(C0, C1, C2), patch_size=patch_size_hr)
-    patch_H_L = np.zeros(patch_size, dtype=volume_H.dtype)
-    patch_H_L = sample(volume_H_L, patch_H_L, center=(c0, c1, c2), patch_size=patch_size)
 
-    out_dict = {'L': patch_L, 'H': patch_H, 'H_L': patch_H_L}
+    out_dict = {"L": patch_L, "H": patch_H}
 
-    # # test that it works:
-    # plt.figure()
-    # plt.subplot(1, 3, 1)
-    # extra = (patch_size - patch_size_lr) // 2
-    # plt.imshow(patch_H[patch_size_hr[0] // 2, :, :])
-    # plt.axis("off")
-    # plt.subplot(1, 3, 2)
-    # plt.imshow(patch_L[patch_size[0]//2, extra[1]:-extra[1], extra[2]:-extra[2]])
-    # plt.axis("off")
-    # plt.subplot(1, 3, 3)
-    # plt.imshow(patch_L[patch_size[0] // 2, :, :])
-    # plt.axis("off")
-    # plt.show()
+    if "REG" in group_pair:  # Include REG if in group_pair (same size as L)
+        volume_REG = data[group_pair["REG"]]
+        patch_REG = np.zeros(patch_size, dtype=volume_REG.dtype)
+        patch_REG = sample(volume_REG, patch_REG, center=(c0, c1, c2), patch_size=patch_size)
+        out_dict["REG"] = patch_REG
 
     if metadata:
         for key, val in metadata.items():
@@ -240,8 +233,8 @@ class ZarrIterableDataset(IterableDataset):
         if sampling_method == 'in_chunk':
             self._sample_data = extract_patch_levels_from_chunk
         else:
-            self._sample_data = extract_patch_levels_prealloc
-            # self._sample_data = extract_patch_levels_prealloc_v2
+            # self._sample_data = extract_patch_levels_prealloc
+            self._sample_data = extract_patch_levels_prealloc_v2
 
     def _load_data(self, worker_id, num_workers):
 
