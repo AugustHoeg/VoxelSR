@@ -27,6 +27,7 @@ pretrained_G_loss_IDs:
 # G optimizer parameters
 num_accum_steps_G: 1
 G_optimizer_type: adam
+G_optimizer_betas: [0.9, 0.999]
 G_optimizer_lr: 1e-4
 G_optimizer_wd: 0
 G_optimizer_clipgrad: 15
@@ -46,6 +47,7 @@ G_param_strict: false
 # D optimizer parameters
 num_accum_steps_D: 1
 D_optimizer_type: adam
+D_optimizer_betas: [0.9, 0.999]
 D_optimizer_lr: 1e-4
 D_optimizer_wd: 0
 D_optimizer_clipgrad: 15

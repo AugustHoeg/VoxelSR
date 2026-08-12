@@ -179,6 +179,7 @@ def define_G(opt, mode='train'):
                    restart_unused_codes=opt_net["restart_unused_codes"],
                    restart_clamp_factor=opt_net["restart_clamp_factor"],
                    skip_update_over=opt_net["skip_update_over"],
+                   attn_resolutions=opt_net["attn_resolutions"],
                    skip_attn=opt_net["skip_attn"],
                    use_checkpoint=opt_net["use_checkpoint"],
         )
@@ -199,6 +200,7 @@ def define_G(opt, mode='train'):
                    resolution=opt["dataset_opt"]["patch_size_hr"],
                    num_res_blocks_enc=opt_net["num_res_blocks_enc"],
                    num_res_blocks_dec=opt_net["num_res_blocks_dec"],
+                   attn_resolutions=opt_net["attn_resolutions"],
                    skip_attn=opt_net["skip_attn"],
                    use_checkpoint=opt_net["use_checkpoint"],
             )

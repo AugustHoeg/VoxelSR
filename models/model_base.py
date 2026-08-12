@@ -347,9 +347,9 @@ class ModelBase():
                         print(f"Params [{k}] will not optimize.")
 
         if self.opt_train["G_optimizer_type"] == "adam":
-            self.G_optimizer = Adam(params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+            self.G_optimizer = Adam(params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=self.opt_train["G_optimizer_betas"])
         elif self.opt_train["G_optimizer_type"] == "adamw":
-            self.G_optimizer = AdamW(params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+            self.G_optimizer = AdamW(params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=self.opt_train["G_optimizer_betas"])
         else:
             raise NotImplementedError(f"Optimizer [{self.opt_train['G_optimizer_type']}] is not implemented.")
         self.G_train_grad_norm = torch.zeros(1)
@@ -359,9 +359,9 @@ class ModelBase():
         self.num_accum_steps_D = self.opt_train["num_accum_steps_D"]
 
         if self.opt_train["D_optimizer_type"] == "adam":
-            self.D_optimizer = Adam(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=(0.9, 0.999))
+            self.D_optimizer = Adam(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=self.opt_train["D_optimizer_betas"])
         elif self.opt_train["D_optimizer_type"] == "adamw":
-            self.D_optimizer = AdamW(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=(0.9, 0.999))
+            self.D_optimizer = AdamW(self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=self.opt_train["D_optimizer_wd"], betas=self.opt_train["D_optimizer_betas"])
         else:
             raise NotImplementedError(f"Optimizer [{self.opt_train['D_optimizer_type']}] is not implemented.")
 
@@ -370,9 +370,9 @@ class ModelBase():
         self.num_accum_steps_star = self.opt_train["num_accum_steps_G"]  # Assume same no. of accumulation steps as G
 
         if self.opt_train["G_optimizer_type"] == "adam":
-            self.star_optimizer = Adam(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+            self.star_optimizer = Adam(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=self.opt_train["G_optimizer_betas"])
         elif self.opt_train["G_optimizer_type"] == "adamw":
-            self.star_optimizer = AdamW(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=(0.9, 0.999))
+            self.star_optimizer = AdamW(star_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=self.opt_train["G_optimizer_wd"], betas=self.opt_train["G_optimizer_betas"])
         else:
             raise NotImplementedError(f"Optimizer [{self.opt_train['G_optimizer_type']}] is not implemented.")
         self.star_train_grad_norm = torch.zeros(1)
