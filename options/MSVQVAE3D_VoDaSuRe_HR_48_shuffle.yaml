@@ -39,7 +39,7 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
+  iterations: 50000
   validation_iterations: 50
   checkpoint_test: 1000
   checkpoint_save: 10000
