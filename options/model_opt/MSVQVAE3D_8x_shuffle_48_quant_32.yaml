@@ -10,7 +10,7 @@ netG:
   num_res_blocks_enc: 2
   num_res_blocks_dec: 4
   latent_dim: 768
-  quant_embed_dim: 768
+  quant_embed_dim: 32  # Now matches Cvae = 32 in VAR
   num_embeddings: 4096
 
   v_patch_nums : [1, 2, 3, 4, 5, 6]   # -> 828 tokens per volume

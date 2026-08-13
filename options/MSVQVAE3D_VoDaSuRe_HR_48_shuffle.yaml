@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: MSVQVAE3D_8x_shuffle_48_v2                  # Default model config
+  - model_opt: MSVQVAE3D_8x_shuffle_48_quant_32                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
