@@ -10,7 +10,7 @@ netG:
   num_res_blocks_enc: 2
   num_res_blocks_dec: 4
   latent_dim: 768
-  quant_embed_dim: 768
+  quant_embed_dim: 768  # Matches latent dim as done in RQVAE paper
   num_embeddings: 4096
 
   n_rq_depth: 6 # number of residual quantization steps
