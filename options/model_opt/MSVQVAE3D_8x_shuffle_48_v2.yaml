@@ -13,7 +13,7 @@ netG:
   quant_embed_dim: 768
   num_embeddings: 4096
 
-  v_patch_nums : [1, 2, 3, 4, 6]   # -> 828 tokens per volume
+  v_patch_nums : [1, 2, 3, 4, 5, 6]   # -> 828 tokens per volume
   quant_resi: 0.5
   share_quant_resi: 4
   using_znorm: false
