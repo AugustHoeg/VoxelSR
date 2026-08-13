@@ -11,9 +11,9 @@ netG:
   num_res_blocks_dec: 4
   latent_dim: 768
   quant_embed_dim: 768
-  num_embeddings: 8192
+  num_embeddings: 4096
 
-  v_patch_nums : [1, 2, 3, 4, 5, 6]   # -> 828 tokens per volume
+  v_patch_nums : [1, 2, 3, 4, 6]   # -> 828 tokens per volume
   quant_resi: 0.5
   share_quant_resi: 4
   using_znorm: false
@@ -23,7 +23,7 @@ netG:
   restart_clamp_factor: 1.0
   skip_update_over: null  # skip codebook update if vector magnitude is above this threshold
 
-  attn_resolutions: [8]
+  attn_resolutions: [6]
   skip_attn: false
   use_checkpoint: true
 

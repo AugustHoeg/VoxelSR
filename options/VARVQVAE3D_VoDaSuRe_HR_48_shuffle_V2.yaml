@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: MSVQVAE3D_8x_shuffle_48_v2                  # Default model config
+  - model_opt: VARVQVAE3D_8x_shuffle_48                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -20,7 +20,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_8x_shuffle_48_matching_hyperparams
+run_name: ${model_opt.model_architecture}_000_VAR_48_matching_hyperparams
 note: Note
 
 # GPU configuration
@@ -47,7 +47,7 @@ train_opt:
   checkpoint_save_visuals: 1000
   num_accum_steps_G: 1
 
-  # Now matches VAR papers hyperparameters (except with EMA)
+  # Now matches VAR papers hyperparameters
   G_optimizer_type: adamw
   G_optimizer_lr: 2e-4 # 2e-4
   G_optimizer_wd: 0.005
