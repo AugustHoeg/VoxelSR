@@ -23,7 +23,7 @@ import torch.nn.functional as F
 
 from models.basic_vae import EncoderV3 as Encoder
 from models.basic_vae import DecoderV3 as Decoder
-from models.RQVAE3D import VQEmbedding, CodebookUsageTracker
+from models.RQVAE3D import VQEmbedding
 from utils.utils_3D_image import numel
 
 
@@ -138,12 +138,6 @@ class MultiScaleBottleneck3D(nn.Module):
             skip_update_over=skip_update_over,
         )
 
-        # ---- Running per-scale usage metric ----
-        self.usage_tracker = CodebookUsageTracker(num_groups=self.K, vocab_size=vocab_size)
-
-    def usage_report(self):
-        return self.usage_tracker.report()
-
     # ---------------------------------------------------------------
     # Training forward: encode -> residual quantize -> STE
     # ---------------------------------------------------------------
@@ -210,7 +204,6 @@ class MultiScaleBottleneck3D(nn.Module):
                 frac_unique_list.append(
                     torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero() / self.vocab_size
                 )
-                self.usage_tracker.update(si, idx)
 
             mean_vq_loss = mean_vq_loss / self.K
 
@@ -408,10 +401,6 @@ class MSVQVAE3D(nn.Module):
             restart_clamp_factor=restart_clamp_factor,
             skip_update_over=skip_update_over,
         )
-
-    def usage_report(self):
-        """(perplexity, norm_perplexity, frac_used) per scale; running EMA."""
-        return self.quantizer.usage_report()
 
     def encode(self, x):
         return self.pre_quant_conv(self.encoder(x))
