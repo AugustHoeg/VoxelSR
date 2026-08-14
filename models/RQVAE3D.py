@@ -157,6 +157,49 @@ class VQEmbedding(nn.Embedding):
         return embeds
 
 
+class CodebookUsageTracker(nn.Module):
+    """Running codebook-usage metric across training iterations.
+
+    Per-batch ``frac_unique`` is capped by the number of tokens in the batch,
+    which badly under-reports usage at coarse MSVQVAE scales (scale 0 has 1
+    token/volume -> at most ``B`` codes can appear regardless of health). This
+    tracker keeps an EMA of the per-code usage *distribution* for each of
+    ``num_groups`` axes (scales for MSVQVAE, depths for RQVAE) and reports:
+
+      - ``perplexity``       exp(entropy(p)) in [1, V]; == V for perfectly
+                             uniform usage, -> 1 under collapse.
+      - ``norm_perplexity``  perplexity / V in [0, 1] (comparable across vocab).
+      - ``frac_used``        fraction of codes with non-negligible EMA usage.
+
+    Everything lives in buffers so it persists in checkpoints and follows
+    ``.to(device)``. ``decay=0.99`` ~ a 100-iteration effective window.
+    """
+
+    def __init__(self, num_groups: int, vocab_size: int, decay: float = 0.99):
+        super().__init__()
+        self.num_groups = num_groups
+        self.vocab_size = vocab_size
+        self.decay = decay
+        self.register_buffer("usage_ema", torch.zeros(num_groups, vocab_size))
+
+    @torch.no_grad()
+    def update(self, group: int, idx: torch.Tensor):
+        if not self.training:
+            return
+        hist = torch.bincount(idx.reshape(-1), minlength=self.vocab_size).float()
+        p = hist / hist.sum().clamp_min(1.0)
+        self.usage_ema[group].mul_(self.decay).add_(p, alpha=1.0 - self.decay)
+
+    @torch.no_grad()
+    def report(self):
+        p = self.usage_ema / self.usage_ema.sum(dim=1, keepdim=True).clamp_min(1e-12)
+        entropy = -(p * p.clamp_min(1e-12).log()).sum(dim=1)      # (num_groups,)
+        perplexity = entropy.exp()                                # (num_groups,) in [1, V]
+        norm_perplexity = perplexity / self.vocab_size
+        frac_used = (p > 1.0 / (10.0 * self.vocab_size)).float().mean(dim=1)
+        return perplexity, norm_perplexity, frac_used
+
+
 class RQBottleneck3D(nn.Module):
     """
     Residual Quantization bottleneck for 3D volumetric latents.
@@ -213,6 +256,15 @@ class RQBottleneck3D(nn.Module):
                 for i in range(n_rq_depth)
             ])
 
+        # Running usage metric (only when vocab is uniform across depths)
+        self.usage_tracker = (
+            CodebookUsageTracker(num_groups=n_rq_depth, vocab_size=n_embed_list[0])
+            if len(set(n_embed_list)) == 1 else None
+        )
+
+    def usage_report(self):
+        return self.usage_tracker.report()
+
     def quantize(self, x):
         """
         x: (B, Dz, Dy, Dx, C)  [channel-last]
@@ -226,13 +278,15 @@ class RQBottleneck3D(nn.Module):
         aggregated = torch.zeros_like(x)
         quant_list, code_list, frac_unique_list = [], [], []
 
-        for codebook in self.codebooks:
+        for d, codebook in enumerate(self.codebooks):
             quant, code, dists = codebook(residual)
             residual.sub_(quant)  #
             aggregated.add_(quant)  #
             quant_list.append(aggregated.clone())
             code_list.append(code.unsqueeze(-1))
             frac_unique_list.append(torch.bincount(code.reshape(-1), minlength=codebook.n_embed).count_nonzero() / codebook.n_embed)
+            if self.usage_tracker is not None:
+                self.usage_tracker.update(d, code)
 
         codes = torch.cat(code_list, dim=-1)
         return quant_list, codes, frac_unique_list
@@ -443,6 +497,10 @@ class RQVAE3D(nn.Module):
         _, _, code, _ = self.quantizer(z_e)
         return code
 
+
+    def usage_report(self):
+        """(perplexity, norm_perplexity, frac_used) per RQ depth; running EMA."""
+        return self.quantizer.usage_report()
 
     @torch.no_grad()
     def decode_code(self, code):

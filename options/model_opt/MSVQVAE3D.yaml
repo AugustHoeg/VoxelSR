@@ -1,0 +1,32 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+model: vqvae
+model_architecture: MSVQVAE3D
+netG:
+  net_type: MSVQVAE3D
+  description: "3D Multi-scale VQVAE (MSVQVAE3D)"
+  in_channels: 1
+  channels_enc: [32, 32, 128, 256, 256]
+  channels_dec: [256, 256, 128, 32, 32]
+  num_res_blocks_enc: 2
+  num_res_blocks_dec: 4
+  latent_dim: 384
+  quant_embed_dim: 32  # Now matches Cvae = 32 in VAR
+  num_embeddings: 4096
+
+  v_patch_nums : [1, 2, 3, 4, 5, 6]   # -> 828 tokens per volume
+  quant_resi: 0.5
+  share_quant_resi: 4
+  using_znorm: false
+
+  decay: 0.99  # EMA decay for codebook updates
+  restart_unused_codes: true
+  restart_clamp_factor: 1.0
+  skip_update_over: null  # skip codebook update if vector magnitude is above this threshold
+
+  attn_resolutions: [6]
+  skip_attn: false
+  use_checkpoint: true
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.2

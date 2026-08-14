@@ -141,6 +141,24 @@ class ModelVQVAE(ModelBase):
             "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per RQ Depth"),
         })
 
+        # Running (EMA) codebook usage: perplexity is token-count-robust, so it
+        # is comparable across scales/depths and across MSVQVAE vs RQVAE runs.
+        net = self.get_bare_model(self.netG)
+        if hasattr(net, "usage_report"):
+            perplexity, norm_perplexity, frac_used = net.usage_report()
+            for g in range(perplexity.shape[0]):
+                self.run.log({
+                    "step": current_step,
+                    f"cb_perplexity/group_{g}": perplexity[g].item(),
+                    f"cb_norm_perplexity/group_{g}": norm_perplexity[g].item(),
+                    f"cb_frac_used/group_{g}": frac_used[g].item(),
+                })
+            self.run.log({
+                "step": current_step,
+                "cb_norm_perplexity_mean": norm_perplexity.mean().item(),
+                "cb_frac_used_mean": frac_used.mean().item(),
+            })
+
         if self.opt_train['E_decay'] > 0:
             self.update_E(self.opt_train['E_decay'])
 

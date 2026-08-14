@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: MSVQVAE3D_8x_shuffle_64                  # Default model config
+  - model_opt: MSVQVAE3D                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -16,11 +16,11 @@ compile: false # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x_test # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_8x_shuffle_64
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -59,18 +59,18 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 16
+  patch_size: 12
 
   datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 2
+    dataloader_batch_size: 1
     num_load_workers: 4
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
+    dataloader_batch_size: 1
     num_load_workers: 4
     persist_workers: true
     pin_memory: false
