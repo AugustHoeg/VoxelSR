@@ -16,12 +16,13 @@ class VQEmbedding(nn.Embedding):
     """VQ embedding module with ema update."""
 
     def __init__(self, n_embed, embed_dim, ema=True, decay=0.99, restart_unused_codes=True, eps=1e-4,
-                 restart_clamp_factor=1.0, skip_update_over=None):
+                 restart_clamp_factor=1.0, skip_update_over=None, using_znorm=False):
         super().__init__(n_embed + 1, embed_dim, padding_idx=n_embed)
 
         self.ema = ema
         self.decay = decay
-        self.eps = eps                                  # raised 1e-5 -> 1e-4
+        self.using_znorm = using_znorm  # L2-normalize inputs and codebook rows for *assignment* only (embeddings and EMA update stay unchanged)
+        self.eps = eps  #  raised 1e-5 -> 1e-4
         self.restart_unused_codes = restart_unused_codes
         self.n_embed = n_embed
 
@@ -47,6 +48,11 @@ class VQEmbedding(nn.Embedding):
 
         inputs_flat = inputs.reshape(-1, embed_dim)
         inputs_flat = inputs_flat.to(codebook_t.dtype)  # // August
+
+        if self.using_znorm:
+            # Normalize vectors and codes on unit sphere so distance becomes cosine similarity
+            inputs_flat = F.normalize(inputs_flat, dim=1)
+            codebook_t = F.normalize(codebook_t, dim=0)
 
         inputs_norm_sq = inputs_flat.pow(2.).sum(dim=1, keepdim=True)
         codebook_t_norm_sq = codebook_t.pow(2.).sum(dim=0, keepdim=True)
@@ -186,6 +192,7 @@ class RQBottleneck3D(nn.Module):
         decay=0.99,
         shared_codebook=False,
         restart_unused_codes=True,
+        using_znorm=False,
     ):
         super().__init__()
         self.latent_dim = latent_dim
@@ -201,6 +208,7 @@ class RQBottleneck3D(nn.Module):
                 n_embed_list[0], latent_dim,
                 decay=decay_list[0],
                 restart_unused_codes=restart_unused_codes,
+                using_znorm=using_znorm,
             )
             self.codebooks = nn.ModuleList([cb] * n_rq_depth)
         else:
@@ -209,6 +217,7 @@ class RQBottleneck3D(nn.Module):
                     n_embed_list[i], latent_dim,
                     decay=decay_list[i],
                     restart_unused_codes=restart_unused_codes,
+                    using_znorm=using_znorm,
                 )
                 for i in range(n_rq_depth)
             ])
@@ -375,6 +384,7 @@ class RQVAE3D(nn.Module):
         decay=0.99,
         shared_codebook=False,
         restart_unused_codes=True,
+        using_znorm=False,
         skip_attn=False,
         attn_resolutions=[16],
         use_checkpoint=False,
@@ -403,6 +413,7 @@ class RQVAE3D(nn.Module):
             decay=decay,
             shared_codebook=shared_codebook,
             restart_unused_codes=restart_unused_codes,
+            using_znorm=using_znorm,
         )
 
         self.decoder = Decoder(

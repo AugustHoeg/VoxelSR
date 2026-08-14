@@ -136,6 +136,7 @@ class MultiScaleBottleneck3D(nn.Module):
             restart_unused_codes=restart_unused_codes,
             restart_clamp_factor=restart_clamp_factor,
             skip_update_over=skip_update_over,
+            using_znorm=using_znorm,
         )
 
     # ---------------------------------------------------------------
@@ -167,21 +168,9 @@ class MultiScaleBottleneck3D(nn.Module):
                 # 1) downsample residual to this scale
                 rest_ds = f_rest if is_last else F.interpolate(f_rest, size=(pd, ph, pw), mode='area')
 
-                # 2) shared-codebook nearest-neighbour lookup (channel-last)
+                # 2) shared-codebook nearest-neighbour lookup (channel-last).
                 rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()   # (B, pd, ph, pw, C)
-                if self.using_znorm:
-                    # cosine variant: normalize inputs and codebook rows
-                    normed = F.normalize(rest_dhwc, dim=-1)
-                    E = F.normalize(self.codebook.weight[:-1, :], dim=-1)  # exclude padding row
-                    logits = normed.reshape(-1, C) @ E.t()                 # (N, V)
-                    idx = logits.argmax(dim=-1).view(B, pd, ph, pw)
-                    embeds = self.codebook.embed(idx)                      # (B, pd, ph, pw, C)
-                    # EMA update path when training
-                    if self.training and self.codebook.ema:
-                        self.codebook._update_buffers(rest_dhwc, idx)
-                        self.codebook._update_embedding()
-                else:
-                    embeds, idx, _ = self.codebook(rest_dhwc)              # L2 lookup + EMA inside
+                embeds, idx, _ = self.codebook(rest_dhwc)
 
                 # 3) upsample chosen embeddings back to full (D, H, W)
                 h = embeds.permute(0, 4, 1, 2, 3).contiguous()             # (B, C, pd, ph, pw)
