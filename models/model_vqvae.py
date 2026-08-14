@@ -31,6 +31,11 @@ class ModelVQVAE(ModelBase):
         self.vae_target = opt.get('vae_target', 'HR')
         self.update = False
 
+        # Running EMA of per-scale/depth frac_unique (smooths the per-batch value,
+        # which is noisy and token-count-capped at coarse scales)
+        self.frac_unique_ema = None
+        self.frac_unique_ema_decay = self.opt_train.get('frac_unique_ema_decay', 0.99)
+
         self.early_stop = False
         self.min_validation_loss = float('inf')
         self.patience = self.opt_train['early_stop_patience']
@@ -88,6 +93,14 @@ class ModelVQVAE(ModelBase):
     def netG_forward(self):
         self.E, _, _, _, _ = self.netG(self.L)
 
+    def _update_frac_unique_ema(self):
+        cur = torch.stack([f.detach().float() for f in self.frac_unique])
+        if self.frac_unique_ema is None or self.frac_unique_ema.shape != cur.shape:
+            self.frac_unique_ema = cur
+        else:
+            d = self.frac_unique_ema_decay
+            self.frac_unique_ema = d * self.frac_unique_ema + (1 - d) * cur
+
     def optimize_parameters_amp(self, current_step, update=False):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
@@ -95,6 +108,8 @@ class ModelVQVAE(ModelBase):
             recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
             self.gen_loss = self.vq_loss + recon_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
+
+        self._update_frac_unique_ema()
 
         self.G_train_loss = self.gen_loss
         if self.opt['rank'] == 0:
@@ -133,7 +148,7 @@ class ModelVQVAE(ModelBase):
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
 
         table = wandb.Table(
-            data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique)],
+            data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique_ema)],
             columns=["depth", "frac_unique"],
         )
         self.run.log({
