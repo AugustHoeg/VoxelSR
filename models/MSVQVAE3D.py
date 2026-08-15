@@ -460,6 +460,7 @@ if __name__ == '__main__':
         v_patch_nums=(1, 2, 3, 4, 6, 8),           # -> 828 tokens per volume
         quant_resi=0.5,
         share_quant_resi=4,
+        using_znorm=True,
         skip_attn=True,
         use_checkpoint=True,
     ).to(device)
