@@ -13,7 +13,7 @@ def _grid_coords(shape):
     return torch.stack([zz.reshape(-1), yy.reshape(-1), xx.reshape(-1)], dim=-1).float()
 
 
-def compute_axial_cis(dim, hr_shape, lr_shape=None, theta=100.0,
+def compute_axial_cis(dim, hr_shape, lr_shape=None, theta=10000,
                       norm_coeff_x=1.0, norm_coeff_y=1.0, norm_coeff_z=1.0):
     """3D axial rotary frequencies as complex phasors.
 
@@ -73,7 +73,7 @@ class Rope3D(nn.Module):
     selects the HR sub-table for the unconditional (HR-only) body pass.
     """
 
-    def __init__(self, head_dim, hr_shape, lr_shape=None, theta=100.0,
+    def __init__(self, head_dim, hr_shape, lr_shape=None, theta=10000,
                  norm_coeffs=(1.0, 1.0, 1.0)):
         super().__init__()
         assert head_dim // 6 > 0, f"head_dim={head_dim} too small for 3D RoPE (need >= 6)"

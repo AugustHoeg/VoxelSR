@@ -209,9 +209,7 @@ class RQTransformer3DPrefix(nn.Module):
         lr_input_len:   LR token count at encoder resolution (None = unconditional).
         lr_input_dim:   channel dim of incoming LR embeddings.
         lr_down_factor: extra PixelUnshuffle3D downsample of the LR grid before prefixing.
-        hr_shape:       (dz,dy,dx) HR grid; defaults to cubic cbrt(seq_len).
-        lr_shape:       (dz,dy,dx) LR-input grid; defaults to cubic cbrt(lr_input_len).
-        rope_theta:     RoPE base frequency (DVAR default 100.0).
+        rope_theta:     RoPE base frequency (DVAR default 10000).
         rope_norm_coeffs: per-axis (x,y,z) coordinate scale for RoPE frequencies.
         use_checkpoint: gradient checkpointing.
         head_emb_vqvae / cumsum_depth_ctx / input_embed_dim: as in RQTransformer3D.
@@ -231,9 +229,7 @@ class RQTransformer3DPrefix(nn.Module):
         lr_input_len=None,
         lr_input_dim=None,
         lr_down_factor=1,
-        hr_shape=None,
-        lr_shape=None,
-        rope_theta=100.0,
+        rope_theta=10000,
         rope_norm_coeffs=(1.0, 1.0, 1.0),
         use_checkpoint=False,
         head_emb_vqvae=False,
@@ -272,10 +268,8 @@ class RQTransformer3DPrefix(nn.Module):
         self.uncond_emb = nn.Embedding(1, embed_dim)
 
         # HR grid geometry (for RoPE coords).
-        hr_shape = tuple(hr_shape) if hr_shape is not None else self._infer_cubic(seq_len)
-        assert hr_shape[0] * hr_shape[1] * hr_shape[2] == seq_len, \
-            f"hr_shape {hr_shape} inconsistent with seq_len {seq_len}"
-        self.hr_shape = hr_shape
+        self.hr_shape = tuple(int(round(seq_len ** (1. / 3))) for _ in range(3))
+        self.lr_shape = tuple(int(round(lr_input_len ** (1. / 3))) for _ in range(3)) if lr_input_len else None
 
         # LR conditioning as a prefix.
         if lr_input_len is not None:
@@ -283,16 +277,14 @@ class RQTransformer3DPrefix(nn.Module):
             self.lr_down = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
             lr_in_dim = lr_input_dim * lr_down_factor ** 3 if lr_input_dim is not None else embed_dim
             self.lr_proj = nn.Conv3d(lr_in_dim, embed_dim, kernel_size=1, bias=False)
-
-            self.prefix_shape = tuple(s // lr_down_factor for s in lr_shape)
-
+            self.prefix_shape = tuple(s // lr_down_factor for s in self.lr_shape) if self.lr_shape else None
         else:
             self.n_lr = 0
             self.prefix_shape = None
 
         # LR prefix coords are mapped onto the HR grid inside compute_axial_cis.
         self.rope = Rope3D(
-            head_dim, hr_shape=hr_shape,
+            head_dim, hr_shape=self.hr_shape,
             lr_shape=(self.prefix_shape if self.n_lr > 0 else None),
             theta=rope_theta, norm_coeffs=rope_norm_coeffs,
         )
@@ -605,8 +597,6 @@ if __name__ == "__main__":
         lr_input_len=L_lr,
         lr_input_dim=lr_input_dim,
         lr_down_factor=lr_down_factor,
-        hr_shape=(hr_spatial, hr_spatial, hr_spatial),
-        lr_shape=(lr_spatial, lr_spatial, lr_spatial),
         dropout=0.1,
         use_checkpoint=True,
     ).to(device)

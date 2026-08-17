@@ -9,12 +9,10 @@ netG:
   num_embeddings: 4096           # codebook size; must match the HR VQ model
   n_rq_depth: 6                  # RQ depth; must match the HR VQ model
   seq_len: 512                   # HR latent spatial token count (Dz*Dy*Dx after VQ encoding)
-  hr_shape: [8, 8, 8]            # HR latent spatial shape (Dz, Dy, Dx)
 
   lr_input_len: 4096             # LR latent spatial token count
   lr_input_dim: 1                # channel dim of LR VQ encoder output (quant_embed_dim)
   lr_down_factor: 2              # downsampling factor for LR input before projection to embed_dim
-  lr_shape: [8, 8, 8]            # LR latent spatial shape (Dz, Dy, Dx)
 
   embed_dim: 768
   body_depth: 12                 # number of SpatialBlocks
