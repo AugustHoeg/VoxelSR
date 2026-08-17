@@ -68,6 +68,31 @@ def define_G(opt, mode='train'):
             input_embed_dim=opt_net.get('input_embed_dim', None),
         )
 
+    elif model_arch == "RQTransformer3DPrefix":
+        from models.RQTransformer3DPrefix import RQTransformer3DPrefix as net
+        netG = net(
+            seq_len=opt_net['seq_len'],
+            n_rq_depth=opt_net['n_rq_depth'],
+            embed_dim=opt_net['embed_dim'],
+            n_embed=opt_net['num_embeddings'],
+            body_depth=opt_net['body_depth'],
+            head_depth=opt_net['head_depth'],
+            num_heads=opt_net['num_heads'],
+            mlp_ratio=opt_net.get('mlp_ratio', 4),
+            dropout=opt_net.get('dropout', 0.0),
+            lr_input_len=opt_net.get('lr_input_len', None),
+            lr_input_dim=opt_net.get('lr_input_dim', None),
+            lr_down_factor=opt_net.get('lr_down_factor', 1),
+            hr_shape=opt_net.get('hr_shape', None),
+            lr_shape=opt_net.get('lr_shape', None),
+            rope_theta=opt_net.get('rope_theta', 100.0),
+            rope_norm_coeffs=tuple(opt_net.get('rope_norm_coeffs', (1.0, 1.0, 1.0))),
+            use_checkpoint=opt_net.get('use_checkpoint', False),
+            head_emb_vqvae=opt_net.get('head_emb_vqvae', False),
+            cumsum_depth_ctx=opt_net.get('cumsum_depth_ctx', False),
+            input_embed_dim=opt_net.get('input_embed_dim', None),
+        )
+
     elif model_arch == "MaskTransformer3D":
         from models.MaskTransformer3D import MaskTransformer3D as net
         netG = net(

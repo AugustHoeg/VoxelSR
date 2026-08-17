@@ -418,46 +418,63 @@ class ModelBase():
             self.metric_val_dict["nrmse"] = 0.0
             self.metric_fn_dict["nrmse"] = NRMSE_3D() if self.opt['input_type'] == '3D' else NRMSE_2D()
 
-    def _build_scheduler(self, optimizer, milestones_key, gamma_key, warmup_steps_key):
-        """Build a MultiStepLR scheduler with an optional LinearLR warmup prefix."""
-        multistep = lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=self.opt_train[milestones_key],
-            gamma=self.opt_train[gamma_key]
-        )
+    def _build_scheduler(self, optimizer, milestones_key, gamma_key, warmup_steps_key, scheduler_type="MultiStepLR"):
+        """Build a scheduler with an optional LinearLR warmup prefix."""
+        if scheduler_type == "CosineAnnealingLR":
+            scheduler = lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=self.opt_train["iterations"],  # Set to no. of training iterations for now
+                eta_min=0.0  # Set to zer for now
+            )
+        else:
+            scheduler = lr_scheduler.MultiStepLR(
+                optimizer,
+                milestones=self.opt_train[milestones_key],
+                gamma=self.opt_train[gamma_key]
+            )
+
         warmup_steps = self.opt_train.get(warmup_steps_key, 0)
         if warmup_steps > 0:
             warmup = lr_scheduler.LinearLR(
                 optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps
             )
             return lr_scheduler.SequentialLR(
-                optimizer, schedulers=[warmup, multistep], milestones=[warmup_steps]
+                optimizer, schedulers=[warmup, scheduler], milestones=[warmup_steps]
             )
-        return multistep
+        return scheduler
 
     def define_G_scheduler(self):
-        self.schedulers.append(self._build_scheduler(
-            self.G_optimizer,
-            milestones_key='G_scheduler_milestones',
-            gamma_key='G_scheduler_gamma',
-            warmup_steps_key='G_warmup_steps'
-        ))
+        self.schedulers.append(
+            self._build_scheduler(
+                self.G_optimizer,
+                milestones_key="G_scheduler_milestones",
+                gamma_key="G_scheduler_gamma",
+                warmup_steps_key="G_warmup_steps",
+                scheduler_type=self.opt_train.get("G_scheduler_type", "MultiStepLR")
+            )
+        )
 
     def define_D_scheduler(self):
-        self.schedulers.append(self._build_scheduler(
-            self.D_optimizer,
-            milestones_key='D_scheduler_milestones',
-            gamma_key='D_scheduler_gamma',
-            warmup_steps_key='D_warmup_steps'
-        ))
+        self.schedulers.append(
+            self._build_scheduler(
+                self.D_optimizer,
+                milestones_key="D_scheduler_milestones",
+                gamma_key="D_scheduler_gamma",
+                warmup_steps_key="D_warmup_steps",
+                scheduler_type=self.opt_train.get("D_scheduler_type", "MultiStepLR"),
+            )
+        )
 
     def define_star_scheduler(self):
-        self.schedulers.append(self._build_scheduler(
-            self.star_optimizer,
-            milestones_key='G_scheduler_milestones',
-            gamma_key='G_scheduler_gamma',
-            warmup_steps_key='G_scheduler_warmup_steps',
-        ))
+        self.schedulers.append(
+            self._build_scheduler(
+                self.star_optimizer,
+                milestones_key="G_scheduler_milestones",
+                gamma_key="G_scheduler_gamma",
+                warmup_steps_key="G_scheduler_warmup_steps",
+                scheduler_type=self.opt_train.get("star_scheduler_type", "MultiStepLR"),
+            )
+        )
 
     def define_scheduler(self):
         """Default: G only. GAN models override to also call define_D_scheduler()."""
