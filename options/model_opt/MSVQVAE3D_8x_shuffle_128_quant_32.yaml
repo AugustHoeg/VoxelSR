@@ -23,7 +23,7 @@ netG:
   restart_clamp_factor: 1.0
   skip_update_over: null  # skip codebook update if vector magnitude is above this threshold
 
-  attn_resolutions: [8]
+  attn_resolutions: [16]
   skip_attn: false
   use_checkpoint: true
 
