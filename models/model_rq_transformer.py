@@ -238,6 +238,10 @@ class ModelTransformerRQ(ModelBase):
         self.H = data['H'].as_tensor().to(self.device, non_blocking=True)
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
 
+    def netG_forward(self):  # This is the function run during inference
+        self.E = self.sample_E(self.L, batch_size=self.L.shape[0])
+
+
     def optimize_parameters_amp(self, current_step, update=False):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
