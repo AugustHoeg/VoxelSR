@@ -45,7 +45,7 @@ train_opt:
   checkpoint_save: 5000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
-  num_accum_steps_G: 1
+  num_accum_steps_G: 2
 
   # Now matches VAR papers hyperparameters (except with EMA)
   G_optimizer_type: adamw
@@ -68,8 +68,8 @@ dataset_opt:
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 24 # 32
-    num_load_workers: 24 # 32
+    dataloader_batch_size: 16 # 32
+    num_load_workers: 32 # 32
     persist_workers: true
     pin_memory: false
 
