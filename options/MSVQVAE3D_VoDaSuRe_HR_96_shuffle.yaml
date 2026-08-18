@@ -53,6 +53,7 @@ train_opt:
   G_optimizer_wd: 0.005
   G_optimizer_clipgrad: 4
   G_optimizer_betas: [ 0.5, 0.9 ]
+  G_warmup_steps: 1000
 
   G_loss_weights:
     L1: 1.0
