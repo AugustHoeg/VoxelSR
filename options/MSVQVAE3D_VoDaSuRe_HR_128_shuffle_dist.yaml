@@ -25,8 +25,8 @@ note: Note
 
 # GPU configuration
 train_mode: "finetune"   # "scratch", "finetune" or "resume"
-gpu_ids: [0]
-dist: false
+gpu_ids: [0, 1]
+dist: true
 cluster: DTU_HPC # DTU_HPC or TITANS
 
 save_model: true  # flag to save model
@@ -45,7 +45,7 @@ train_opt:
   checkpoint_save: 5000  # 10000
   checkpoint_print: 1000
   checkpoint_save_visuals: 1000
-  num_accum_steps_G: 4
+  num_accum_steps_G: 2
 
   # Now matches VAR papers hyperparameters (except with EMA)
   G_optimizer_type: adamw
