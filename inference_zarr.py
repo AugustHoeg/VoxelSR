@@ -267,7 +267,8 @@ def main(opt: DictConfig):
         patch_size_hr = opt['dataset_opt']['patch_size_hr']
 
     if hasattr(model, "latent_shape_hr"):  #
-        model.latent_shape_hr = (opt['dataset_opt']['patch_size_hr'] // 8 for _ in range(3))
+        size_hr = opt['dataset_opt']['patch_size_hr']
+        model.latent_shape_hr = (size_hr // 8, size_hr // 8, size_hr // 8)
 
     # Create directory for test patch comparisons
     image_path = os.path.join(wandb_path, "files/", "media/", "images/")
