@@ -88,7 +88,7 @@ class ModelVQVAE(ModelBase):
         self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss, self.codes, self.z_e, self.frac_unique = self.netG(self.vae_in)
+        self.E, self.vq_loss, self.codes, self.z_no_vq, self.frac_unique = self.netG(self.vae_in)
 
     def netG_forward(self):
         self.E, _, _, _, _ = self.netG(self.L)
@@ -105,8 +105,8 @@ class ModelVQVAE(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
-            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
-            self.gen_loss = self.vq_loss + recon_loss
+            self.recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
+            self.gen_loss = self.vq_loss + self.recon_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self._update_frac_unique_ema()
@@ -143,6 +143,12 @@ class ModelVQVAE(ModelBase):
     def record_train_log(self, current_step):
         loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": loss})
+
+        # Log the recon / vq components separately: G_train_loss bundles both, but
+        # vq_loss is a per-quantizer regularizer (not comparable across families) and
+        # recon_loss is the fidelity term that actually tracks PSNR/SSIM.
+        self.run.log({"step": current_step, "G_recon_loss": self.recon_loss.item()})
+        self.run.log({"step": current_step, "G_vq_loss": self.vq_loss.item()})
 
         grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
@@ -197,9 +203,9 @@ class ModelVQVAE(ModelBase):
         net = self.get_bare_model(self.netG)
         if self.mixed_precision is not None:
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                E_no_vq = net.decode(self.z_e)
+                E_no_vq = net.decode(self.z_no_vq)
         else:
-            E_no_vq = net.decode(self.z_e)
+            E_no_vq = net.decode(self.z_no_vq)
         out_dict['E_no_vq'] = E_no_vq.detach()[0].float().cpu()
         return out_dict
 

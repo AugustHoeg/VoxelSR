@@ -463,6 +463,26 @@ class MultiScaleBSQ3D(nn.Module):
             pd, ph, pw = self.v_patch_nums[si + 1]
             return f_hat, F.interpolate(f_hat, size=(pd, ph, pw), mode=self.z_down)
 
+    @torch.no_grad()
+    def fhat_no_vq(self, f_BLDHW: torch.Tensor) -> torch.Tensor:
+        """Same multiscale loop but skip binarization: code = q_scale * normalize(r).
+        Lives in the SAME space as f_hat, so decode() of it is a valid no-VQ upper bound."""
+        B, L, D, H, W = f_BLDHW.shape
+        with torch.amp.autocast("cuda", enabled=False):
+            residual = f_BLDHW.float()
+            f_hat = torch.zeros_like(residual)
+            for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
+                is_last = si == self.K - 1
+                r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
+                r = r.permute(0, 2, 3, 4, 1)
+                code = self.bsq.q_scale * F.normalize(r, dim=-1)  # soft, no quantize()
+                q = code.permute(0, 4, 1, 2, 3).contiguous() * self._out_fact(si)
+                if not is_last:
+                    q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
+                f_hat = f_hat + q
+                residual = residual - q
+            return f_hat
+
     def extra_repr(self) -> str:
         return (f"L={self.L} (vocab=2**{self.L}), v_patch_nums={self.v_patch_nums}, "
                 f"K={self.K}, decay={self.use_decay_factor}")
@@ -570,7 +590,7 @@ class BSQVAE3D(nn.Module):
         z_e = self.encode(x)
         f_hat, vq_loss, frac_unique = self.quantizer(z_e)
         x_hat = self.decode(f_hat)
-        return x_hat, vq_loss, None, z_e, frac_unique
+        return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique
 
     # -------- helpers for transformer training later --------
     @torch.no_grad()
