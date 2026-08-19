@@ -47,12 +47,14 @@ train_opt:
   checkpoint_save_visuals: 1000
   num_accum_steps_G: 1
 
-  # Matches RQVAE papers hyperparameters for fair comparison
+  # Matches BSQ papers hyperparameters (expect LR increased from 1e-4 to 2e-4)
   G_optimizer_type: adamw
   G_optimizer_lr: 2e-4 # 2e-4
-  G_optimizer_wd: 0.005
+  G_optimizer_wd: 0.0001
   G_optimizer_clipgrad: 4
-  G_optimizer_betas: [ 0.5, 0.9 ]
+  G_optimizer_betas: [ 0.9, 0.99 ]
+  G_scheduler_type: CosineAnnealingLR
+  G_warmup_steps: 0
 
   G_loss_weights:
     L1: 1.0

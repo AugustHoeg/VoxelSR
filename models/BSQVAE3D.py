@@ -30,7 +30,7 @@ Token representation (Infinity-style, bitwise):
 Defaults picked for a 64^3 input -> 8^3 latent (down_factor=8).
 """
 
-from typing import List, Optional, Sequence, Tuple, Union
+from typing import Callable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -325,11 +325,25 @@ class MultiScaleBSQ3D(nn.Module):
         f_BLDHW: torch.Tensor,
         to_fhat: bool,
         v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int, int]]]] = None,
+        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
     ) -> List[torch.Tensor]:
         """
         Encode a latent into either:
           - to_fhat=True  : list[Tensor(B, L, D, H, W)]   cumulative reconstructions
-          - to_fhat=False : list[BoolTensor(B, pd*ph*pw, L)] per-scale bit maps
+          - to_fhat=False : list[IntTensor(B, pd*ph*pw, L)] per-scale *ground-truth* bit maps
+
+        Bitwise Self-Correction hook (Infinity). If `bit_noise_fn` is given it is
+        called per scale as `bit_noise_fn(si, gt_bit_idx) -> used_bit_idx`, where
+        `gt_bit_idx` is the true quantization of the current residual, shape
+        (B, pd, ph, pw, L). The returned (possibly bit-flipped) `used_bit_idx` is
+        requantized and used for the residual peel + f_hat accumulation, so the
+        downstream scales see the *corrupted* history (train/test-discrepancy
+        reduction). The emitted maps stay ground-truth: `to_fhat=False` returns the
+        true `gt_bit_idx` (transformer targets), `to_fhat=True` returns the corrupted
+        cumulative f_hat (teacher-forcing input). A BSC module can therefore make one
+        `to_fhat=True` pass and capture the gt bits inside its own `bit_noise_fn`
+        closure under the same random-flip realization. `bit_noise_fn=None` is an
+        exact no-op (identity requantization reproduces the plain code).
         """
         B, L, D, H, W = f_BLDHW.shape
         with torch.amp.autocast("cuda", enabled=False):
@@ -343,6 +357,13 @@ class MultiScaleBSQ3D(nn.Module):
                 is_last = (si == len(patches) - 1)
                 r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
                 q, _idx, bit_idx, _aux = self.bsq(r)
+
+                # BSC: requantize (possibly flipped) bits for the accumulated history
+                if bit_noise_fn is not None:
+                    used_bit_idx = bit_noise_fn(si, bit_idx)
+                    code = self.bsq.indices_to_code(used_bit_idx)          # (B,pd,ph,pw,L)
+                    q = code.permute(0, 4, 1, 2, 3).contiguous()           # (B,L,pd,ph,pw)
+
                 q = q * self._out_fact(si)
                 if not is_last:
                     q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
@@ -351,6 +372,64 @@ class MultiScaleBSQ3D(nn.Module):
                 residual = residual - q
                 out.append(f_hat.clone() if to_fhat else bit_idx.reshape(B, pd * ph * pw, L))
         return out
+
+    @torch.no_grad()
+    def f_to_var_input(
+        self,
+        f_BLDHW: torch.Tensor,
+        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
+        return_gt_bits: bool = False,
+    ):
+        """
+        Infinity-style teacher-forcing inputs, built exactly as
+        Infinity's MultiScaleBSQ.forward `var_inputs`:
+
+            for si in [0, K-2]:
+                var_inputs[si] = area_down(quantized_out_after_scale_si, scale[si+1])
+
+        i.e. the running cumulative f_hat (== Infinity `quantized_out`) after scale
+        si, area-downsampled to the *next* scale, in the L-dim code space (before
+        post_quant_conv). Length K-1; these condition the transformer's prediction
+        of scales 1..K-1 (scale 0 comes from the start/prefix token).
+
+        If `return_gt_bits`, also returns the per-scale ground-truth bit maps
+        (B, l_k, L) so a transformer step gets teacher inputs + targets from ONE
+        pass -- consistent even under a Bitwise Self-Correction `bit_noise_fn`
+        (see f_to_bits_or_fhat). This mirrors Infinity returning both
+        `all_bit_indices` and `var_inputs` from the same forward.
+        """
+        B, L, D, H, W = f_BLDHW.shape
+        with torch.amp.autocast("cuda", enabled=False):
+            residual = f_BLDHW.float()
+            f_hat = torch.zeros_like(residual)          # == Infinity quantized_out
+            var_inputs: List[torch.Tensor] = []
+            gt_bits: List[torch.Tensor] = []
+            for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
+                is_last = (si == self.K - 1)
+                r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
+                q, _idx, bit_idx, _aux = self.bsq(r)
+                gt_bits.append(bit_idx.reshape(B, pd * ph * pw, L))
+
+                # BSC: requantize (possibly flipped) bits into the accumulated history
+                if bit_noise_fn is not None:
+                    code = self.bsq.indices_to_code(bit_noise_fn(si, bit_idx))
+                    q = code.permute(0, 4, 1, 2, 3).contiguous()
+
+                q = q * self._out_fact(si)
+                if not is_last:
+                    q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
+                q = q.contiguous()
+                residual = residual - q
+                f_hat = f_hat + q
+
+                # Infinity: append running quantized_out area-downsampled to next scale
+                if not is_last:
+                    pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
+                    var_inputs.append(
+                        F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode=self.z_down).contiguous()
+                    )
+        return (var_inputs, gt_bits) if return_gt_bits else var_inputs
+
 
     @torch.no_grad()
     def bits_to_fhat(self, ms_bits: List[torch.Tensor]) -> torch.Tensor:
@@ -495,10 +574,28 @@ class BSQVAE3D(nn.Module):
 
     # -------- helpers for transformer training later --------
     @torch.no_grad()
-    def encode_multiscale(self, x) -> List[torch.Tensor]:
-        """Returns list[BoolTensor(B, l_k, L)] per-scale bit maps (transformer targets)."""
+    def encode_multiscale(
+        self, x,
+        to_fhat: bool = False,
+        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
+    ) -> List[torch.Tensor]:
+        """Per-scale ground-truth bit maps (transformer targets), or cumulative f_hats
+        if to_fhat=True. Pass `bit_noise_fn` to drive Bitwise Self-Correction (see
+        MultiScaleBSQ3D.f_to_bits_or_fhat)."""
         z_e = self.encode(x)
-        return self.quantizer.f_to_bits_or_fhat(z_e, to_fhat=False)
+        return self.quantizer.f_to_bits_or_fhat(z_e, to_fhat=to_fhat, bit_noise_fn=bit_noise_fn)
+
+    @torch.no_grad()
+    def encode_var_input(
+        self, x,
+        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
+        return_gt_bits: bool = False,
+    ):
+        """Infinity-style teacher-forcing `var_inputs` (list len K-1), and optionally
+        the per-scale gt bit targets from the same pass. See
+        MultiScaleBSQ3D.f_to_var_input."""
+        z_e = self.encode(x)
+        return self.quantizer.f_to_var_input(z_e, bit_noise_fn=bit_noise_fn, return_gt_bits=return_gt_bits)
 
     @torch.no_grad()
     def decode_multiscale(self, ms_bits: List[torch.Tensor]):

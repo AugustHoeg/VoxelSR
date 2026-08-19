@@ -153,7 +153,7 @@ class ModelVQVAE(ModelBase):
         )
         self.run.log({
             "step": current_step,
-            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per RQ Depth"),
+            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per depth/scale"),
         })
 
         if self.opt_train['E_decay'] > 0:
