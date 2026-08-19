@@ -227,6 +227,31 @@ def define_G(opt, mode='train'):
                    skip_attn=opt_net["skip_attn"],
                    use_checkpoint=opt_net["use_checkpoint"],
             )
+        
+    elif model_arch == "BSQVAE3D":
+        from models.BSQVAE3D import BSQVAE3D as net
+        netG = net(
+            in_channels=opt_net["in_channels"],
+            latent_dim=opt_net["latent_dim"],
+            channels_enc=opt_net["channels_enc"],
+            channels_dec=opt_net["channels_dec"],
+            v_patch_nums=opt_net["v_patch_nums"],
+            codebook_bits=opt_net["codebook_bits"],
+            use_decay_factor=opt_net["use_decay_factor"],
+            entropy_loss_weight=opt_net["entropy_loss_weight"],
+            commitment_loss_weight=opt_net["commitment_loss_weight"],
+            inv_temperature=opt_net["inv_temperature"],
+            diversity_gamma=opt_net["diversity_gamma"],
+            gamma0=opt_net["gamma0"],
+            zeta=opt_net["zeta"],
+            lfq_weight=opt_net["lfq_weight"],
+            resolution=opt["dataset_opt"]["patch_size_hr"],
+            num_res_blocks_enc=opt_net["num_res_blocks_enc"],
+            num_res_blocks_dec=opt_net["num_res_blocks_dec"],
+            attn_resolutions=opt_net["attn_resolutions"],
+            skip_attn=opt_net["skip_attn"],
+            use_checkpoint=opt_net["use_checkpoint"],
+        )
 
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
