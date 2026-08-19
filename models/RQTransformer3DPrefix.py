@@ -527,8 +527,6 @@ class RQTransformer3DPrefix(nn.Module):
         if not use_cache:
             self._set_body_kv_cache(False)
             for s in range(L):
-                if s % 100 == 0:
-                    print(f"AR token: {s}/{L}")
                 spatial_ctx, _ = self._body_forward(codes_flat, lr_tokens)
                 self._sample_depths(spatial_ctx[:, s, :], codes_flat, s, depth_emb,
                                     temperature, top_k, code_emb_fn)
@@ -555,8 +553,6 @@ class RQTransformer3DPrefix(nn.Module):
                                            rope_offset=m0)
 
         for s in range(L):
-            if s % 100 == 0:
-                print(f"AR token: {s}/{L}")
             self._sample_depths(spatial_ctx_s, codes_flat, s, depth_emb,
                                 temperature, top_k, code_emb_fn)
             if s + 1 < L:
