@@ -50,7 +50,9 @@ class SliceMetrics3D():
 
         num_slices = vol_ref.shape[self.slice_dim]
         for slice_idx in range(num_slices):
-
+            if slice_idx % 100 == 0:
+                print(f"Evaluating slice: {slice_idx}/{num_slices}")
+            
             # Slice and normalize
             slice_src = self.normalize(self.get_slice(vol_src, slice_idx))
             slice_ref = self.normalize(self.get_slice(vol_ref, slice_idx))   
