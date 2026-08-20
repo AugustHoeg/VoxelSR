@@ -5,9 +5,23 @@ import numpy as np
 
 up_factor = 2
 base_path = f"../logs/VoDaSuRe_OME/wandb/"
-experiment_id = "ID009501"
+experiment_id = "ID009501" # "ID005605" # "ID005805" # "ID005605"
+search_string = f"*_VoDaSuRe_2x_VoDaSuRe_OME_{experiment_id}" # f"*{up_factor}x_VoDaSuRe_OME_{experiment_id}"
 
-search_path = os.path.join(base_path, f"*{up_factor}x_VoDaSuRe_OME_{experiment_id}/files/performance_statistics/*.txt")
+REG = False
+
+if REG:
+    if up_factor == 4:
+        group_pair = "HR0_REG0"
+    elif up_factor == 2:
+        group_pair = "HR1_REG0"
+else:
+    if up_factor == 4:
+        group_pair = "HR0_HR2"
+    elif up_factor == 2:
+        group_pair = "HR0_HR1"
+
+search_path = os.path.join(base_path, f"{search_string}/files/performance_statistics/*.txt")
 print("Search path:", search_path)
 
 experiments = glob.glob(search_path)
@@ -18,25 +32,33 @@ print("Found experiments:", experiments)
 psnr_pattern = re.compile(r"PSNR SAMPLE LIST:\s*\[([^\]]+)\]")
 ssim_pattern = re.compile(r"SSIM SAMPLE LIST:\s*\[([^\]]+)\]")
 nrmse_pattern = re.compile(r"NRMSE SAMPLE LIST:\s*\[([^\]]+)\]")
+lpips_pattern = re.compile(r"LPIPS SAMPLE LIST:\s*\[([^\]]+)\]")
 
 results = []
 
-exp_file = experiments[0]
-with open(exp_file, "r") as f:
-    content = f.read()
+for exp_file in experiments:
+    with open(exp_file, "r") as f:
+        content = f.read()
+        if content.find(group_pair) != -1:
+            print(content)
+            break
+
 
 psnr_match = psnr_pattern.search(content)
 ssim_match = ssim_pattern.search(content)
 nrmse_match = nrmse_pattern.search(content)
+lpips_match = lpips_pattern.search(content)
 
-if psnr_match and ssim_match and nrmse_match:
+if psnr_match and ssim_match and nrmse_match and lpips_match:
     psnr_values = np.fromstring(psnr_match.group(1), sep=' ')
     ssim_values = np.fromstring(ssim_match.group(1), sep=' ')
     nrmse_values = np.fromstring(nrmse_match.group(1), sep=' ')
+    lpips_values = np.fromstring(lpips_match.group(1), sep=' ')
 
     psnr_values = np.delete(psnr_values, [-2]) # remove next to last element (invalid scan)
     ssim_values = np.delete(ssim_values, [-2])  # remove next to last element (invalid scan)
     nrmse_values = np.delete(nrmse_values, [-2])  # remove next to last element (invalid scan)
+    lpips_values = np.delete(lpips_values, [-2])
 
     #print(psnr_values)
     #print(ssim_values)
@@ -47,3 +69,4 @@ if psnr_match and ssim_match and nrmse_match:
     print(f"PSNR MEAN: {np.mean(psnr_values):.2f}")
     print(f"SSIM MEAN: {np.mean(ssim_values):.4f}")
     print(f"NRMSE MEAN: {np.mean(nrmse_values):.4f}")
+    print(f"LPIPS MEAN: {np.mean(lpips_values):.4f}")
