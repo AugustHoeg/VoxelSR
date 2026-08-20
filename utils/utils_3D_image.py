@@ -32,11 +32,11 @@ class SliceMetrics3D():
 
     def get_slice(self, vol, slice_idx):
         if self.slice_dim == 0:
-            return torch.from_numpy(vol[slice_idx, :, :]).to(self.device)
+            return torch.from_numpy(vol[slice_idx, :, :])
         elif self.slice_dim == 1:
-            return torch.from_numpy(vol[:, slice_idx, :]).to(self.device)
+            return torch.from_numpy(vol[:, slice_idx, :])
         else:
-            return torch.from_numpy(vol[:, :, slice_idx]).to(self.device)
+            return torch.from_numpy(vol[:, :, slice_idx])
 
     def normalize(self, img):
         # Normalize to [0, 1] + clip
@@ -54,8 +54,8 @@ class SliceMetrics3D():
                 print(f"Evaluating slice: {slice_idx}/{num_slices}")
             
             # Slice and normalize
-            slice_src = self.normalize(self.get_slice(vol_src, slice_idx))
-            slice_ref = self.normalize(self.get_slice(vol_ref, slice_idx))   
+            slice_src = self.normalize(self.get_slice(vol_src, slice_idx)).to(self.device)
+            slice_ref = self.normalize(self.get_slice(vol_ref, slice_idx)).to(self.device)
 
             # Skip all-zero slices
             if slice_ref.max() - slice_ref.min() < self.eps_skip:
