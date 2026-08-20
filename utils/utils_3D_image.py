@@ -11,10 +11,66 @@ import torchio.transforms as tiotransforms
 import zarr
 from PIL import Image
 from torchvision.utils import make_grid
+import pyiqa
 
 from utils.utils_zarr import write_ome_pyramid
 
 # from numcodecs import Blosc
+
+class SliceMetrics3D():
+    def __init__(self, slice_dim=0, slice_step=1, slice_max_val=65535.0, metric_names=None, device='cuda'):
+
+        self.slice_dim = slice_dim
+        self.slice_step = slice_step
+        self.slice_max_val = slice_max_val
+        self.eps_skip = 1e-10
+        self.metric_names = metric_names
+        self.device = device
+
+        # Dicts for metric functions
+        self.metric_funcs = {metric_name: pyiqa.create_metric(metric_name, device=device) for metric_name in metric_names}
+
+    def get_slice(self, vol, slice_idx):
+        if self.slice_dim == 0:
+            return torch.from_numpy(vol[slice_idx, :, :]).to(self.device)
+        elif self.slice_dim == 1:
+            return torch.from_numpy(vol[:, slice_idx, :]).to(self.device)
+        else:
+            return torch.from_numpy(vol[:, :, slice_idx]).to(self.device)
+
+    def normalize(self, img):
+        # Normalize to [0, 1] + clip
+        img = img.float() / self.slice_max_val
+        img = torch.clip(img, 0.0, 1.0)
+        return img
+
+    def get_metrics(self, vol_src, vol_ref):
+
+        metric_vals = {metric_name: [] for metric_name in self.metric_names}
+
+        num_slices = vol_ref.shape[self.slice_dim]
+        for slice_idx in range(num_slices):
+
+            # Slice and normalize
+            slice_src = self.normalize(self.get_slice(vol_src, slice_idx))
+            slice_ref = self.normalize(self.get_slice(vol_ref, slice_idx))   
+
+            # Skip all-zero slices
+            if slice_ref.min() - slice_ref.max() < self.eps_skip:
+                continue
+                
+            for metric_name in self.metric_names:
+                metric = self.metric_funcs[metric_name](slice_src, slice_ref)
+                metric_vals[metric_name].append(metric.item())
+
+        return metric_vals
+
+    def get_avg_metrics(self, vol_src, vol_ref):
+
+        metric_vals = self.get_metrics(vol_src, vol_ref)
+        avg_metric_vals = {metric_name: np.mean(metric_vals[metric_name]) for metric_name in self.metric_names}
+
+        return metric_vals, avg_metric_vals
 
 
 def upscale_slices(model, img_L, up_factor=2):

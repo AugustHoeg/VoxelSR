@@ -13,6 +13,7 @@ torchio
 lightning
 timm
 kornia
+pyiqa
 opencv-python
 wandb
 qim3d
