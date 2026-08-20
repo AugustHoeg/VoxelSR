@@ -376,10 +376,8 @@ def main(opt: DictConfig):
                 start = time.time()
                 vals, means = slice_metrics.get_avg_metrics(img_E, img_H)
                 for metric_name in metric_names:
-                    print(type(vals[metric_name]))
-                    print(type(means[metric_name]))
                     sample_vals[metric_name].extend(vals[metric_name])
-                    sample_means[metric_name].extend(means[metric_name].tolist())
+                    sample_means[metric_name].append(means[metric_name])
                     print("Sample %s: %0.6f" % (metric_name, means[metric_name]))
                     
                 stop = time.time()
