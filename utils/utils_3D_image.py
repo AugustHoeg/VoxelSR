@@ -32,11 +32,14 @@ class SliceMetrics3D():
 
     def get_slice(self, vol, slice_idx):
         if self.slice_dim == 0:
-            return torch.from_numpy(vol[slice_idx, :, :])
+            img = torch.from_numpy(vol[slice_idx, :, :])
+            return img[None, None, ...]  # (H, W) -> (B, C, H, W)
         elif self.slice_dim == 1:
-            return torch.from_numpy(vol[:, slice_idx, :])
+            img = torch.from_numpy(vol[:, slice_idx, :])
+            return img[None, None, ...]  # (D, W) -> (B, C, D, W)
         else:
-            return torch.from_numpy(vol[:, :, slice_idx])
+            img = torch.from_numpy(vol[:, :, slice_idx])
+            return img[None, None, ...]  # (D, H) -> (B, C, D, H)
 
     def normalize(self, img):
         # Normalize to [0, 1] + clip
