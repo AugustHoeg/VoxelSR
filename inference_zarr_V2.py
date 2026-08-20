@@ -379,7 +379,7 @@ def main(opt: DictConfig):
                     print(type(vals[metric_name]))
                     print(type(means[metric_name]))
                     sample_vals[metric_name].extend(vals[metric_name])
-                    sample_means[metric_name].extend(means[metric_name])
+                    sample_means[metric_name].extend(means[metric_name].tolist())
                     print("Sample %s: %0.6f" % (metric_name, means[metric_name]))
                     
                 stop = time.time()
