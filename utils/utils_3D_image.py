@@ -58,7 +58,7 @@ class SliceMetrics3D():
             slice_ref = self.normalize(self.get_slice(vol_ref, slice_idx))   
 
             # Skip all-zero slices
-            if slice_ref.min() - slice_ref.max() < self.eps_skip:
+            if slice_ref.max() - slice_ref.min() < self.eps_skip:
                 continue
                 
             for metric_name in self.metric_names:
