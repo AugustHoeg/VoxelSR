@@ -66,7 +66,7 @@ class SliceMetrics3D():
                 
             for metric_name in self.metric_names:
                 metric = self.metric_funcs[metric_name](slice_src, slice_ref)
-                metric_vals[metric_name].extend(metric.item())
+                metric_vals[metric_name].extend(metric)
 
         return metric_vals
 
