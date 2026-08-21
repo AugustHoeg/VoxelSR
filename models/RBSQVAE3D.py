@@ -1,5 +1,16 @@
 """
-Multi-Scale Binary Spherical Quantization (BSQ) VAE for 3D volumes.
+Multi-Scale *Residual-Depth* Binary Spherical Quantization (RBSQ) VAE for 3D volumes.
+
+Extends BSQVAE3D with an inner residual-DEPTH loop: at each spatial scale the
+shrinking inner residual is quantized `depth` times by the shared parameter-free
+BSQ, each code scaled by a hand-set geometric per-depth decay, then summed before
+upsampling. This gives RQ-style residual refinement *at each scale's resolution*
+(the finest scale therefore competes directly with RQVAE's full-res depth) while
+keeping the multi-scale scaffolding. depth=1 reproduces BSQVAE3D exactly.
+
+Only the forward / reconstruction paths (forward, fhat_no_vq) implement depth for
+now; the bit-map / transformer-prep helpers are guarded (NotImplementedError) for
+depth>1 until the transformer phase.
 
 Port of BitVAE / Infinity's MultiScaleBSQ quantizer
 (https://github.com/FoundationVision/BitVAE, https://arxiv.org/abs/2406.07548)
@@ -69,7 +80,7 @@ def get_entropy(count, dim=-1):
 # applied AFTER upsampling each scale's code, so it can compensate the
 # high-frequency loss of trilinear interpolation (VAR's Phi mechanism). Mirrors
 # MSVQVAE3D's Phi so the two tokenizers stay comparable; kept local to keep
-# BSQVAE3D self-contained.
+# RBSQVAE3D self-contained.
 class Phi3D(nn.Conv3d):
     """(1 - r) * x + r * conv(x). Small learned refine applied after upsampling."""
     def __init__(self, embed_dim, quant_resi):
@@ -253,15 +264,27 @@ class BSQ3D(nn.Module):
 # ---------------------------------------------------------------------------
 # Multi-scale residual BSQ bottleneck
 # ---------------------------------------------------------------------------
-class MultiScaleBSQ3D(nn.Module):
+class MultiScaleRBSQ3D(nn.Module):
     """
-    Coarse-to-fine residual quantization on the unit hypersphere.
+    Coarse-to-fine residual quantization on the unit hypersphere, with an inner
+    residual-DEPTH loop at each scale (RBSQ). At every scale the shrinking inner
+    residual is quantized `depth` times by the shared, parameter-free BSQ, each
+    code scaled by a hand-set per-depth decay, then summed before upsampling.
+    depth=1 reproduces plain multi-scale BSQ exactly.
 
     Args:
         codebook_bits:       L, spherical dimensions / bits per token.
         v_patch_nums:        list of scales, small -> large. int (isotropic) or
                              (D, H, W). The LAST scale must equal the encoder
                              output resolution.
+        depth:               number of inner residual-BSQ steps per scale (D),
+                             uniform across scales. depth=1 == plain BSQ.
+        depth_decay:         geometric per-depth magnitude base; the code at inner
+                             step d is scaled by depth_decay**d (depth_fact(0)=1).
+                             Shrinking step sizes let the unit-norm codes refine
+                             below the code magnitude without overshooting; the best
+                             value interacts with the encoder's learned latent scale,
+                             so it is the primary knob to ablate (see _depth_fact).
         use_decay_factor:    if True, scale-s code magnitude = max(0.1, 1-0.1*s);
                              the BitVAE mechanism that lets unit-norm codes act as
                              shrinking residual corrections. If False, out_fact=1.
@@ -283,6 +306,8 @@ class MultiScaleBSQ3D(nn.Module):
         self,
         codebook_bits: int,
         v_patch_nums: Sequence[Union[int, Tuple[int, int, int]]],
+        depth: int = 1,
+        depth_decay: float = 0.5,
         use_decay_factor: bool = True,
         quant_resi: float = 0.5,
         share_quant_resi: Optional[int] = None,
@@ -300,6 +325,8 @@ class MultiScaleBSQ3D(nn.Module):
         self.L = codebook_bits
         self.v_patch_nums: List[Tuple[int, int, int]] = [_as_dhw(pn) for pn in v_patch_nums]
         self.K = len(self.v_patch_nums)
+        self.depth = depth
+        self.depth_decay = depth_decay
         self.use_decay_factor = use_decay_factor
         self.z_down = z_down
         self.z_up = z_up
@@ -336,6 +363,52 @@ class MultiScaleBSQ3D(nn.Module):
         """BitVAE decay schedule: 1.0, 0.9, ... clamped at 0.1 (or constant 1.0)."""
         return max(0.1, 1.0 - 0.1 * si) if self.use_decay_factor else 1.0
 
+    def _depth_fact(self, d: int) -> float:
+        """Hand-set per-depth magnitude decay (geometric): depth_fact(d)=decay**d.
+        depth_fact(0)=1 so depth=1 reproduces single-step BSQ exactly. Successive
+        inner codes are scaled down so the unit-norm spherical codes act as finer
+        residual corrections instead of overshooting once the residual drops toward
+        the code magnitude. The optimal schedule interacts with the encoder's
+        (freely learned) latent magnitude, so `depth_decay` is the primary knob to
+        ablate -- decay<1 refines below the code magnitude but too-aggressive decay
+        caps the total code budget (sum_d decay**d) and plateaus early."""
+        return self.depth_decay ** d
+
+    def _quantize_scale(self, r_BLDHW: torch.Tensor, si: int):
+        """Inner residual-depth loop at this scale's native resolution.
+
+        Runs `depth` shared parameter-free BSQ steps on the shrinking inner
+        residual, scales each code by the hand-set per-depth decay, peels it
+        (detached, like BitVAE) and sums into this scale's code (pre-upsample).
+
+        Returns:
+            q_acc:        (B, L, pd, ph, pw) summed depth code at scale resolution.
+            aux_losses:   list[Tensor] length depth, per-depth BSQ aux loss.
+            depth_usage:  (depth,) tensor, per-depth normalized bit usage.
+        """
+        r_inner = r_BLDHW
+        q_acc = torch.zeros_like(r_inner)
+        aux_losses: List[torch.Tensor] = []
+        depth_usage: List[torch.Tensor] = []
+        for d in range(self.depth):
+            code_d, _idx, bit_d, aux_d = self.bsq(r_inner)
+            code_d = code_d * self._depth_fact(d)
+            r_inner = r_inner - code_d.detach()      # peel inner residual (scale res)
+            q_acc = q_acc + code_d
+            aux_losses.append(aux_d)
+            depth_usage.append(self.bsq.normalized_bit_usage(bit_d))
+        return q_acc, aux_losses, torch.stack(depth_usage)
+
+    def _require_depth1(self, where: str) -> None:
+        """The bit-map / transformer-prep paths emit one code per (scale) position;
+        residual depth (D codes per position) is not wired into them yet. Guard so
+        depth>1 fails loudly instead of returning a depth=1-only reconstruction."""
+        if self.depth > 1:
+            raise NotImplementedError(
+                f"{where}: residual depth>1 is not yet supported on the "
+                f"bit/transformer path -- only forward()/fhat_no_vq handle depth "
+                f"for now (tokenizer-recon phase). depth={self.depth}.")
+
     def _upsample_and_refine(self, q: torch.Tensor, si: int,
                              n_scales: Optional[int] = None) -> torch.Tensor:
         """Upsample this scale's code to the full latent grid and apply per-scale
@@ -368,9 +441,14 @@ class MultiScaleBSQ3D(nn.Module):
         f_BLDHW: (B, L, D, H, W) encoder output projected to L channels.
 
         Returns:
-            f_hat:        (B, L, D, H, W) quantized latent (STE-connected to input).
-            vq_loss:      scalar (entropy + commitment, scale-averaged & weighted).
-            frac_unique:  list[Tensor] len K, per-scale normalized bit usage in[0,1].
+            f_hat:                (B, L, D, H, W) quantized latent (STE to input).
+            vq_loss:              scalar (entropy + commitment, averaged over
+                                  scale*depth & weighted).
+            frac_unique:          list[Tensor] len K, per-scale normalized bit usage
+                                  in [0,1], AVERAGED over depth (kept scalar-per-scale
+                                  for continuity with the depth=1 experiments / EMA).
+            frac_unique_per_depth:list[Tensor] len K, each (depth,), bit usage split
+                                  by inner depth step so depth collapse is visible.
         """
         B, L, D, H, W = f_BLDHW.shape
         assert L == self.L, f"encoder produced {L} channels, expected L={self.L}"
@@ -382,6 +460,7 @@ class MultiScaleBSQ3D(nn.Module):
 
             all_losses: List[torch.Tensor] = []
             frac_unique: List[torch.Tensor] = []
+            frac_unique_per_depth: List[torch.Tensor] = []
 
             for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
                 is_last = (si == self.K - 1)
@@ -389,8 +468,8 @@ class MultiScaleBSQ3D(nn.Module):
                 # 1) downsample running residual to this scale
                 r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
 
-                # 2) binary spherical quantize (per-scale reference aux_loss)
-                q, _idx, bit_idx, aux_loss = self.bsq(r)
+                # 2) inner residual-depth loop of binary spherical quantize (scale res)
+                q, aux_losses, depth_usage = self._quantize_scale(r, si)
 
                 # 3) upsample to full grid + per-scale refine (Phi conv, else out_fact decay)
                 q = self._upsample_and_refine(q, si)
@@ -399,13 +478,14 @@ class MultiScaleBSQ3D(nn.Module):
                 f_hat = f_hat + q
                 residual = residual - q.detach()
 
-                all_losses.append(aux_loss)
-                frac_unique.append(self.bsq.normalized_bit_usage(bit_idx))
+                all_losses.extend(aux_losses)
+                frac_unique.append(depth_usage.mean())        # scalar, avg over depth
+                frac_unique_per_depth.append(depth_usage)     # (depth,)
 
-            # reference: stack per-scale aux_loss; d_vae reduces with mean * lfq_weight
+            # reference: stack per-(scale,depth) aux_loss; reduce with mean * lfq_weight
             vq_loss = torch.stack(all_losses).mean() * self.lfq_weight
 
-        return f_hat, vq_loss, frac_unique
+        return f_hat, vq_loss, frac_unique, frac_unique_per_depth
 
     # ---------------------------------------------------------------
     # Analysis / transformer data-prep
@@ -436,6 +516,7 @@ class MultiScaleBSQ3D(nn.Module):
         closure under the same random-flip realization. `bit_noise_fn=None` is an
         exact no-op (identity requantization reproduces the plain code).
         """
+        self._require_depth1("f_to_bits_or_fhat")
         B, L, D, H, W = f_BLDHW.shape
         with torch.amp.autocast("cuda", enabled=False):
             patches = [_as_dhw(pn) for pn in (v_patch_nums or self.v_patch_nums)]
@@ -486,6 +567,7 @@ class MultiScaleBSQ3D(nn.Module):
         (see f_to_bits_or_fhat). This mirrors Infinity returning both
         `all_bit_indices` and `var_inputs` from the same forward.
         """
+        self._require_depth1("f_to_var_input")
         B, L, D, H, W = f_BLDHW.shape
         with torch.amp.autocast("cuda", enabled=False):
             residual = f_BLDHW.float()
@@ -519,6 +601,7 @@ class MultiScaleBSQ3D(nn.Module):
     @torch.no_grad()
     def bits_to_fhat(self, ms_bits: List[torch.Tensor]) -> torch.Tensor:
         """Per-scale bit maps (B, l_k, L) -> full-resolution quantized latent (B, L, D, H, W)."""
+        self._require_depth1("bits_to_fhat")
         B = ms_bits[0].shape[0]
         D, H, W = self.v_patch_nums[-1]
         with torch.amp.autocast("cuda", enabled=False):
@@ -541,6 +624,7 @@ class MultiScaleBSQ3D(nn.Module):
         the area-downsampled conditioning for scale si+1 is returned. Mirrors
         MSVQVAE3D.get_next_autoregressive_input's contract (per-scale code in).
         """
+        self._require_depth1("get_next_autoregressive_input")
         is_last = (si == self.K - 1)
         with torch.amp.autocast("cuda", enabled=False):
             q = self._upsample_and_refine(q_BLDHW.float(), si)
@@ -552,8 +636,10 @@ class MultiScaleBSQ3D(nn.Module):
 
     @torch.no_grad()
     def fhat_no_vq(self, f_BLDHW: torch.Tensor) -> torch.Tensor:
-        """Same multiscale loop but skip binarization: code = q_scale * normalize(r).
-        Lives in the SAME space as f_hat, so decode() of it is a valid no-VQ upper bound."""
+        """Same multiscale + inner-depth loop but skip binarization: each inner code
+        is q_scale * normalize(r) instead of the binarized code. Lives in the SAME
+        space as f_hat (same scale/depth scaffolding, decay factors and refine), so
+        decode() of it is a valid no-VQ upper bound for the depth-D architecture."""
         B, L, D, H, W = f_BLDHW.shape
         with torch.amp.autocast("cuda", enabled=False):
             residual = f_BLDHW.float()
@@ -561,10 +647,17 @@ class MultiScaleBSQ3D(nn.Module):
             for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
                 is_last = si == self.K - 1
                 r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
-                r = r.permute(0, 2, 3, 4, 1)
-                code = self.bsq.q_scale * F.normalize(r, dim=-1)  # soft, no quantize()
-                q = code.permute(0, 4, 1, 2, 3).contiguous()
-                q = self._upsample_and_refine(q, si)
+
+                # inner depth loop, soft (mirrors _quantize_scale without quantize())
+                r_inner = r
+                q_acc = torch.zeros_like(r_inner)
+                for d in range(self.depth):
+                    code = self.bsq.q_scale * F.normalize(r_inner.permute(0, 2, 3, 4, 1), dim=-1)
+                    code = code.permute(0, 4, 1, 2, 3).contiguous() * self._depth_fact(d)
+                    r_inner = r_inner - code
+                    q_acc = q_acc + code
+
+                q = self._upsample_and_refine(q_acc, si)
                 f_hat = f_hat + q
                 residual = residual - q
             return f_hat
@@ -573,23 +666,26 @@ class MultiScaleBSQ3D(nn.Module):
         refine = (f"Phi(quant_resi={self.quant_resi_ratio})"
                   if self.quant_resi is not None else f"out_fact(decay={self.use_decay_factor})")
         return (f"L={self.L} (vocab=2**{self.L}), v_patch_nums={self.v_patch_nums}, "
-                f"K={self.K}, refine={refine}")
+                f"K={self.K}, depth={self.depth} (decay={self.depth_decay}), refine={refine}")
 
 
 # ---------------------------------------------------------------------------
 # Full model
 # ---------------------------------------------------------------------------
-class BSQVAE3D(nn.Module):
+class RBSQVAE3D(nn.Module):
     """
-    Multi-scale BSQ VAE for 3D volumes. Mirrors MSVQVAE3D's init/forward so the
-    two are drop-in swappable in your trainer.
+    Multi-scale *residual-depth* BSQ VAE for 3D volumes. Same as BSQVAE3D but the
+    quantizer runs `depth` inner residual-BSQ steps per scale (depth=1 == BSQVAE3D),
+    kept drop-in swappable with MSVQVAE3D / RQVAE3D in your trainer.
 
-    Note: `quant_embed_dim` here IS the number of bits L (the spherical code dim),
-    so it is typically small (18-32), unlike the codebook-embedding dim in
-    MSVQVAE3D. The pre/post-quant 1x1 convs project latent_dim <-> L.
+    Note: `codebook_bits` here IS the number of bits L (the spherical code dim), so
+    it is typically small (18-48), unlike the codebook-embedding dim in MSVQVAE3D.
+    The pre/post-quant 1x1 convs project latent_dim <-> L.
 
     forward returns (mirrors MSVQVAE3D, `codes` stays None during VAE training):
-        x_hat, vq_loss, codes(None), z_e, frac_unique
+        x_hat, vq_loss, codes(None), z_no_vq, frac_unique
+    Per-depth bit usage is stashed on self.frac_unique_per_depth (list len K of
+    (depth,) tensors) so the 5-tuple trainer contract is preserved.
     """
 
     def __init__(
@@ -604,6 +700,8 @@ class BSQVAE3D(nn.Module):
         channels_dec=[512, 512, 256, 64, 64],
         # multi-scale specific
         v_patch_nums=(1, 2, 3, 4, 6, 8),
+        depth: int = 1,
+        depth_decay: float = 0.5,
         use_decay_factor: bool = True,
         quant_resi: float = 0.5,
         share_quant_resi: Optional[int] = None,
@@ -657,9 +755,11 @@ class BSQVAE3D(nn.Module):
         self.pre_quant_conv = nn.Conv3d(latent_dim, codebook_bits, 1)
         self.post_quant_conv = nn.Conv3d(codebook_bits, latent_dim, 1)
 
-        self.quantizer = MultiScaleBSQ3D(
+        self.quantizer = MultiScaleRBSQ3D(
             codebook_bits=codebook_bits,
             v_patch_nums=v_patch_nums,
+            depth=depth,
+            depth_decay=depth_decay,
             use_decay_factor=use_decay_factor,
             quant_resi=quant_resi,
             share_quant_resi=share_quant_resi,
@@ -680,9 +780,9 @@ class BSQVAE3D(nn.Module):
 
     def forward(self, x):
         z_e = self.encode(x)
-        f_hat, vq_loss, frac_unique = self.quantizer(z_e)
+        f_hat, vq_loss, frac_unique, frac_unique_per_depth = self.quantizer(z_e)
         x_hat = self.decode(f_hat)
-        return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique
+        return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique, frac_unique_per_depth
 
     # -------- helpers for transformer training later --------
     @torch.no_grad()
@@ -693,7 +793,7 @@ class BSQVAE3D(nn.Module):
     ) -> List[torch.Tensor]:
         """Per-scale ground-truth bit maps (transformer targets), or cumulative f_hats
         if to_fhat=True. Pass `bit_noise_fn` to drive Bitwise Self-Correction (see
-        MultiScaleBSQ3D.f_to_bits_or_fhat)."""
+        MultiScaleRBSQ3D.f_to_bits_or_fhat)."""
         z_e = self.encode(x)
         return self.quantizer.f_to_bits_or_fhat(z_e, to_fhat=to_fhat, bit_noise_fn=bit_noise_fn)
 
@@ -705,7 +805,7 @@ class BSQVAE3D(nn.Module):
     ):
         """Infinity-style teacher-forcing `var_inputs` (list len K-1), and optionally
         the per-scale gt bit targets from the same pass. See
-        MultiScaleBSQ3D.f_to_var_input."""
+        MultiScaleRBSQ3D.f_to_var_input."""
         z_e = self.encode(x)
         return self.quantizer.f_to_var_input(z_e, bit_noise_fn=bit_noise_fn, return_gt_bits=return_gt_bits)
 
@@ -726,16 +826,19 @@ if __name__ == "__main__":
                      if torch.cuda.is_available() else 0)
 
     patch_size = 64
-    model = BSQVAE3D(
+    depth = 3
+    model = RBSQVAE3D(
         in_channels=1,
         latent_dim=768,
-        codebook_bits=48,                 # implicit vocab 2**48
+        codebook_bits=24,                 # implicit vocab 2**24
         channels_enc=[64, 64, 256, 512, 512],   # down_factor = 8 -> latent 8^3
         channels_dec=[512, 512, 256, 64, 64],
         resolution=patch_size,
         num_res_blocks_enc=2,
         num_res_blocks_dec=4,
         v_patch_nums=(1, 2, 3, 4, 6, 8),        # -> 828 tokens per volume
+        depth=depth,                            # inner residual-BSQ steps per scale
+        depth_decay=0.7,                        # geometric per-depth magnitude decay
         use_decay_factor=True,                  # fallback path (share_quant_resi=None)
         quant_resi=0.5,                         # learned Phi refine (used only if
         share_quant_resi=4,                     # share_quant_resi is not None)
@@ -744,22 +847,29 @@ if __name__ == "__main__":
     ).to(device)
 
     print("Number of parameters, G", numel(model, only_trainable=True))
+    print(model.quantizer.extra_repr())
     model.train()
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
-    x_hat, loss, codes, z_e, frac_unique = model(x)
+    x_hat, loss, codes, z_no_vq, frac_unique = model(x)
 
     print(f"Input:            {tuple(x.shape)}")
     print(f"Output:           {tuple(x_hat.shape)}")
     print(f"VQ loss:          {loss.item():.4f}")
-    print(f"Bit usage / scale: {[f'{u.item():.2f}' for u in frac_unique]}")
+    print(f"Bit usage / scale (avg over depth): {[f'{u.item():.2f}' for u in frac_unique]}")
+    print("Bit usage / (scale x depth):")
+    for si, du in enumerate(model.frac_unique_per_depth):
+        print(f"  scale {si}: {[f'{v:.2f}' for v in du.tolist()]}")
 
-    ms_bits = model.encode_multiscale(x)
-    print(f"Per-scale bit maps: {[tuple(t.shape) for t in ms_bits]} "
-          f"(total tokens = {sum(t.shape[1] for t in ms_bits)}, L={model.codebook_bits})")
-
-    x_rec = model.decode_multiscale(ms_bits)
-    print(f"Round-trip decode: {tuple(x_rec.shape)}")
+    # bit-map / round-trip decode is guarded for depth>1 (transformer phase pending)
+    if model.quantizer.depth == 1:
+        ms_bits = model.encode_multiscale(x)
+        print(f"Per-scale bit maps: {[tuple(t.shape) for t in ms_bits]} "
+              f"(total tokens = {sum(t.shape[1] for t in ms_bits)}, L={model.codebook_bits})")
+        x_rec = model.decode_multiscale(ms_bits)
+        print(f"Round-trip decode: {tuple(x_rec.shape)}")
+    else:
+        print(f"Skipping bit round-trip: depth={model.quantizer.depth}>1 not yet on bit path.")
 
     if torch.cuda.is_available():
         max_memory_reserved = torch.cuda.max_memory_reserved()

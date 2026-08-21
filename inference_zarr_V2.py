@@ -80,7 +80,7 @@ def write_metric_statistics(file_path, sample_vals, sample_means, text=None):
         file.write("AVERAGE SLICE-WISE PERFORMANCE METRICS \n")
 
         for metric_name, metric_vals in sample_vals.items():
-            mean, ci = get_mean_and_ci(metric_vals[metric_name])
+            mean, ci = get_mean_and_ci(sample_vals[metric_name])
             file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: " + str(mean) + "+-" + str(ci) + "\n")
 
 
