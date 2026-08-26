@@ -46,6 +46,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'maskrqvsrt':
         from models.model_mask_rqvsrt import ModelMaskRQVSRT as M
 
+    elif model == 'resshift':
+        from models.model_resshift import ModelResShift as M
+
     elif model == 'aesop':
         from models.model_aesop import ModelAESOP as M
 

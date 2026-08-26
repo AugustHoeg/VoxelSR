@@ -1,8 +1,8 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
 model: vqvae
-model_architecture: BSQVAE3D
+model_architecture: RBSQVAE3D
 netG:
-  net_type: BSQVAE3D
+  net_type: RBSQVAE3D
   description: "3D Multi-scale Bit-VAE (From Infinity paper)"
   in_channels: 1
   channels_enc: [64, 64, 256, 512, 512]
@@ -13,8 +13,10 @@ netG:
 
   v_patch_nums : [1, 2, 3, 4, 6, 8]   # -> 828 tokens per volume
   depth: 3
-  depth_decay: 0.7
+  depth_decay: 0.5
   codebook_bits: 24 # 24, 32, 48, 64
+  quant_resi: 0.5
+  share_quant_resi: null
   use_decay_factor: true
   entropy_loss_weight: 0.1
   commitment_loss_weight: 0.25

@@ -335,6 +335,7 @@ def main(opt: DictConfig):
                         batch_size=batch_size,
                         overlap_mode="hann",
                         model_input_type=opt['input_type'],
+                        unnorm=opt['dataset_opt']['norm_type'] == 'znormalization'
                     )
 
                     zarr_H = zarr.open(zarr_path, mode='r')
@@ -364,7 +365,8 @@ def main(opt: DictConfig):
                         context_width=context_width,
                         batch_size=batch_size,
                         overlap_mode="hann",
-                        model_input_type=opt['input_type']
+                        model_input_type=opt['input_type'],
+                        unnorm=opt['dataset_opt']['norm_type'] == 'znormalization'
                     )
                     img_L = img_L[0]  # assumes single channel dimension
                     img_E = img_E[0]  # assumes single channel dimension

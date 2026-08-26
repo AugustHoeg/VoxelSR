@@ -64,7 +64,7 @@ def unnorm_and_rescale(img, out_dtype=np.uint8, unnorm=False, div_max=False):
     elif out_dtype == np.uint16:
         img = (np.round(img.numpy() * 65535)).astype(np.uint16).squeeze()  # Convert to numpy uint16 (unsupported in torch)
 
-        return img
+    return img
 
 class ImageComparisonTool2D():
     def __init__(self, patch_size_hr, upscaling_methods, unnorm=True, div_max=False, out_dtype=np.uint8):

@@ -13,9 +13,9 @@ netG:
 
   v_patch_nums : [1, 2, 3, 4, 6, 8]   # -> 828 tokens per volume
   codebook_bits: 48 # 24, 32, 48, 64
-  use_decay_factor: true              # out_fact decay; used only when share_quant_resi is null
-  quant_resi: 0.5                     # Phi residual ratio (0.5*conv(x) + 0.5*x)
-  share_quant_resi: null              # null -> out_fact fallback; 1 shared / N tick-mapped / 0 per-scale
+  quant_resi: 0.5
+  share_quant_resi: null
+  use_decay_factor: true
   entropy_loss_weight: 0.1
   commitment_loss_weight: 0.25
   inv_temperature: 100.0

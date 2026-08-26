@@ -145,6 +145,26 @@ class LPIPSLoss3D(torch.nn.Module):
 
         return loss
 
+class LPIPSLoss2D(torch.nn.Module):
+    def __init__(self, net_type='alex', version='0.1', device="cuda"):
+        super(LPIPSLoss2D, self).__init__()
+        self.device = device
+        self.loss_fn = lpips.LPIPS(net=net_type, version=version, verbose=False)
+        self.loss_fn.to(self.device)
+
+    def forward(self, img_ref, img_pred):
+
+        # Tile to 3 channels, since LPIPS expects RGB images
+        img1 = torch.tile(img_ref, dims=(1, 3, 1, 1))
+        img2 = torch.tile(img_pred, dims=(1, 3, 1, 1))
+
+        # Scale to [-1, 1]
+        img1 = img1 * 2.0 - 1.0
+        img2 = img2 * 2.0 - 1.0
+
+        loss = self.loss_fn.forward(img1, img2).mean()
+        return loss
+        
 
 class FSCLoss3D(torch.nn.Module):
     def __init__(self, size, delta=1, alpha=None, drop_DC=False, device="cuda"):

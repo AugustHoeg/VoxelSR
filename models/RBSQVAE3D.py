@@ -781,8 +781,9 @@ class RBSQVAE3D(nn.Module):
     def forward(self, x):
         z_e = self.encode(x)
         f_hat, vq_loss, frac_unique, frac_unique_per_depth = self.quantizer(z_e)
+        self.frac_unique_per_depth = frac_unique_per_depth
         x_hat = self.decode(f_hat)
-        return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique, frac_unique_per_depth
+        return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique
 
     # -------- helpers for transformer training later --------
     @torch.no_grad()
@@ -852,6 +853,7 @@ if __name__ == "__main__":
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
     x_hat, loss, codes, z_no_vq, frac_unique = model(x)
+    frac_unique_per_depth = model.frac_unique_per_depth
 
     print(f"Input:            {tuple(x.shape)}")
     print(f"Output:           {tuple(x_hat.shape)}")

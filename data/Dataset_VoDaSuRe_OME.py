@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from data.train_transforms import (
+    Znormalized,
     RandSRCLAHEd,
     RandSRContrastd,
     RandSRFlipd,
@@ -197,10 +198,10 @@ class Dataset_VoDaSuRe_OME():
         trans_list.append(mt.SignalFillEmptyd(keys=["H", "L", "REG"], replacement=0, allow_missing_keys=True))  # Remove any NaNs
 
         # Normalization and scaling
-        if pdata.norm_type == "scale_intensity":
+        if pdata.norm_type == "scale_intensity":  # Unused
             pass
-        elif pdata.norm_type == "znormalization":
-            pass
+        elif pdata.norm_type == "znormalization":  # Scale from [0, 1] to [-1, 1]
+            trans_list.append(Znormalized(keys=["H", "L", "REG"]))  # Scale to [-1, 1]
 
         # Augmentations after crop
         if mode == "train":

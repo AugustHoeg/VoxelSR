@@ -284,6 +284,32 @@ def define_G(opt, mode='train'):
             use_checkpoint=opt_net["use_checkpoint"],
         )
 
+    elif model_arch == "ResShiftUNet":  # ResShift Swin-UNet denoiser (2D pixel-space)
+        from models.resshift import UNetModelSwin as net
+        hr = opt['dataset_opt']['patch_size_hr']
+        netG = net(
+            image_size=hr,
+            in_channels=opt_net['in_channels'],
+            model_channels=opt_net['model_channels'],
+            out_channels=opt_net['out_channels'],
+            num_res_blocks=opt_net['num_res_blocks'],
+            attention_resolutions=opt_net['attention_resolutions'],
+            dropout=opt_net.get('dropout', 0.0),
+            channel_mult=tuple(opt_net['channel_mult']),
+            num_heads=opt_net['num_heads'],
+            num_head_channels=opt_net.get('num_head_channels', -1),
+            use_scale_shift_norm=opt_net.get('use_scale_shift_norm', False),
+            resblock_updown=opt_net.get('resblock_updown', False),
+            swin_depth=opt_net.get('swin_depth', 2),
+            swin_embed_dim=opt_net.get('swin_embed_dim', 192),
+            window_size=opt_net.get('window_size', 8),
+            mlp_ratio=opt_net.get('mlp_ratio', 2.0),
+            patch_norm=opt_net.get('patch_norm', False),
+            cond_lq=True,
+            lq_size=hr,  # lq is pre-upsampled to HR size -> Identity feature extractor
+            lq_channels=opt_net['in_channels'],
+        )
+
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],

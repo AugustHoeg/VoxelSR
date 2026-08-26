@@ -203,6 +203,17 @@ def extract_patch_levels_from_chunk(data, group_name, ome_levels, patch_size=(32
 
     return out_dict
 
+def extract_patch_slice(patch, slice_idx, slice_dim=0):
+
+    if slice_dim == 0:
+        return patch[:, slice_idx, :, :]
+    elif slice_dim == 1:
+        return patch[:, :, slice_idx, :]
+    elif slice_dim == 2:
+        return patch[:, :, :, slice_idx]
+    else:
+        raise ValueError(f'Invalid slice dimension: {slice_dim}')
+
 class ZarrIterableDataset(IterableDataset):
 
     def __init__(self, dataset_dict, patch_shape, patch_shape_hr, patch_transform, up_factor, base_seed=8338, store_type='Numpy', num_samples=1000, sampling_method='random', print_metadata=False, slice_dim=None):
@@ -313,8 +324,12 @@ class ZarrIterableDataset(IterableDataset):
         if self.slice_dim is not None:
             idx_L = np.random.randint(0, patch['L'].shape[1 + self.slice_dim])
             idx_H = idx_L * self.up_factor
-            patch['L'] = np.take(patch['L'], indices=idx_L, axis=self.slice_dim + 2)
-            patch['H'] = np.take(patch['H'], indices=idx_H, axis=self.slice_dim + 2)
+            # patch['L'] = np.take(patch['L'], indices=idx_L, axis=self.slice_dim + 2)
+            # patch['H'] = np.take(patch['H'], indices=idx_H, axis=self.slice_dim + 2)
+
+            # Drop numpy for standard slicing:
+            patch['L'] = extract_patch_slice(patch['L'], slice_idx=idx_L, slice_dim=self.slice_dim)
+            patch['H'] = extract_patch_slice(patch['H'], slice_idx=idx_H, slice_dim=self.slice_dim)
 
         return patch
 

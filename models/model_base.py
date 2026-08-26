@@ -293,30 +293,41 @@ class ModelBase():
             elif key == "BCE" and value > 0:
                 self.loss_fn_dict["BCE"] = nn.BCELoss()
             elif key == "LPIPS" and value > 0:
-                from loss_functions.loss_functions_simple import LPIPSLoss3D
-                self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(
-                    net_type='alex', version='0.1', device=self.device, axes=(0, 1, 2)
-                )
+                if self.opt['input_type'] == '3D':
+                    from loss_functions.loss_functions_simple import LPIPSLoss3D
+                    self.loss_fn_dict["LPIPS"] = LPIPSLoss3D(net_type='alex', version='0.1', device=self.device, axes=(0, 1, 2))
+                else:
+                    from loss_functions.loss_functions_simple import LPIPSLoss2D
+                    self.loss_fn_dict["LPIPS"] = LPIPSLoss2D(net_type='alex', version='0.1', device=self.device)
             elif key == "FSC" and value > 0:
-                from loss_functions.loss_functions_simple import FSCLoss3D
-                self.loss_fn_dict["FSC"] = FSCLoss3D(
-                    size=self.opt['dataset_opt']['patch_size_hr'], delta=1, alpha=2.0,
-                    drop_DC=False, device=self.device
-                )
+                if self.opt['input_type'] == '3D':
+                    from loss_functions.loss_functions_simple import FSCLoss3D
+                    self.loss_fn_dict["FSC"] = FSCLoss3D(
+                        size=self.opt['dataset_opt']['patch_size_hr'], delta=1, alpha=2.0,
+                        drop_DC=False, device=self.device
+                    )
+                else:
+                    raise NotImplementedError("FSC loss is only implemented for 3D inputs.")
             elif key == "CSC" and value > 0:
-                from loss_functions.loss_functions_simple import CSCLoss
-                self.loss_fn_dict["CSC"] = CSCLoss(
-                    eval_mode=True, verbose=True, feat_dist_func='FSC',
-                    compare_input=False, device=self.device,
-                    size=self.opt['dataset_opt']['patch_size_hr'],
-                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['CSC']
-                )
+                if self.opt['input_type'] == '3D':
+                    from loss_functions.loss_functions_simple import CSCLoss
+                    self.loss_fn_dict["CSC"] = CSCLoss(
+                        eval_mode=True, verbose=True, feat_dist_func='FSC',
+                        compare_input=False, device=self.device,
+                        size=self.opt['dataset_opt']['patch_size_hr'],
+                        experiment_id=self.opt_train['pretrained_G_loss_IDs']['CSC']
+                    )
+                else:
+                    raise NotImplementedError("CSC loss is only implemented for 3D inputs.")
             elif key == "AESOP3D" and value > 0:
-                from loss_functions.loss_functions_simple import AESOPLoss3D
-                self.loss_fn_dict["AESOP3D"] = AESOPLoss3D(
-                    ae_criterion_type='L1', ae_weight=1.0,
-                    experiment_id=self.opt_train['pretrained_G_loss_IDs']['AESOP3D'],
-                )
+                if self.opt['input_type'] == '3D':
+                    from loss_functions.loss_functions_simple import AESOPLoss3D
+                    self.loss_fn_dict["AESOP3D"] = AESOPLoss3D(
+                        ae_criterion_type='L1', ae_weight=1.0,
+                        experiment_id=self.opt_train['pretrained_G_loss_IDs']['AESOP3D'],
+                    )
+                else:
+                    raise NotImplementedError("AESOP loss is only implemented for 3D inputs.")
 
     def init_G_loss_trackers(self):
         self.G_train_loss = 0.0

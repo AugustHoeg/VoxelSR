@@ -203,7 +203,7 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     return img_E
 
 
-def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D'):
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False):
 
     global_min = 0
     global_max = 65535
@@ -257,6 +257,9 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
                 model.netG_forward()
                 upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
+            if unnorm:
+                upsampled_batch = (upsampled_batch / 2) + 0.5  # unnormalize from [-1; 1] to [0; 1]
+
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D_hr) - z_hr
                 dy = min(y_hr+size_hr, H_hr) - y_hr
@@ -285,7 +288,7 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
 
 
 
-def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, size_hr, border, batch_size, overlap_mode="hann", model_input_type='3D'):
+def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_lr, size_hr, border, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False):
 
     global_min = 0
     global_max = 65535
@@ -346,6 +349,9 @@ def run_strided_inference_zarr(model, zarr_path, out_path, group_pair, f, size_l
                 model.L = patch_batch.to(model.device)
                 model.netG_forward()
                 upsampled_batch = model.E.float().cpu()
+
+            if unnorm:
+                upsampled_batch = (upsampled_batch / 2) + 0.5  # unnormalize from [-1; 1] to [0; 1]
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D*f) - z_hr

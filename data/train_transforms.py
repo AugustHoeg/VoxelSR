@@ -4,6 +4,7 @@ from typing import Any
 import numpy as np
 import torch
 import monai.transforms as mt
+from dask.dataframe.dask_expr._expr import Clip
 from monai.transforms import Randomizable, RandomizableTransform, Transform, MapTransform, Flip, Rotate, Zoom
 from skimage.exposure import equalize_adapthist
 
@@ -169,6 +170,26 @@ def get_context_pad_size(opt):
     else:
         pad_size = 0
     return pad_size
+
+class Znormalized(MapTransform):
+    """
+    Standard znormalization transform that applies the standard formula:
+    img = 2 * img - 1 to all specified keys in a dictionary.
+    """
+
+    def __init__(self, keys):
+        super().__init__(keys, allow_missing_keys=True)
+
+    def __call__(self, data):
+
+        d = dict(data)
+
+        for key in self.keys:
+            if key not in d:
+                continue
+            d[key] = torch.clamp(2.0 * d[key] - 1.0, min=-1, max=1)
+
+        return d
 
 class RandSRFlipd(Randomizable):
     """

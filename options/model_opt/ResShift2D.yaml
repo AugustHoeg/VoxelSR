@@ -1,0 +1,46 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+# ResShift (https://github.com/zsyOAOA/ResShift) as a 2D SR baseline.
+# Pixel-space, no autoencoder; residual-shifting diffusion (15 steps).
+model: resshift
+model_architecture: ResShiftUNet
+netG:
+  net_type: ResShiftUNet
+  description: "ResShift Swin-UNet denoiser (2D, pixel-space)"
+  in_channels: 1            # single-channel (e.g. CT/medical); lq is concatenated internally
+  out_channels: 1
+
+  model_channels: 160
+  num_res_blocks: 2
+  # NOTE: attention_resolutions are ABSOLUTE feature-map sizes; they must match
+  # dataset_opt.patch_size_hr and channel_mult depth. Values below assume
+  # patch_size_hr == 64 with 3 downsamples -> {64, 32, 16, 8}.
+  attention_resolutions: [64, 32, 16, 8]
+  channel_mult: [1, 2, 2, 4]
+  num_heads: 4
+  num_head_channels: -1
+  use_scale_shift_norm: false
+  resblock_updown: false
+
+  swin_depth: 2
+  swin_embed_dim: 192
+  window_size: 8
+  mlp_ratio: 2.0
+  patch_norm: false
+  dropout: 0.0
+
+  init_type: default        # UNet self-initializes (zero_module etc.); keep 'default'
+  init_bn_type: uniform
+  init_gain: 0.2
+
+diffusion:
+  schedule_name: exponential
+  power: 0.3                 # exponential-schedule shape parameter
+  kappa: 2.0                 # noise scale (tuned for [-1, 1] input range)
+  min_noise_level: 0.04
+  etas_end: 0.99
+  steps: 15                  # ResShift's headline: only 15 sampling steps
+  predict_type: xstart       # predict x0 directly
+  weighted_mse: false
+  normalize_input: true
+  clip_denoised: true        # clamps x0 to [-1, 1]; set false if not using [-1,1] range
+  # sf defaults to up_factor if omitted
