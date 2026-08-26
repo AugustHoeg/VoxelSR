@@ -53,7 +53,7 @@ class SliceMetrics3D():
 
         num_slices = vol_ref.shape[self.slice_dim]
         for slice_idx in range(num_slices):
-            if slice_idx % 100 == 0:
+            if slice_idx % 10 == 0:
                 print(f"Evaluating slice: {slice_idx}/{num_slices}")
             
             # Slice and normalize
@@ -65,7 +65,10 @@ class SliceMetrics3D():
                 continue
                 
             for metric_name in self.metric_names:
-                metric = self.metric_funcs[metric_name](slice_src, slice_ref).cpu().numpy()
+                if metric_name == "musiq":  # MUSIQ expects images to be RGB
+                    metric = self.metric_funcs[metric_name](slice_src.tile(1, 3, 1, 1), slice_ref.tile(1, 3, 1, 1)).cpu().numpy()
+                else:  # Other metrics work fine on grayscale
+                    metric = self.metric_funcs[metric_name](slice_src, slice_ref).cpu().numpy()
                 metric_vals[metric_name].append(metric)
 
         return metric_vals

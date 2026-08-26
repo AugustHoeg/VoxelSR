@@ -65,23 +65,28 @@ def create_metric_file(wandb_path, opt, dataset_name):
     return file_path
 
 
-def write_metric_statistics(file_path, sample_vals, sample_means, text=None):
+def write_metric_statistics(file_path, sample_vals, sample_means, sample_names, text=None):
 
     # Open the file in write mode and write the contents
     with open(file_path, 'a+') as file:
         if text is not None:
             file.write("\n" + "METRICS: " + text.upper() + "\n")
-        file.write("SAMPLE PERFORMANCE METRICS \n")
+        file.write(f"SAMPLE PERFORMANCE METRICS \n")
+        sample_names_str = ', '.join(str(x) for x in sample_names)
+        file.write(f"SAMPLE NAMES: {sample_names_str}\n")
 
         for metric_name, metric_vals in sample_means.items():
-            file.write(f"{metric_name.upper()} SAMPLE LIST: " + str(metric_vals) + "\n")
+            metric_vals_str = f', '.join(str(x.round(6)) for x in metric_vals)
+            file.write(f"{metric_name.upper()} SAMPLE LIST: {metric_vals_str}\n")
 
         # Write the individual values to the file
         file.write("AVERAGE SLICE-WISE PERFORMANCE METRICS \n")
 
         for metric_name, metric_vals in sample_vals.items():
             mean, ci = get_mean_and_ci(sample_vals[metric_name])
-            file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: " + str(mean) + "+-" + str(ci) + "\n")
+            mean_str = str(mean.round(6))
+            ci_str = f', '.join(str(x.round(6)) for x in ci)
+            file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: {mean_str} +- {ci_str} \n")
 
 
 def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9, lpips_model=None, device='cuda'):
@@ -208,7 +213,7 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    experiment_id = "mDCSRN_VoDaSuRe_REG_4x_VoDaSuRe_OME_ID004805"
+    experiment_id = "mDCSRN_MRI_4x_VoDaSuRe_OME_ID004200"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
@@ -244,7 +249,10 @@ def main(opt: DictConfig):
     model.init_test(experiment_id)
 
     # Metrics to calculate
-    metric_names = ["psnr", "ssim", "lpips"]
+    metric_names = ["psnr", "ssim"]
+    # metric_names = ["psnr", "ssim", "lpips", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
+    print("Evaluating metrics:", metric_names)
+
     slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
     from utils.utils_3D_image import SliceMetrics3D
     slice_metrics = SliceMetrics3D(slice_dim=0, slice_step=slice_step, slice_max_val=65535.0, metric_names=metric_names, device=model.device)
@@ -284,7 +292,7 @@ def main(opt: DictConfig):
     if not os.path.exists(image_path + "full_slice_comparisons/"):
         os.makedirs(image_path + "full_slice_comparisons/")
 
-    batch_size = opt.dataset_opt.train_dataloader_params.dataloader_batch_size
+    batch_size = 2 # opt.dataset_opt.train_dataloader_params.dataloader_batch_size
     if opt['input_type'] == '2D' and batch_size > 1:
         batch_size = 1  # Force batch size of 1 for 2D models
 
@@ -299,6 +307,7 @@ def main(opt: DictConfig):
 
         sample_means = {metric_name: [] for metric_name in metric_names}
         sample_vals = {metric_name: [] for metric_name in metric_names}
+        sample_names = [os.path.basename(path) for path in paths]
 
         for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
             group_text = group_pair['H'].replace("/", "") + "_" + group_pair['L'].replace("/", "")
@@ -414,7 +423,7 @@ def main(opt: DictConfig):
                     shutil.rmtree(out_path)
 
             # Save group pair metrics
-            write_metric_statistics(metric_file_path, sample_vals, sample_means, text=group_text)
+            write_metric_statistics(metric_file_path, sample_vals, sample_means, sample_names, text=group_text)
 
         # Write final dataset metric averages
         with open(metric_file_path, 'a+') as file:
