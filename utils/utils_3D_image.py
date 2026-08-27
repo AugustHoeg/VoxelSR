@@ -11,13 +11,21 @@ import torchio.transforms as tiotransforms
 import zarr
 from PIL import Image
 from torchvision.utils import make_grid
+
 import pyiqa
+from pyiqa.archs.inception import InceptionV3
+from pyiqa.archs.fid_arch import frechet_distance as frechet_distance
 
 from utils.utils_zarr import write_ome_pyramid
 
 # from numcodecs import Blosc
 
 class SliceMetrics3D():
+    """
+    Metric class used to evaluate slice-wise performance metrics of volumetric images
+    Supports FID calculation by stashing slice features internally, and can be retrieved by calling compute_fid
+    """
+
     def __init__(self, slice_dim=0, slice_step=1, slice_max_val=65535.0, metric_names=None, device='cuda'):
 
         self.slice_dim = slice_dim
@@ -28,7 +36,17 @@ class SliceMetrics3D():
         self.device = device
 
         # Dicts for metric functions
-        self.metric_funcs = {metric_name: pyiqa.create_metric(metric_name, device=device) for metric_name in metric_names}
+        self.metric_funcs = {}
+        for metric_name in self.metric_names:
+            if metric_name != "fid":  # FID is handled separately
+                self.metric_funcs[metric_name] = pyiqa.create_metric(metric_name, device=device)
+
+        if "fid" in metric_names:
+            block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[2048]
+            self.model_inception = InceptionV3(output_blocks=[block_idx]).to(device)
+            self.model_inception.eval()
+            self.src_feats = []
+            self.ref_feats = []
 
     def get_slice(self, vol, slice_idx):
         if self.slice_dim == 0:
@@ -47,9 +65,42 @@ class SliceMetrics3D():
         img = torch.clip(img, 0.0, 1.0)
         return img
 
+    def get_fid_feats(self, img, test_img_size=(299, 299), normalize_input=True, mode='clean'):
+
+        # Resize to 299x299 for InceptionV3
+        img = F.interpolate(img, size=test_img_size, mode='bilinear', align_corners=False)
+
+        # Normalize from [0, 1] to [-1, 1]
+        if mode == 'clean':
+            img = torch.clamp(2.0 * img - 1.0, min=-1, max=1)
+
+        # Tile to RGB
+        img = img.tile(1, 3, 1, 1)
+
+        # Compute features
+        with torch.no_grad():
+            feats = self.model_inception(img, False, normalize_input)[0]
+            feats = feats.reshape(feats.shape[0], feats.shape[1]).detach().cpu().numpy()
+
+        return feats
+
+    def fid_from_feats(self, feats1, feats2):
+        mu1, sig1 = np.mean(feats1, axis=0), np.cov(feats1, rowvar=False)
+        mu2, sig2 = np.mean(feats2, axis=0), np.cov(feats2, rowvar=False)
+        return frechet_distance(mu1, sig1, mu2, sig2)
+
+    def compute_fid(self):
+        assert len(self.src_feats) > 0 and len(self.ref_feats) > 0, "No features computed for FID. Ensure that slices were processed."
+        fid = self.fid_from_feats(np.concatenate(self.src_feats), np.concatenate(self.ref_feats))
+        self.src_feats = []  # Zero feats
+        self.ref_feats = []  # Zero feats
+        return fid
+
     def get_metrics(self, vol_src, vol_ref):
 
-        metric_vals = {metric_name: [] for metric_name in self.metric_names}
+        metric_vals = {}
+        for metric_name in self.metric_names:
+            metric_vals[metric_name] = []
 
         num_slices = vol_ref.shape[self.slice_dim]
         for slice_idx in range(num_slices):
@@ -67,16 +118,24 @@ class SliceMetrics3D():
             for metric_name in self.metric_names:
                 if metric_name == "musiq":  # MUSIQ expects images to be RGB
                     metric = self.metric_funcs[metric_name](slice_src.tile(1, 3, 1, 1), slice_ref.tile(1, 3, 1, 1)).cpu().numpy()
+                    metric_vals[metric_name].append(metric)
+                elif metric_name == "fid":
+                    # If FID, compute features and stash internally to compute later.
+                    self.src_feats.append(self.get_fid_feats(slice_src))
+                    self.ref_feats.append(self.get_fid_feats(slice_ref))
                 else:  # Other metrics work fine on grayscale
                     metric = self.metric_funcs[metric_name](slice_src, slice_ref).cpu().numpy()
-                metric_vals[metric_name].append(metric)
+                    metric_vals[metric_name].append(metric)
 
         return metric_vals
 
     def get_avg_metrics(self, vol_src, vol_ref):
 
         metric_vals = self.get_metrics(vol_src, vol_ref)
-        avg_metric_vals = {metric_name: np.mean(metric_vals[metric_name]) for metric_name in self.metric_names}
+        avg_metric_vals = {}
+        for metric_name in self.metric_names:
+            if metric_name != "fid":
+                avg_metric_vals[metric_name] = np.mean(metric_vals[metric_name])# {metric_name: np.mean(metric_vals[metric_name]) for metric_name in self.metric_names}
 
         return metric_vals, avg_metric_vals
 

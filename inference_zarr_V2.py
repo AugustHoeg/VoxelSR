@@ -13,6 +13,7 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf
 import lpips
 import matplotlib.pyplot as plt
+from zarr.core.buffer import NDArrayLike
 
 import config
 from utils import utils_3D_image
@@ -20,10 +21,11 @@ from utils.utils_image import calculate_psnr_2D, calculate_ssim_2D, calculate_nr
 from utils.utils_3D_image import run_strided_inference_zarr, run_strided_inference, run_strided_inference_pad
 from utils.load_options import load_options_from_experiment_id
 
-def _mask_slices(img_src, img_ref):
 
+def _mask_zero_slices(img_src, img_ref):
+    # Zero out slices in img_src where img_ref is zero.
     for i in range(0, img_ref.shape[0]):
-        img_src[i, :, :] = torch.where(img_ref[i, :, :], img_src[i, :, :], 0)
+        img_src[i, :, :] = np.where(img_ref[i, :, :], img_src[i, :, :], 0)
 
 
 def get_mean_and_ci(data_sequence, confidence=0.95):
@@ -249,8 +251,8 @@ def main(opt: DictConfig):
     model.init_test(experiment_id)
 
     # Metrics to calculate
-    metric_names = ["psnr", "ssim"]
-    # metric_names = ["psnr", "ssim", "lpips", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
+    # metric_names = ["psnr", "ssim", "fid"]
+    metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
     print("Evaluating metrics:", metric_names)
 
     slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
@@ -305,8 +307,13 @@ def main(opt: DictConfig):
         # Create metrics file
         metric_file_path = create_metric_file(wandb_path, opt, dataset_name=name)
 
-        sample_means = {metric_name: [] for metric_name in metric_names}
-        sample_vals = {metric_name: [] for metric_name in metric_names}
+        sample_vals = {}
+        sample_means = {}
+        for metric_name in metric_names:
+            if metric_name == "fid":
+                continue
+            sample_vals[metric_name] = []
+            sample_means[metric_name] = []
         sample_names = [os.path.basename(path) for path in paths]
 
         for group_idx, group_pair in enumerate(group_pairs[f"{opt['up_factor']}"]):
@@ -382,9 +389,12 @@ def main(opt: DictConfig):
                 else:
                     raise ValueError(f"Inference mode {inference_mode} not recognized.")
 
+                # Set values in SR prediction to zero where HR is zero to avoid metric bias
+                _mask_zero_slices(img_E, img_H)
+
                 start = time.time()
                 vals, means = slice_metrics.get_avg_metrics(img_E, img_H)
-                for metric_name in metric_names:
+                for metric_name in sample_vals:
                     sample_vals[metric_name].extend(vals[metric_name])
                     sample_means[metric_name].append(means[metric_name])
                     print("Sample %s: %0.6f" % (metric_name, means[metric_name]))
@@ -425,14 +435,21 @@ def main(opt: DictConfig):
             # Save group pair metrics
             write_metric_statistics(metric_file_path, sample_vals, sample_means, sample_names, text=group_text)
 
+            # Write FID score once per dataset
+            if "fid" in metric_names:
+                with open(metric_file_path, "a+") as file:
+                    fid = slice_metrics.compute_fid()
+                    file.write(f"\nDATASET {name} FID SCORE: {fid}\n")
+                    print(f"DATASET {name} FID SCORE: {fid}")
+
         # Write final dataset metric averages
         with open(metric_file_path, 'a+') as file:
             file.write("\nDATASET SAMPLE AVERAGES\n")
             
-            for metric_name in metric_names:
+            for metric_name in sample_means:
                 total_avg = np.mean(sample_means[metric_name])
                 print("Sample %s: %0.6f" % (metric_name, total_avg))
-                file.write("METRIC AVERAGE: " + str(total_avg) + "\n")
+                file.write("METRIC AVERAGE: " + str(total_avg.round(6)) + "\n")
 
 
 if __name__ == "__main__":
