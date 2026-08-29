@@ -182,7 +182,32 @@ def define_G(opt, mode='train'):
                    skip_attn=opt_net['skip_attn'],
                    use_checkpoint=opt_net['use_checkpoint'],
                    )
-        
+
+    elif model_arch == "RMSVQVAE3D" or model_arch == "RMSVQGAN3D":
+        from models.RMSVQVAE3D import RMSVQVAE3D as net
+        netG = net(in_channels=opt_net["in_channels"],
+                   latent_dim=opt_net["latent_dim"],
+                   channels_enc=opt_net["channels_enc"],
+                   channels_dec=opt_net["channels_dec"],
+                   v_patch_nums=opt_net["v_patch_nums"],
+                   n_rq_depth=opt_net["n_rq_depth"],
+                   quant_resi=opt_net["quant_resi"],
+                   share_quant_resi=opt_net["share_quant_resi"],
+                   using_znorm=opt_net["using_znorm"],
+                   quant_embed_dim=opt_net["quant_embed_dim"],  #
+                   n_embed=opt_net["num_embeddings"],
+                   resolution=opt["dataset_opt"]["patch_size_hr"],
+                   num_res_blocks_enc=opt_net["num_res_blocks_enc"],
+                   num_res_blocks_dec=opt_net["num_res_blocks_dec"],
+                   decay=opt_net["decay"],
+                   restart_unused_codes=opt_net["restart_unused_codes"],
+                   restart_clamp_factor=opt_net["restart_clamp_factor"],
+                   skip_update_over=opt_net["skip_update_over"],
+                   attn_resolutions=opt_net["attn_resolutions"],
+                   skip_attn=opt_net["skip_attn"],
+                   use_checkpoint=opt_net["use_checkpoint"],
+        )
+
     elif model_arch == "MSVQVAE3D" or model_arch == "MSVQGAN3D":
         from models.MSVQVAE3D import MSVQVAE3D as net
         netG = net(in_channels=opt_net["in_channels"],
