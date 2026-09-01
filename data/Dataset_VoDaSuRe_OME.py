@@ -85,7 +85,7 @@ class Dataset_VoDaSuRe_OME():
                            os.path.join(self.data_path, "MDF_A_bin1x1_ome_1.zarr"),
                            os.path.join(self.data_path, "Oak_A_bin1x1_ome_1.zarr"),
                            os.path.join(self.data_path, "Ox_bone_A_bin1x1_ome_1.zarr"),
-                           glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/train/*.zarr"))]
+                           *glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/train/*.zarr"))]
 
             test_paths = [os.path.join(self.data_path, "Bamboo_A_bin1x1_ome_0.zarr"),
                           os.path.join(self.data_path, "Cardboard_A_bin1x1_ome_0.zarr"),
@@ -96,7 +96,7 @@ class Dataset_VoDaSuRe_OME():
                           os.path.join(self.data_path, "MDF_A_bin1x1_ome_0.zarr"),
                           os.path.join(self.data_path, "Oak_A_bin1x1_ome_0.zarr"),
                           os.path.join(self.data_path, "Ox_bone_A_bin1x1_ome_0.zarr"),
-                          glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/test/*.zarr"))]
+                          *glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/test/*.zarr"))]
 
             if self.synthetic:
                 group_pairs["VoDaSuRe2"] = {
