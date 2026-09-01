@@ -33,7 +33,8 @@ class Dataset_VoDaSuRe_OME():
                             "LITS": 2.0,
                             "CTSpine1K": 5.0,
                             "LIDC-IDRI": 5.0,
-                            "VoDaSuRe": 15.0}
+                            "VoDaSuRe": 15.0,
+                            "VoDaSuRe2": 15.0}
 
         group_pairs = {}
         group_pairs["HCP_1200"] = {"4": [{"H": "HR/0", "L": "HR/2"}], "2": [{"H": "HR/0", "L": "HR/1"}], "1": [{"H": "HR/0", "L": "HR/0"}]}
@@ -47,7 +48,8 @@ class Dataset_VoDaSuRe_OME():
                       "LITS": "LocalStore",
                       "CTSpine1K": "LocalStore",
                       "LIDC-IDRI": "LocalStore",
-                      "VoDaSuRe": "LocalStore"}
+                      "VoDaSuRe": "LocalStore",
+                      "VoDaSuRe2": "LocalStore"}
 
         train_paths = {}
         test_paths = {}
@@ -70,6 +72,44 @@ class Dataset_VoDaSuRe_OME():
         if "LIDC-IDRI" in opt['dataset_opt']['datasets']:
             train_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/train/*.zarr"))
             test_paths["LIDC-IDRI"] = glob.glob(os.path.join(self.data_path, "LIDC_IDRI/ome/test/*.zarr"))
+
+        if "VoDaSuRe2" in opt['dataset_opt']['datasets']:
+            train_paths = [os.path.join(self.data_path, "Bamboo_A_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "Cardboard_A_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "Cypress_A_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "Elm_A_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "Femur_15_80kV_ome.zarr"),
+                           os.path.join(self.data_path, "Femur_21_80kV_ome.zarr"),
+                           os.path.join(self.data_path, "Femur_74_80kV_ome.zarr"),
+                           os.path.join(self.data_path, "Larch_B_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "MDF_A_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "Oak_A_bin1x1_ome_1.zarr"),
+                           os.path.join(self.data_path, "Ox_bone_A_bin1x1_ome_1.zarr"),
+                           glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/train/*.zarr"))]
+
+            test_paths = [os.path.join(self.data_path, "Bamboo_A_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "Cardboard_A_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "Cypress_A_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "Elm_A_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "Femur_01_80kV_ome.zarr"),
+                          os.path.join(self.data_path, "Larch_B_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "MDF_A_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "Oak_A_bin1x1_ome_0.zarr"),
+                          os.path.join(self.data_path, "Ox_bone_A_bin1x1_ome_0.zarr"),
+                          glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/test/*.zarr"))]
+
+            if self.synthetic:
+                group_pairs["VoDaSuRe2"] = {
+                    "4": [{"H": "HR/0", "L": "HR/2", "REG": "REG/0"}],
+                    "2": [{"H": "HR/0", "L": "HR/1"}],
+                    "1": [{"H": "HR/0", "L": "HR/0"}],
+                }
+            else:
+                group_pairs["VoDaSuRe2"] = {
+                    "4": [{"H": "HR/0", "L": "REG/0"}],
+                    "2": [{"H": "HR/1", "L": "REG/0"}],
+                    "1": [{"H": "HR/0", "L": "HR/0"}],
+                }
 
         if "VoDaSuRe" in opt['dataset_opt']['datasets']:
             train_paths["VoDaSuRe"] = glob.glob(os.path.join(self.data_path, "VoDaSuRe/ome/train/*.zarr"))
