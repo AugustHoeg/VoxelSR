@@ -327,15 +327,6 @@ def main(opt: DictConfig):
                 print(f"Processing image {image_idx + 1}/{len(paths)}: {zarr_path}")
                 out_path = os.path.join(wandb_path, f"files/model_outputs/{os.path.basename(zarr_path)}")
 
-                # Skip bone samples for VoDaSuRe OME dataset
-                if "bone_2_ome" in zarr_path:
-                    print("Skipping large bone sample.")
-                    continue
-
-                if "Vertebrae_D_80kV_ome" in zarr_path:
-                    print("Skipping vertebrae sample.")
-                    continue
-
                 if inference_mode == 'zarr':
                     run_strided_inference_zarr(
                         model=model,
