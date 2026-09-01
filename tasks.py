@@ -65,13 +65,17 @@ def finetuneid(ctx, model, dataset, experiment_id, pretrained_experiment_id):
     ctx.run(f"python -u train.py -cn {model} dataset_opt={dataset} experiment_id={model}_{dataset}_{experiment_id} train_mode='finetune' path.pretrained_experiment_id={model}_{dataset}_{pretrained_experiment_id}")
 
 @task
-def testzarr(ctx, experiment_id, datasets=None, mode=None):
+def testzarr(ctx, experiment_id, datasets=None, mode=None, version="V1"):
     """Run the testing script."""
 
-    cmd = (
-        f"python -u inference_zarr.py "
-        f"experiment_id={experiment_id} "
-    )
+    # Added support for legacy inference script
+    # Should be specified like this on command line: --version="V1" or --version="V2"
+    if version == "V1":
+        cmd = f"python -u inference_zarr.py experiment_id={experiment_id} "
+    elif version == "V2":
+        cmd = f"python -u inference_zarr_V2.py experiment_id={experiment_id} "
+    else:
+        raise ValueError(f"Invalid inference script version specified: {version}. Must be 'V1' or 'V2'.")
 
     # To make Hydra happy, datasets should be specified like this on command line: --datasets="[VoDaSuRe,CTSpine1K]"
     if datasets:
