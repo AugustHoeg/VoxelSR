@@ -2,6 +2,7 @@ import lpips
 import matplotlib.pyplot as plt
 import torch
 import torch.cuda.amp
+import torch.utils.checkpoint
 import torch.nn as nn
 import torch.nn.functional as F
 from omegaconf import OmegaConf
@@ -99,49 +100,62 @@ def bce_loss(y_real, y_pred):
 
 
 class LPIPSLoss3D(torch.nn.Module):
-    def __init__(self, net_type='alex', version='0.1', device="cuda", axes=(0, 1, 2)):
+    def __init__(self, net_type='alex', version='0.1', device="cuda", axes=(0, 1, 2),
+                 slice_chunk=32, use_checkpoint=True):
         super(LPIPSLoss3D, self).__init__()
         self.device = device
         self.loss_fn = lpips.LPIPS(net=net_type, version=version, verbose=False)
         self.loss_fn.to(self.device)
         self.axes = axes
+        self.slice_chunk = slice_chunk
+        self.use_checkpoint = use_checkpoint
+
+    def _axis_loss(self, a, b):
+        # a, b: (N, C, h, w) stacks of 2D slices. Returns the mean LPIPS distance over all N slices
+        N = a.shape[0]
+        chunk = self.slice_chunk or N
+        total = 0.0
+        for i in range(0, N, chunk):
+            a_c, b_c = a[i:i + chunk], b[i:i + chunk]
+            if self.use_checkpoint and torch.is_grad_enabled():
+                d = torch.utils.checkpoint.checkpoint(self.loss_fn.forward, a_c, b_c, use_reentrant=False)
+            else:
+                d = self.loss_fn.forward(a_c, b_c)
+            total = total + d.sum()
+        return total / N
 
     def forward(self, img_ref, img_pred):
 
         # Compute LPIPS loss for 3D images
         B, C, D, H, W = img_ref.shape
 
-        # Tile to 3 channels, since LPIPS expects RGB images
-        img1 = torch.tile(img_ref, dims=(1, 3, 1, 1, 1))
-        img2 = torch.tile(img_pred, dims=(1, 3, 1, 1, 1))
-
-        # Scale to [-1, 1]
-        img1 = img1 * 2.0 - 1.0
-        img2 = img2 * 2.0 - 1.0
+        # Tile to 3 channels, since LPIPS expects RGB images.
+        img1 = (img_ref * 2.0 - 1.0).expand(B, 3, D, H, W)
+        img2 = (img_pred * 2.0 - 1.0).expand(B, 3, D, H, W)
 
         loss = 0.0
         #loss = torch.zeros(1).to(self.device)
 
         if 0 in self.axes:
             # Along D axis
-            loss = loss + self.loss_fn.forward(
-                img1.permute(0, 2, 1, 3, 4).contiguous().view(-1, C, H, W),
-                img2.permute(0, 2, 1, 3, 4).contiguous().view(-1, C, H, W)
-            ).mean()
+            loss = loss + self._axis_loss(
+                img1.permute(0, 2, 1, 3, 4).contiguous().view(-1, 3, H, W),
+                img2.permute(0, 2, 1, 3, 4).contiguous().view(-1, 3, H, W)
+            )
 
         if 1 in self.axes:
             # Along H axis
-            loss = loss + self.loss_fn.forward(
-                img1.permute(0, 3, 2, 1, 4).contiguous().view(-1, C, D, W),
-                img2.permute(0, 3, 2, 1, 4).contiguous().view(-1, C, D, W)
-            ).mean()
+            loss = loss + self._axis_loss(
+                img1.permute(0, 3, 2, 1, 4).contiguous().view(-1, 3, D, W),
+                img2.permute(0, 3, 2, 1, 4).contiguous().view(-1, 3, D, W)
+            )
 
         if 2 in self.axes:
             # Along W axis
-            loss = loss + self.loss_fn.forward(
-                img1.permute(0, 4, 2, 3, 1).contiguous().view(-1, C, D, H),
-                img2.permute(0, 4, 2, 3, 1).contiguous().view(-1, C, D, H)
-            ).mean()
+            loss = loss + self._axis_loss(
+                img1.permute(0, 4, 2, 3, 1).contiguous().view(-1, 3, D, H),
+                img2.permute(0, 4, 2, 3, 1).contiguous().view(-1, 3, D, H)
+            )
 
         return loss
 

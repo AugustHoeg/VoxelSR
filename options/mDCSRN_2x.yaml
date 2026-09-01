@@ -21,7 +21,7 @@ run_name: ${model_opt.model_architecture}_001
 note: Note
 
 # GPU configuration
-train_mode: "finetune"   # "scratch", "finetune" or "resume"
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -49,18 +49,18 @@ train_opt:
 
   G_loss_weights:
     L1: 0.0  # Disabled inplace of AESOP3D loss
-    AESOP3D: 1.0  # Enabled AESOP3D loss with weight 1.0
+    # AESOP3D: 1.0  # Enabled AESOP3D loss with weight 1.0
     LPIPS: 0.01
 
-  pretrained_G_loss_IDs:
-    AESOP3D: "AESOP3D_VoDaSuRe_OME_ID000000"
+  # pretrained_G_loss_IDs:
+  #   AESOP3D: "AESOP3D_VoDaSuRe_OME_ID000000"
 
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
   patch_size: 32
 
-  datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
     dataloader_batch_size: 2
