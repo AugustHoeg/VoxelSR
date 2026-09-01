@@ -55,7 +55,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    LPIPS: 0.01
+    LPIPS: 0.0 # 0.01
 
   manual_seed: 8800 # 8400
 
