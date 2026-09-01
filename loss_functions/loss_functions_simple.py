@@ -101,14 +101,13 @@ def bce_loss(y_real, y_pred):
 
 class LPIPSLoss3D(torch.nn.Module):
     def __init__(self, net_type='alex', version='0.1', device="cuda", axes=(0, 1, 2),
-                 slice_chunk=32, use_checkpoint=True):
+                 slice_chunk=32):
         super(LPIPSLoss3D, self).__init__()
         self.device = device
         self.loss_fn = lpips.LPIPS(net=net_type, version=version, verbose=False)
         self.loss_fn.to(self.device)
         self.axes = axes
         self.slice_chunk = slice_chunk
-        self.use_checkpoint = use_checkpoint
 
     def _axis_loss(self, a, b):
         # a, b: (N, C, h, w) stacks of 2D slices. Returns the mean LPIPS distance over all N slices
@@ -117,10 +116,7 @@ class LPIPSLoss3D(torch.nn.Module):
         total = 0.0
         for i in range(0, N, chunk):
             a_c, b_c = a[i:i + chunk], b[i:i + chunk]
-            if self.use_checkpoint and torch.is_grad_enabled():
-                d = torch.utils.checkpoint.checkpoint(self.loss_fn.forward, a_c, b_c, use_reentrant=False)
-            else:
-                d = self.loss_fn.forward(a_c, b_c)
+            d = self.loss_fn.forward(a_c, b_c)
             total = total + d.sum()
         return total / N
 
