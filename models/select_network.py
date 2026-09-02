@@ -191,6 +191,7 @@ def define_G(opt, mode='train'):
                    channels_dec=opt_net["channels_dec"],
                    v_patch_nums=opt_net["v_patch_nums"],
                    n_rq_depth=opt_net["n_rq_depth"],
+                   quantizer_dropout=opt_net.get("quantizer_dropout", 0.0),
                    quant_resi=opt_net["quant_resi"],
                    share_quant_resi=opt_net["share_quant_resi"],
                    using_znorm=opt_net["using_znorm"],

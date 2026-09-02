@@ -102,6 +102,11 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         n_rq_depth:          number of residual codebooks D applied *within* each
                              scale. D distinct codebook instances, each shared
                              across all scales (depth d always uses codebook_d).
+        quantizer_dropout:   DAC-style depth dropout in [0, 1]. Probability that a
+                             given sample is trained with a randomly reduced number
+                             of active depth codebooks (uniform in [1, D]). 0.0
+                             disables the feature entirely (byte-identical to the
+                             all-depth path). Training only; eval uses full depth.
         beta:                commitment loss weight
         using_znorm:         if True, use cosine similarity in nearest-neighbour lookup
         quant_resi:          residual ratio for Phi. 0.5 => 0.5*conv(x) + 0.5*x.
@@ -116,6 +121,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         Cvae: int,
         v_patch_nums: Sequence[Union[int, Tuple[int, int, int]]],
         n_rq_depth: int = 4,
+        quantizer_dropout: float = 0.0,
         beta: float = 0.25,
         using_znorm: bool = False,
         quant_resi: float = 0.5,
@@ -134,6 +140,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         self.v_patch_nums: List[Tuple[int, int, int]] = [_as_dhw(pn) for pn in v_patch_nums]
         self.K = len(self.v_patch_nums)
         self.n_rq_depth = n_rq_depth
+        self.quantizer_dropout = quantizer_dropout
         self.quant_resi_ratio = quant_resi
 
         # ---- Phi refinement convs (applied once per scale on the summed depth output) ----
@@ -167,30 +174,55 @@ class MultiScaleResidualBottleneck3D(nn.Module):
     # ---------------------------------------------------------------
     # Inner depth RQ at a single scale (channel-last, low resolution)
     # ---------------------------------------------------------------
-    def _quantize_depth(self, rest_dhwc: torch.Tensor):
+    def _quantize_depth(self, rest_dhwc: torch.Tensor, n_active: Optional[torch.Tensor] = None):
         """
         Run the D-step residual loop at one scale.
 
         rest_dhwc: (B, pd, ph, pw, C) residual, channel-last.
+        n_active:  optional (B,) LongTensor giving how many depth codebooks are
+                   active per sample (quantizer/depth dropout). None -> all D
+                   depths active for every sample. The residual is ALWAYS peeled
+                   with the full embedding, so deeper codebooks keep seeing the
+                   true residual and their EMA stays healthy; dropout only masks
+                   which depths are *added* into the summed output (DAC-style).
 
         Returns:
-            agg:         (B, pd, ph, pw, C) sum of the D chosen embeddings
+            agg:         (B, pd, ph, pw, C) sum of the active depth embeddings
             depth_fracs: list[Tensor] len D, per-depth codebook usage this scale
         """
+        B = rest_dhwc.shape[0]
         depth_rest = rest_dhwc
         agg = torch.zeros_like(rest_dhwc)
         depth_fracs: List[torch.Tensor] = []
 
-        for codebook in self.codebooks:
+        for d, codebook in enumerate(self.codebooks):
             embeds, idx, _ = codebook(depth_rest)
-            depth_rest = depth_rest - embeds     # peel residual for next depth
-            agg = agg + embeds
+            depth_rest = depth_rest - embeds     # peel residual for next depth (unmasked)
+            if n_active is None:
+                agg = agg + embeds
+            else:
+                mask = (d < n_active).view(B, 1, 1, 1, 1).to(embeds.dtype)
+                agg = agg + embeds * mask
             depth_fracs.append(
                 torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero()
                 / self.vocab_size
             )
 
         return agg, depth_fracs
+
+    def _sample_active_depths(self, B: int, device) -> torch.Tensor:
+        """Per-sample active depth count for quantizer dropout (DAC-style).
+
+        Samples n ~ U{1, ..., D} for every sample, then reverts a fraction
+        (1 - quantizer_dropout) back to full depth D. So quantizer_dropout is the
+        probability that a given sample is trained at a reduced depth. The same
+        count is used across all scales for a sample, so it stays a coherent
+        reduced-depth reconstruction rather than a per-scale mix.
+        """
+        D = self.n_rq_depth
+        n = torch.randint(1, D + 1, (B,), device=device)
+        keep_full = torch.rand(B, device=device) >= self.quantizer_dropout
+        return torch.where(keep_full, torch.full_like(n, D), n)
 
     # ---------------------------------------------------------------
     # Training forward: encode -> per-scale depth-residual quantize -> STE
@@ -212,6 +244,11 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         f_rest = f_no_grad.clone()
         f_hat = torch.zeros_like(f_rest)
 
+        # per-sample active depth count for quantizer (depth) dropout; None disables
+        n_active = None
+        if self.training and self.quantizer_dropout > 0:
+            n_active = self._sample_active_depths(B, f_BCDHW.device)
+
         with torch.amp.autocast("cuda", enabled=False):
             mean_vq_loss = f_BCDHW.new_zeros(())
             frac_unique_list: List[float] = []
@@ -224,7 +261,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
 
                 # 2) inner D-depth residual quantization at this scale (channel-last)
                 rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()   # (B, pd, ph, pw, C)
-                agg_dhwc, depth_fracs = self._quantize_depth(rest_dhwc)
+                agg_dhwc, depth_fracs = self._quantize_depth(rest_dhwc, n_active)
 
                 # 3) upsample summed depth embedding back to full (D, H, W)
                 h = agg_dhwc.permute(0, 4, 1, 2, 3).contiguous()           # (B, C, pd, ph, pw)
@@ -278,7 +315,8 @@ class MultiScaleResidualBottleneck3D(nn.Module):
 
     def extra_repr(self) -> str:
         return (f'v_patch_nums={self.v_patch_nums}, K={self.K}, n_rq_depth={self.n_rq_depth}, '
-                f'znorm={self.using_znorm}, beta={self.beta}, quant_resi={self.quant_resi_ratio}')
+                f'qdrop={self.quantizer_dropout}, znorm={self.using_znorm}, beta={self.beta}, '
+                f'quant_resi={self.quant_resi_ratio}')
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +348,7 @@ class RMSVQVAE3D(nn.Module):
         # multi-scale specific
         v_patch_nums=(1, 2, 4, 8),
         n_rq_depth: int = 4,
+        quantizer_dropout: float = 0.0,
         quant_resi: float = 0.5,
         share_quant_resi: int = 4,
         using_znorm: bool = False,
@@ -365,6 +404,7 @@ class RMSVQVAE3D(nn.Module):
             Cvae=quant_embed_dim,
             v_patch_nums=v_patch_nums,
             n_rq_depth=n_rq_depth,
+            quantizer_dropout=quantizer_dropout,
             beta=beta,
             using_znorm=using_znorm,
             quant_resi=quant_resi,
@@ -428,7 +468,7 @@ if __name__ == '__main__':
         num_res_blocks_enc=2,
         num_res_blocks_dec=4,
         v_patch_nums=(1, 2, 3, 4, 6, 8),           # -> 828 spatial tokens per volume
-        n_rq_depth=4,                              # D shared codebooks per scale
+        n_rq_depth=8,                              # D shared codebooks per scale
         quant_resi=0.5,
         share_quant_resi=4,
         using_znorm=True,
@@ -446,6 +486,13 @@ if __name__ == '__main__':
     print(f'Output:           {tuple(x_hat.shape)}')
     print(f'Commitment loss:  {loss.item():.4f}')
     print(f'Frac unique / scale (depth-avg): {[f"{u:.2f}" for u in frac_unique]}')
+
+    # exercise the quantizer (depth) dropout path on the same model
+    model.quantizer.quantizer_dropout = 0.5
+    x_hat_d, loss_d, _, _, frac_unique_d = model(torch.randn(2, 1, patch_size, patch_size, patch_size, device=device))
+    print(f'[qdrop=0.5] Output: {tuple(x_hat_d.shape)}  loss: {loss_d.item():.4f}  '
+          f'frac unique/scale: {[f"{u:.2f}" for u in frac_unique_d]}')
+    model.quantizer.quantizer_dropout = 0.0
 
     if torch.cuda.is_available():
         max_memory_reserved = torch.cuda.max_memory_reserved()
