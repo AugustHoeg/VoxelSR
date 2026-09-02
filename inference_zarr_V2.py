@@ -333,13 +333,14 @@ def main(opt: DictConfig):
                         zarr_path=zarr_path,
                         out_path=out_path,
                         group_pair=group_pair,
-                        f=opt['up_factor'],
+                        f=opt["up_factor"],
                         size_lr=opt.dataset_opt.patch_size,
                         size_hr=patch_size_hr,
-                        border=4+context_width*2,
+                        border=4 + context_width * 2,
                         batch_size=batch_size,
                         overlap_mode="hann",
-                        model_input_type=opt['input_type'],
+                        model_input_type=opt["input_type"],
+                        unnorm=opt["dataset_opt"]["norm_type"] == "znormalization",
                     )
 
                     zarr_H = zarr.open(zarr_path, mode='r')
@@ -362,14 +363,15 @@ def main(opt: DictConfig):
                     img_E = run_strided_inference_pad(
                         model=model,
                         img_L=img_L,
-                        f=opt['up_factor'],
+                        f=opt["up_factor"],
                         size_lr=opt.dataset_opt.patch_size,
                         size_hr=patch_size_hr,
-                        border=4+context_width*2,
+                        border=4 + context_width * 2,
                         context_width=context_width,
                         batch_size=batch_size,
                         overlap_mode="hann",
-                        model_input_type=opt['input_type']
+                        model_input_type=opt["input_type"],
+                        unnorm=opt["dataset_opt"]["norm_type"] == "znormalization",
                     )
                     img_L = img_L[0]  # assumes single channel dimension
                     img_E = img_E[0]  # assumes single channel dimension
