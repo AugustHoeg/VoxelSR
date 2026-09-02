@@ -30,7 +30,7 @@ class ModelVQGAN(ModelBase):
             self.netD = define_D(opt, mode=mode)
             self.netD = self.model_to_device(self.netD, data_parallel=data_parallel)
             if self.opt_train['E_decay'] > 0:
-                self.netE = define_G(opt).to(self.device).eval()
+                self.netE = self.init_netE(opt)
 
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
@@ -388,10 +388,6 @@ class ModelVQGAN(ModelBase):
             "step": current_step,
             "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per RQ Depth"),
         })
-
-        if self.opt_train['E_decay'] > 0:
-            self.update_E(self.opt_train['E_decay'])
-
     def record_avg_train_log(self, current_step, idx_train):
         avg_loss_G = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": avg_loss_G})
@@ -401,10 +397,6 @@ class ModelVQGAN(ModelBase):
 
         self.G_train_loss = 0.0
         self.D_train_loss = 0.0
-
-        if self.opt_train['E_decay'] > 0:
-            self.update_E(self.opt_train['E_decay'])
-
     def record_test_log(self, idx_test):
         idx_tensor = torch.tensor(idx_test, device=self.device)
         global_idx_tensor = reduce_sum(idx_tensor)

@@ -24,7 +24,7 @@ netG:
   swin_depth: 2
   swin_embed_dim: 192
   window_size: 8
-  mlp_ratio: 2.0
+  mlp_ratio: 4
   patch_norm: false
   dropout: 0.0
 

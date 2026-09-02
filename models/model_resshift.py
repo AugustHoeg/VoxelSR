@@ -69,11 +69,9 @@ class ModelResShift(ModelPlain):
     # ------------------------------------------------------------------
     def _diffusion_loss(self):
         b = self.H.shape[0]
-        t = torch.randint(0, self.diffusion.num_timesteps, (b,), device=self.device).long()
+        t = torch.randint(0, self.diffusion.num_timesteps, size=(b,), device=self.device).long()
         lq_up = self._lq_cond(self.L)
-        terms, _, _ = self.diffusion.training_losses(
-            self.netG, self.H, self.L, t, model_kwargs={'lq': lq_up},
-        )
+        terms, _, _ = self.diffusion.training_losses(self.netG, self.H, self.L, t, model_kwargs={'lq': lq_up})
         return terms['mse'].mean()
 
     def optimize_parameters_amp(self, current_step, update=False):

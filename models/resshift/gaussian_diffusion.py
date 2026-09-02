@@ -9,10 +9,10 @@ import torch.nn.functional as F
 from .basic_ops import mean_flat
 from .losses import normal_kl, discretized_gaussian_log_likelihood
 
-# NOTE (VoxelSR vendor): the original ResShift imports the LDM autoencoder here
-# (`from ldm.models.autoencoder import AutoencoderKLTorch`). We run in pixel space
-# with `first_stage_model=None`, so the autoencoder is never used and the import
-# is dropped to avoid pulling in the `ldm` package.
+# from ldm.models.autoencoder import AutoencoderKLTorch
+
+# NOTE: the original ResShift imports the LDM autoencoder here. We run in pixel space with `first_stage_model=None`,
+# so the autoencoder is never used and the import is dropped to avoid importing the `ldm` package.
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps, beta_start, beta_end):
     """
@@ -475,8 +475,7 @@ class GaussianDiffusion:
                 z_sample = out["sample"]
 
     def decode_first_stage(self, z_sample, first_stage_model=None, consistencydecoder=None):
-        # VoxelSR vendor: pixel-space path (no autoencoder) -> identity decode.
-        # Guard added before dereferencing first_stage_model.parameters().
+        # Added pixel-space decode -> returns input as is.
         if first_stage_model is None and consistencydecoder is None:
             return z_sample
 
@@ -506,8 +505,8 @@ class GaussianDiffusion:
             return out
 
     def encode_first_stage(self, y, first_stage_model, up_sample=False):
-        # VoxelSR vendor: pixel-space path (no autoencoder) -> just bicubic upsample.
-        # Guard added before dereferencing first_stage_model.parameters().
+        # Added pixel-space encode path -> returns bicubic upsampled input.
+        # Fixed encode path when first_stage_model is None
         if up_sample and self.sf != 1:
             y = F.interpolate(y, scale_factor=self.sf, mode='bicubic')
         if first_stage_model is None:

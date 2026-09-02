@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
-  - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: ResShift2D                  # Default model config
+  - dataset_opt: VoDaSuRe_OME       # Default dataset config
+  - model_opt: ResShift2D              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -10,17 +10,17 @@ input_type: 2D # Input type, 2D or 3D
 up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
-# Profile
+# Profile & Compile
 run_profile: false
-compile: false # Enable PyTorch 2.0 compilation
+compile: true # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_${vae_target}_${up_factor}x # <--- change project
-experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_001
+wandb_project: ${dataset_opt.name}_V2_REG_${up_factor}x # <--- change project
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_V2_ID000000
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -34,51 +34,52 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: null
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 1000
+  iterations: 100000
   validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
-  G_optimizer_lr: 2e-4
+
+  # ResShift2D hyperparameters
+  G_optimizer_type: adam
+  G_optimizer_lr: 5e-5
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+  G_optimizer_betas: [0.9, 0.999]
+  G_scheduler_type: CosineAnnealingLR
+  G_eta_min: 2e-5
+  G_warmup_steps: 5000
 
-  # In ResShift paper:
-  # Input patch size: 256 x 256 -> 64 x 64 after 2 downsampling steps
-  # Learning rate: 5e-5 (fixed)
-  # Iterations: 500K
-  # Batch size: 64
-
+  # ResShift2D relies on MSE loss in noise space, so loss weights are set to 0
   G_loss_weights:
     L1: 0
     LPIPS: 0
 
+  manual_seed: 8800 # 8400
+
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: true
-  patch_size: 16
+  synthetic: false
+  patch_size: 16  # --> patch_size_hr = 64
 
-  datasets: [IXI] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
-
-  # Diffusion process of ResShift assumes inputs are normalized to [-1, 1]
-  norm_type: znormalization  # scale_intensity
+  datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 2
+    dataloader_batch_size: 8
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 1
-    num_load_workers: 2
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 

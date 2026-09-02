@@ -98,6 +98,7 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
             # -------------------------------
             if model.update:
                 model.update_learning_rate()  # removed current step here and moved line to after optimizer.step()
+                model.update_ema()  # EMA (netE) tracks netG once per real optimizer step
 
             # -------------------------------
             # 4) print training information

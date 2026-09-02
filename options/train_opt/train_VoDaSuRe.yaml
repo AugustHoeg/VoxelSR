@@ -40,6 +40,7 @@ G_scheduler_milestones:
   - 85000
   - 95000
 G_scheduler_gamma: 0.5
+G_eta_min: 0.0
 G_regularizer_orthstep: null
 G_regularizer_clipstep: null
 G_param_strict: false
@@ -57,6 +58,7 @@ D_warmup_steps: 0
 D_scheduler_milestones:
   - 800000  # Never reduce LR
 D_scheduler_gamma: 0.5
+D_eta_min: 0.0
 D_regularizer_orthstep: null
 D_regularizer_clipstep: null
 D_param_strict: false

@@ -654,7 +654,7 @@ class UNetModelSwin(nn.Module):
         cond_lq=True,
         cond_mask=False,
         lq_size=256,
-        lq_channels=3,
+        lq_channels=3,  # Added variable number of channels for LR input
     ):
         super().__init__()
 
@@ -687,8 +687,7 @@ class UNetModelSwin(nn.Module):
             linear(time_embed_dim, time_embed_dim),
         )
 
-        # VoxelSR vendor: original code hardcoded RGB (3) lq channels. Parametrized
-        # via `lq_channels` so single-channel (e.g. CT/medical) data works.
+        # Fixed hardcoded RGB (3) lq channels. Added `lq_channels` argument to allow variable channels for LR input
         mask_chn = 1 if cond_mask else 0
         if cond_lq and lq_size == image_size:
             self.feature_extractor = nn.Identity()

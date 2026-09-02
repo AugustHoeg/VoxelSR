@@ -431,13 +431,13 @@ class ModelBase():
             self.metric_val_dict["nrmse"] = 0.0
             self.metric_fn_dict["nrmse"] = NRMSE_3D() if self.opt['input_type'] == '3D' else NRMSE_2D()
 
-    def _build_scheduler(self, optimizer, milestones_key, gamma_key, warmup_steps_key, scheduler_type="MultiStepLR"):
+    def _build_scheduler(self, optimizer, milestones_key, gamma_key, warmup_steps_key, eta_min_key, scheduler_type="MultiStepLR"):
         """Build a scheduler with an optional LinearLR warmup prefix."""
         if scheduler_type == "CosineAnnealingLR":
             scheduler = lr_scheduler.CosineAnnealingLR(
                 optimizer,
                 T_max=self.opt_train["iterations"],  # Set to no. of training iterations for now
-                eta_min=0.0  # Set to zer for now
+                eta_min=self.opt_train.get(eta_min_key, default=0.0)  # Set to zer for now
             )
         else:
             scheduler = lr_scheduler.MultiStepLR(
@@ -463,6 +463,7 @@ class ModelBase():
                 milestones_key="G_scheduler_milestones",
                 gamma_key="G_scheduler_gamma",
                 warmup_steps_key="G_warmup_steps",
+                eta_min_key="G_eta_min",
                 scheduler_type=self.opt_train.get("G_scheduler_type", "MultiStepLR")
             )
         )
@@ -474,6 +475,7 @@ class ModelBase():
                 milestones_key="D_scheduler_milestones",
                 gamma_key="D_scheduler_gamma",
                 warmup_steps_key="D_warmup_steps",
+                eta_min_key="D_eta_min",
                 scheduler_type=self.opt_train.get("D_scheduler_type", "MultiStepLR"),
             )
         )
@@ -485,6 +487,7 @@ class ModelBase():
                 milestones_key="G_scheduler_milestones",
                 gamma_key="G_scheduler_gamma",
                 warmup_steps_key="G_scheduler_warmup_steps",
+                eta_min_key="G_eta_min",
                 scheduler_type=self.opt_train.get("star_scheduler_type", "MultiStepLR"),
             )
         )
@@ -777,12 +780,34 @@ class ModelBase():
     def load_gradscaler(self, load_path, gradscaler, weights_only=True):
         gradscaler.load_state_dict(torch.load(load_path, map_location=lambda storage, loc: storage.cuda(torch.cuda.current_device()), weights_only=weights_only))
 
+    def init_netE(self, opt):
+        """Create the EMA network (netE) as a frozen copy of netG's current weights.
+
+        Call from a model's __init__ *after* netG exists. Copying netG (instead of
+        a fresh define_G init) makes the EMA meaningful from the first step.
+        """
+        from models.select_network import define_G
+        netE = define_G(opt).to(self.device).eval()
+        netE.load_state_dict(self.get_bare_model(self.netG).state_dict())
+        for p in netE.parameters():
+            p.requires_grad_(False)
+        return netE
+
     def update_E(self, decay=0.999):
         netG = self.get_bare_model(self.netG)
         netG_params = dict(netG.named_parameters())
         netE_params = dict(self.netE.named_parameters())
         for k in netG_params.keys():
             netE_params[k].data.mul_(decay).add_(netG_params[k].data, alpha=1-decay)
+
+    def update_ema(self):
+        """Update EMA weights (netE) from netG. No-op when EMA is disabled.
+
+        Must be called once per real optimizer step, i.e. under `if model.update:`
+        in the training loop -- not on every gradient-accumulation micro-step.
+        """
+        if self.opt_train.get('E_decay', 0) > 0 and hasattr(self, 'netE'):
+            self.update_E(self.opt_train['E_decay'])
 
     """
     # ----------------------------------------

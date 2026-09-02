@@ -24,6 +24,8 @@ class ModelVQVAE(ModelBase):
         self.last_iteration = 0
         self.netG = define_G(opt, mode=mode)
         self.netG = self.model_to_device(self.netG, data_parallel=data_parallel)
+        if self.opt_train['E_decay'] > 0:
+            self.netE = self.init_netE(opt)
 
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters", utils_3D_image.numel(self.netG, only_trainable=True))
@@ -161,19 +163,11 @@ class ModelVQVAE(ModelBase):
             "step": current_step,
             "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per depth/scale"),
         })
-
-        if self.opt_train['E_decay'] > 0:
-            self.update_E(self.opt_train['E_decay'])
-
     def record_avg_train_log(self, current_step, idx_train):
         avg_loss = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": avg_loss})
 
         self.G_train_loss = 0.0
-
-        if self.opt_train['E_decay'] > 0:
-            self.update_E(self.opt_train['E_decay'])
-
     def validation(self):
         self.vq_forward()
 
