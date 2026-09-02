@@ -9,8 +9,10 @@ task: superresolution
 input_type: 3D # Input type, 2D or 3D
 up_factor: 2  # upscaling factor
 
-# Profile
+# Profile & Compile
 run_profile: false
+compile: true # Enable PyTorch 2.0 compilation
+compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
 wandb_mode: offline

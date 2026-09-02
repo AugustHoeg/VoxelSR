@@ -299,6 +299,8 @@ class ModelBase():
                 else:
                     from loss_functions.loss_functions_simple import LPIPSLoss2D
                     self.loss_fn_dict["LPIPS"] = LPIPSLoss2D(net_type='alex', version='0.1', device=self.device)
+                if self.opt["compile"]:  # LPIPS loss function benefits from compilation if available
+                    self.loss_fn_dict["LPIPS"] = torch.compile(self.loss_fn_dict["LPIPS"], mode=self.opt["compile_mode"])
             elif key == "FSC" and value > 0:
                 if self.opt['input_type'] == '3D':
                     from loss_functions.loss_functions_simple import FSCLoss3D
