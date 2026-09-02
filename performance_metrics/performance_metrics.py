@@ -69,7 +69,7 @@ def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric
 
     for key in metric_fn_dict:
         val = metric_fn_dict[key](img1, img2)
-        metric_val_dict[key] += val if val.ndim == 0 else val.mean().item()
+        metric_val_dict[key] += val.item() if val.ndim == 0 else val.mean().item()
 
     return metric_val_dict
 
@@ -153,7 +153,7 @@ class PSNR_3D(nn.Module):
 
         result = torch.mean(self.metric_func(img_true.clamp(min=0.0, max=1.0), img_false.clamp(min=0.0, max=1.0)))  # mean over patches in batch
 
-        return result.item()
+        return result
 
 
 class SSIM_2D(nn.Module):
@@ -188,7 +188,7 @@ class SSIM_3D(nn.Module):
     def forward(self, img_true, img_false):
 
         result = torch.mean(self.metric_func(img_true, img_false))  # mean over patches in batch
-        return result.item()
+        return result
 
 
 class NRMSE_2D(nn.Module):
@@ -239,7 +239,7 @@ class NRMSE_3D(nn.Module):
             return 0.0
 
         result = torch.mean(self.metric_func(img_true[idx], img_false[idx]) / denom[idx])
-        return result.item()
+        return result
 
 def performance_metrics(real_hi_res, fake_hi_res):
     mse_func = nn.MSELoss()

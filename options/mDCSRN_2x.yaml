@@ -11,7 +11,7 @@ up_factor: 2  # upscaling factor
 
 # Profile & Compile
 run_profile: false
-compile: true # Enable PyTorch 2.0 compilation
+compile: false # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
@@ -33,17 +33,17 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: "mDCSRN_VoDaSuRe_OME_ID000000"  # "mDCSRN_ID000000"
+  pretrained_experiment_id: null  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
   iterations: 1000
   validation_iterations: 50
-  checkpoint_test: 200
-  checkpoint_save: 200
-  checkpoint_print: 200
-  checkpoint_save_visuals: 200
+  checkpoint_test: 100
+  checkpoint_save: 100
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
   num_accum_steps_G: 1
   G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
