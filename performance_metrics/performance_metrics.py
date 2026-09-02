@@ -8,6 +8,26 @@ from monai.metrics.regression import PSNRMetric, RMSEMetric, SSIMMetric
 from utils.utils_image import calculate_nrmse_2D, calculate_psnr_2D, calculate_ssim_2D
 
 
+def rescale_intensity(x: torch.Tensor, a_min= 0.0, a_max = 1.0, eps: float = 1e-8):
+
+    if x.ndim not in (4, 5):
+        raise ValueError(f"Expected (B,C,H,W) or (B,C,D,H,W), got shape {tuple(x.shape)}")
+
+    if a_max <= a_min:
+        raise ValueError("a_max must be greater than a_min")
+
+    reduce_dims = tuple(range(1, x.ndim))
+    x_min = x.amin(dim=reduce_dims, keepdim=True)
+    x_max = x.amax(dim=reduce_dims, keepdim=True)
+
+    # Normalize to [0, 1] and map to [a_min, a_max].
+    denominator = (x_max - x_min).clamp_min(eps)
+
+    y = (x - x_min) / denominator
+    y = y * (a_max - a_min) + a_min
+
+    return y
+
 def calculate_metric_2D(img_H, img_E, border=0, metric_fn=None):
     metric = 0
     metric_slice_list = []
@@ -39,22 +59,17 @@ def calculate_metric_3D(img_H, img_E, border=0, metric_fn=None):
 
 def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
 
-    num_patches = len(real_hi_res)
-
     # Rescale images if needed
     if rescale_images:
-        rescale = tio.transforms.RescaleIntensity((0.0, 1.0))
-        img1 = torch.zeros_like(real_hi_res)
-        img2 = torch.zeros_like(fake_hi_res)
-        for patch_idx in range(num_patches):
-             img1[patch_idx] = rescale(real_hi_res[patch_idx].cpu())
-             img2[patch_idx] = rescale(fake_hi_res[patch_idx].cpu())
+        img1 = rescale_intensity(real_hi_res, a_min=0.0, a_max=1.0)
+        img2 = rescale_intensity(fake_hi_res, a_min=0.0, a_max=1.0)
     else:
         img1 = real_hi_res
         img2 = fake_hi_res
 
     for key in metric_fn_dict:
-        metric_val_dict[key] += metric_fn_dict[key](img1, img2)
+        val = metric_fn_dict[key](img1, img2)
+        metric_val_dict[key] += val if val.ndim == 0 else val.mean().item()
 
     return metric_val_dict
 

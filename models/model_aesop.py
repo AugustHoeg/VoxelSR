@@ -156,6 +156,7 @@ class ModelAESOP(ModelBase):
         self.run.log({"step": current_step, "G_train_loss": avg_loss})
 
         self.G_train_loss = 0.0
+
     def validation(self):
         self.ae_forward()
 
@@ -165,7 +166,7 @@ class ModelAESOP(ModelBase):
         self.G_valid_loss += self.gen_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     def validation_amp(self):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
@@ -176,7 +177,7 @@ class ModelAESOP(ModelBase):
         self.G_valid_loss += self.gen_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     def current_log(self):
         return self.log_dict

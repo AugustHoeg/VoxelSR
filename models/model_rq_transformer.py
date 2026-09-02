@@ -350,7 +350,7 @@ class ModelTransformerRQ(ModelBase):
         self.E = self.sample_E(z_lr, batch_size=self.H.shape[0])
 
         rescale_images = self.opt["dataset_opt"]["norm_type"] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     def validation_amp(self):
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
@@ -369,7 +369,7 @@ class ModelTransformerRQ(ModelBase):
             self.E = self.sample_E(z_lr, batch_size=self.H.shape[0])
 
         rescale_images = self.opt["dataset_opt"]["norm_type"] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     # ----------------------------------------
     # Logging / visuals

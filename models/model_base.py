@@ -16,7 +16,7 @@ from performance_metrics.performance_metrics import NRMSE_2D, NRMSE_3D, PSNR_2D,
 from utils.utils_3D_image import crop_center
 from utils.utils_bnorm import merge_bn, tidy_sequential
 from utils.utils_dist import get_rank, reduce_max, reduce_sum
-
+import pyiqa
 
 class ModelBase():
 
@@ -423,13 +423,22 @@ class ModelBase():
 
         if "psnr" in self.opt_train['performance_metrics']:
             self.metric_val_dict["psnr"] = 0.0
-            self.metric_fn_dict["psnr"] = PSNR_3D() if self.opt['input_type'] == '3D' else PSNR_2D()
+            if self.opt['input_type'] == '3D':
+                self.metric_fn_dict["psnr"] = PSNR_3D()
+            else:
+                self.metric_fn_dict["psnr"] = pyiqa.create_metric("psnr", device=self.device)
         if "ssim" in self.opt_train['performance_metrics']:
             self.metric_val_dict["ssim"] = 0.0
-            self.metric_fn_dict["ssim"] = SSIM_3D() if self.opt['input_type'] == '3D' else SSIM_2D()
+            if self.opt['input_type'] == '3D':
+                self.metric_fn_dict["ssim"] = SSIM_3D()
+            else: 
+                self.metric_fn_dict["ssim"] = pyiqa.create_metric("ssim", device=self.device)
         if "nrmse" in self.opt_train['performance_metrics']:
             self.metric_val_dict["nrmse"] = 0.0
-            self.metric_fn_dict["nrmse"] = NRMSE_3D() if self.opt['input_type'] == '3D' else NRMSE_2D()
+            if self.opt['input_type'] == '3D':
+                self.metric_fn_dict["nrmse"] = NRMSE_3D()
+            else:
+                self.metric_fn_dict["nrmse"] = NRMSE_2D()
 
     def _build_scheduler(self, optimizer, milestones_key, gamma_key, warmup_steps_key, eta_min_key, scheduler_type="MultiStepLR"):
         """Build a scheduler with an optional LinearLR warmup prefix."""

@@ -77,7 +77,6 @@ checkpoint_save_visuals: 5000
 performance_metrics:
   - psnr
   - ssim
-  - nrmse
 
 upscaling_methods:
   - tio_nearest

@@ -382,7 +382,7 @@ class ModelGAN(ModelBase):
         self.D_valid_loss += self.dis_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     def validation_amp(self):
 
@@ -399,7 +399,7 @@ class ModelGAN(ModelBase):
         self.D_valid_loss += self.dis_loss
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
-        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images)
+        compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     def current_log(self):
         return self.log_dict
