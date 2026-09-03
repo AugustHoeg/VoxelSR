@@ -72,7 +72,7 @@ dataset_opt:
   datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
+    dataloader_batch_size: 32
     num_load_workers: 32
     persist_workers: true
     pin_memory: false
