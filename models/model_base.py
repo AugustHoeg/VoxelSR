@@ -446,7 +446,7 @@ class ModelBase():
             scheduler = lr_scheduler.CosineAnnealingLR(
                 optimizer,
                 T_max=self.opt_train["iterations"],  # Set to no. of training iterations for now
-                eta_min=self.opt_train.get(eta_min_key, default=0.0)  # Set to zer for now
+                eta_min=self.opt_train.get(eta_min_key, 0.0)  # Set to zer for now
             )
         else:
             scheduler = lr_scheduler.MultiStepLR(

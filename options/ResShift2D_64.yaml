@@ -46,9 +46,16 @@ train_opt:
   checkpoint_print: 100
   checkpoint_save_visuals: 100
   num_accum_steps_G: 1
-  G_optimizer_lr: 2e-4
+
+  # ResShift2D hyperparameters
+  G_optimizer_type: adam
+  G_optimizer_lr: 5e-5
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+  G_optimizer_betas: [0.9, 0.999]
+  G_scheduler_type: CosineAnnealingLR
+  G_eta_min: 2e-5
+  G_warmup_steps: 5000
 
   # In ResShift paper:
   # Input patch size: 256 x 256 -> 64 x 64 after 2 downsampling steps
