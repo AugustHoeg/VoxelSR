@@ -38,12 +38,12 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 100000
-  validation_iterations: 50
-  checkpoint_test: 2500
-  checkpoint_save: 20000
-  checkpoint_print: 2500
-  checkpoint_save_visuals: 2500
+  iterations: 100000 # 100000
+  validation_iterations: 50 # 50
+  checkpoint_test: 100  # 2500
+  checkpoint_save: 20000 # 20000
+  checkpoint_print: 100 # 2500
+  checkpoint_save_visuals: 100 # 2500
   num_accum_steps_G: 1
 
   # HAT hyperparameters
