@@ -23,7 +23,7 @@ run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -33,7 +33,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null
+  pretrained_experiment_id: RRDBNet3D_VoDaSuRe2_REG_4x_VoDaSuRe_OME_ID005000
   pretrained_netE: null
 
 # Overwrite default training parameters
@@ -47,7 +47,7 @@ train_opt:
   num_accum_steps_G: 1
 
   G_optimizer_type: adam
-  G_optimizer_lr: 2e-4
+  G_optimizer_lr: 1e-4
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
   G_optimizer_betas: [0.9, 0.999]
@@ -55,9 +55,9 @@ train_opt:
 
   # Loss weights from ESRGAN paper
   G_loss_weights:
-    L1: 0.01    #  1 x 10^-2
-    LPIPS: 1.0  #  1.0
-    ADV: 0.005  #  5 x 10^-3
+    L1: 0.01
+    LPIPS: 1.0
+    ADV: 0.005
 
   manual_seed: 8800 # 8400
 
