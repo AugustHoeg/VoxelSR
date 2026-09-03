@@ -654,7 +654,7 @@ class ModelBase():
 
         system = platform.system()
 
-        # Force static-shape compilation
+        # Force static-shape triggers separate fast compilations for train/test batch sizes
         torch._dynamo.config.automatic_dynamic_shapes = False
 
         try:
