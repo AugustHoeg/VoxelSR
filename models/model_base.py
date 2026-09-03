@@ -6,6 +6,7 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch._dynamo
 import torch.nn as nn
 import wandb
 from torch.nn.parallel import DataParallel, DistributedDataParallel
@@ -653,13 +654,16 @@ class ModelBase():
 
         system = platform.system()
 
+        # Force static-shape compilation
+        torch._dynamo.config.automatic_dynamic_shapes = False
+
         try:
             if system == "Windows":
                 print("Using torch.compile with backend='aot_eager' (Windows safe mode)")
-                return torch.compile(network, backend="aot_eager", mode=mode)
+                return torch.compile(network, backend="aot_eager", mode=mode, dynamic=False)
             else:
                 print("Using torch.compile with backend='inductor'")
-                return torch.compile(network, backend="inductor", mode=mode)
+                return torch.compile(network, backend="inductor", mode=mode, dynamic=False)
 
         except Exception as e:
             print(f"torch.compile failed: {e}")
