@@ -254,6 +254,26 @@ def define_G(opt, mode='train'):
                    use_checkpoint=opt_net["use_checkpoint"],
             )
         
+    elif model_arch == "VARVQVAE2D":  # VARSR multi-scale VQVAE (2D baseline)
+        from models.varsr import VARVQVAE2D as net
+        netG = net(in_channels=opt_net["in_channels"],
+                   vocab_size=opt_net["num_embeddings"],
+                   z_channels=opt_net["z_channels"],
+                   ch=opt_net["ch"],
+                   ch_mult=tuple(opt_net["ch_mult"]),
+                   num_res_blocks=opt_net["num_res_blocks"],
+                   dropout=opt_net.get("dropout", 0.0),
+                   using_sa=opt_net.get("using_sa", True),
+                   using_mid_sa=opt_net.get("using_mid_sa", True),
+                   beta=opt_net.get("beta", 0.25),
+                   using_znorm=opt_net.get("using_znorm", False),
+                   quant_conv_ks=opt_net.get("quant_conv_ks", 3),
+                   quant_resi=opt_net.get("quant_resi", 0.5),
+                   share_quant_resi=opt_net.get("share_quant_resi", 4),
+                   v_patch_nums=tuple(opt_net["v_patch_nums"]),
+                   eini=opt_net.get("eini", 0.0),
+                   resolution=opt["dataset_opt"]["patch_size_hr"])
+
     elif model_arch == "BSQVAE3D":
         from models.BSQVAE3D import BSQVAE3D as net
         netG = net(

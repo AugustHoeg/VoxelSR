@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from data.train_transforms import (
+    ExpandChannelsd,
     Znormalized,
     RandSRCLAHEd,
     RandSRContrastd,
@@ -256,6 +257,10 @@ class Dataset_VoDaSuRe_OME():
 
             trans_list.append(RandSRRotated(keys=["H", "L", "REG"], prob=0.25, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True))
             trans_list.append(RandSRZoomd(keys=["H", "L", "REG"], prob=0.25, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
+
+            # Expand channels to RGB if required
+            if pdata.expand_channels_rgb:
+                trans_list.append(ExpandChannelsd(keys=["H", "L", "REG"], num_channels=3))
 
             # trans_list.append(mt.Rand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
             # trans_list.append(mt.RandGaussianNoised(keys=["L"], prob=0.2, mean=0.0, std=0.005))

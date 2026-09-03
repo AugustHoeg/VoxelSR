@@ -191,6 +191,25 @@ class Znormalized(MapTransform):
 
         return d
 
+class ExpandChannelsd(MapTransform):
+    """
+    Expand the channel dimension of the input tensor to a specified number of channels.
+    """
+
+    def __init__(self, keys, num_channels):
+        super().__init__(keys, allow_missing_keys=True)
+        self.num_channels = num_channels
+
+    def __call__(self, data):
+        d = dict(data)
+
+        for key in self.keys:
+            if key not in d:
+                continue
+            d[key] = d[key].expand(self.num_channels, *d[key].shape[1:])
+
+        return d
+
 class RandSRFlipd(Randomizable):
     """
     Custom random flip transform that applies the same random flip decision

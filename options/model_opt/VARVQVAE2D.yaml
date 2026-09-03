@@ -1,0 +1,29 @@
+## @package _global_ # remove first # to enable merging into top-level namespace
+
+model: vqvae
+model_architecture: VARVQVAE2D
+netG:
+  net_type: VARVQVAE2D
+  description: "VARSR multi-scale VQVAE (2D port, single-channel)"
+  in_channels: 1                 # grayscale; set 3 only for the RGB zero-shot ablation
+  num_embeddings: 4096           # codebook size V (VARSR: 4096)
+  z_channels: 32                 # latent / codebook vector dim Cvae (VARSR: 32)
+  ch: 160                        # base width (VARSR: 160 -> vae_ch160v4096z32)
+  ch_mult: [1, 1, 2, 2, 4]       # downsample = 2**(len-1) = 16 -> latent = patch_size_hr / 16
+  num_res_blocks: 2
+  dropout: 0.0
+  using_sa: true                 # self-attn at the lowest resolution
+  using_mid_sa: true             # self-attn in the mid block
+  beta: 0.25                     # commitment loss weight
+  using_znorm: false             # L2 nearest-neighbour lookup (VARSR default)
+  quant_conv_ks: 3               # quant / post-quant conv kernel size (VARSR: 3)
+  quant_resi: 0.5                # phi(x) = 0.5*conv(x) + 0.5*x
+  share_quant_resi: 4            # partially-shared phi across scales
+
+  v_patch_nums: [1, 2, 3, 4, 5, 6, 8, 10, 13, 16]
+
+  eini: -1.0                     # uniform codebook init (stabler from scratch); 0 = default nn.Embedding
+
+  init_type: default             # encoder/decoder self-initialize; keep 'default'
+  init_bn_type: uniform
+  init_gain: 0.2

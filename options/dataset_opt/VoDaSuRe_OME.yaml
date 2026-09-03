@@ -15,6 +15,7 @@ patch_size: 32
 channel_dim: no_channel
 norm_type: scale_intensity
 patch_crop_type: random_spatial
+expand_channels_rgb: false
 mask_mode: LR
 
 # Sample crop and padding
