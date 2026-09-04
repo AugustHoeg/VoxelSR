@@ -152,14 +152,19 @@ def extract_patch_levels_prealloc_v2(data, group_pair, patch_size=(32, 32, 32), 
     patch_size_lr = np.floor_divide(patch_size_hr, f)
     valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size_lr), (1, 1, 1))
 
-    # Create an empty cube filled with zeros
-    # Resample LR cube until a non-zero patch is found:
     patch_valid = False
     while not patch_valid:
         c0, c1, c2 = np.random.randint(0, valid_shape) + patch_size_lr // 2
-        patch_L = np.zeros(patch_size, dtype=volume_L.dtype)
-        patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
-        patch_valid = patch_L.any() if resample_empty else True # Check if the patch contains any non-zero values
+        if resample_empty:
+            core = np.zeros(patch_size_lr, dtype=volume_L.dtype)
+            core = sample(volume_L, core, center=(c0, c1, c2), patch_size=patch_size_lr)
+            patch_valid = core.any()  # non-empty supervised region
+        else:
+            patch_valid = True
+
+    # Sample the (possibly larger) context patch at the accepted location
+    patch_L = np.zeros(patch_size, dtype=volume_L.dtype)
+    patch_L = sample(volume_L, patch_L, center=(c0, c1, c2), patch_size=patch_size)
 
     C0, C1, C2 = np.multiply((c0, c1, c2), f)
     patch_H = np.zeros(patch_size_hr, dtype=volume_H.dtype)
