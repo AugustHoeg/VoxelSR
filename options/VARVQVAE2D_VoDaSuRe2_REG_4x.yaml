@@ -67,6 +67,8 @@ dataset_opt:
 
   datasets: [VoDaSuRe2]
 
+  # expand_channels_rgb: true  # Expand single-channel images to RGB if using pretrained VQVAE
+
   train_dataloader_params:
     dataloader_batch_size: 32
     num_load_workers: 32

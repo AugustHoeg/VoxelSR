@@ -61,8 +61,8 @@ train_opt:
   D_warmup_steps: 0
 
   G_loss_weights:
-    L1: 0.01
-    LPIPS: 1.0
+    L1: 1.0
+    LPIPS: 0.01
     ADV: 0.005
 
   manual_seed: 8800 # 8400
