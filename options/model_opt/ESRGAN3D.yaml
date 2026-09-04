@@ -18,9 +18,11 @@ netD:
   net_type: ESRGAN3D
   description: "Discriminator for ESRGAN3D"
   in_channels: 1
-  num_channels: 32
+  n_conv_vec: [ 64, 64, 128, 128, 256, 256, 512, 512 ]
+  n_dense: 1024
+  k_size: 3
   use_checkpoint: false
 
-  init_type: kaiming_normal
+  init_type: default
   init_bn_type: uniform  # "uniform" | "constant"
   init_gain: 0.1
