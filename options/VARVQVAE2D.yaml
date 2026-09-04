@@ -24,7 +24,7 @@ run_name: ${model_opt.model_architecture}_000_VAR_2D
 note: Note
 
 # GPU configuration
-train_mode: "finetune"   # "scratch", "finetune" or "resume"
+train_mode: "scratch"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -66,6 +66,8 @@ dataset_opt:
   patch_size: 64
 
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+
+  expand_channels_rgb: true  # Expand single-channel images to RGB to use pretrained VQVAE
 
   train_dataloader_params:
     dataloader_batch_size: 2 # 32

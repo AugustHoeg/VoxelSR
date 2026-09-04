@@ -5,7 +5,7 @@ model_architecture: VARVQVAE2D
 netG:
   net_type: VARVQVAE2D
   description: "VARSR multi-scale VQVAE (2D port, single-channel)"
-  in_channels: 1                 # grayscale; set 3 only for the RGB zero-shot ablation
+  in_channels: 3                 # grayscale; set 3 only for loading pretrained weights from 3-channel model
   num_embeddings: 4096           # codebook size V (VARSR: 4096)
   z_channels: 32                 # latent / codebook vector dim Cvae (VARSR: 32)
   ch: 160                        # base width (VARSR: 160 -> vae_ch160v4096z32)

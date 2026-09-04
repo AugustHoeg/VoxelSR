@@ -71,6 +71,9 @@ dataset_opt:
 
   datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
+  # Diffusion process of ResShift assumes inputs are normalized to [-1, 1]
+  norm_type: znormalization  # scale_intensity
+
   train_dataloader_params:
     dataloader_batch_size: 32
     num_load_workers: 32
