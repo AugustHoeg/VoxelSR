@@ -15,7 +15,7 @@ compile: false # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_V2_REG_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_V2_ID000000
