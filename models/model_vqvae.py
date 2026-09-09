@@ -146,9 +146,7 @@ class ModelVQVAE(ModelBase):
         loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": loss})
 
-        # Log the recon / vq components separately: G_train_loss bundles both, but
-        # vq_loss is a per-quantizer regularizer (not comparable across families) and
-        # recon_loss is the fidelity term that actually tracks PSNR/SSIM.
+        # Log the recon / vq components separately:
         self.run.log({"step": current_step, "G_recon_loss": self.recon_loss.item()})
         self.run.log({"step": current_step, "G_vq_loss": self.vq_loss.item()})
 
@@ -207,9 +205,16 @@ class ModelVQVAE(ModelBase):
         unnorm = self.opt['dataset_opt']['norm_type'] == 'znormalization'
         slice_idx = img_dict['H'].shape[-1] // 2
 
-        E_vq_slice = img_dict['E_vq'][:, :, :, slice_idx]
-        E_no_vq_slice = img_dict['E_no_vq'][:, :, :, slice_idx]
-        H_slice = img_dict['H'][:, :, :, slice_idx]
+        if img_dict['H'].ndim == 3:
+            E_vq_slice = img_dict['E_vq']
+            E_no_vq_slice = img_dict['E_no_vq']
+            H_slice = img_dict['H']
+        elif img_dict['H'].ndim == 4:
+            E_vq_slice = img_dict['E_vq'][..., slice_idx]
+            E_no_vq_slice = img_dict['E_no_vq'][..., slice_idx]
+            H_slice = img_dict['H'][..., slice_idx]
+        else:
+            raise ValueError("Unsupported number of dimensions: {}".format(img_dict['H'].ndim))
 
         row = torch.stack([E_vq_slice, E_no_vq_slice, H_slice])
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)

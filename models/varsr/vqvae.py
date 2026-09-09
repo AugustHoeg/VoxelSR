@@ -40,8 +40,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import torch
 import torch.nn as nn
 
-from .basic_vae import Decoder, Encoder
-from .quant import VectorQuantizer2
+from models.varsr.basic_vae import Decoder, Encoder
+from models.varsr.quant import VectorQuantizer2
 
 
 class VARVQVAE2D(nn.Module):
@@ -132,11 +132,21 @@ class VARVQVAE2D(nn.Module):
     def fhat_to_img(self, f_hat: torch.Tensor) -> torch.Tensor:
         return self.decode(f_hat).clamp_(-1, 1)
 
-    def img_to_idxBl(self, inp_img_no_grad: torch.Tensor, v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None) -> List[torch.LongTensor]:
+    def img_to_idxBl(self, inp_img_no_grad: torch.Tensor, v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None) -> Tuple[List[torch.Tensor], List[torch.LongTensor]]:
+        """Image -> ``(gt_idx_Bl, idx_N_list)`` — exactly the official VARSR contract.
+
+        Callers unpack both (see VARSR ``trainer.py``):
+          * ``gt_idx_Bl`` = ``f_hat_or_idx_Bl`` — length SN+1:
+              - ``gt_idx_Bl[0:SN]``  : per-scale discrete token maps (B, l_k) — CE targets.
+              - ``gt_idx_Bl[-2]``    : last-scale discrete tokens.
+              - ``gt_idx_Bl[-1]``    : last-scale continuous residual (B, l_last, Cvae)
+                                       — the diffusion-refiner target.
+          * ``idx_N_list`` = the SN per-scale token maps fed to ``idxBl_to_var_input``.
+        """
         f = self.encode(inp_img_no_grad)
         return self.quantize.f_to_idxBl_or_fhat(f, to_fhat=False, v_patch_nums=v_patch_nums)
 
-    def idxBl_to_img(self, ms_idx_Bl: List[torch.Tensor], same_shape: bool, last_one: bool = False) -> Union[List[torch.Tensor], torch.Tensor]:
+    def idxBl_to_img(self, ms_idx_Bl: List[torch.Tensor], same_shape: bool, last_one=False) -> Union[List[torch.Tensor], torch.Tensor]:
         B = ms_idx_Bl[0].shape[0]
         ms_h_BChw = []
         for idx_Bl in ms_idx_Bl:
@@ -145,17 +155,25 @@ class VARVQVAE2D(nn.Module):
             ms_h_BChw.append(self.quantize.embedding(idx_Bl).transpose(1, 2).view(B, self.Cvae, pn, pn))
         return self.embed_to_img(ms_h_BChw=ms_h_BChw, all_to_max_scale=same_shape, last_one=last_one)
 
-    def embed_to_img(self, ms_h_BChw: List[torch.Tensor], all_to_max_scale: bool, last_one: bool = False) -> Union[List[torch.Tensor], torch.Tensor]:
+    def embed_to_img(self, ms_h_BChw: List[torch.Tensor], all_to_max_scale: bool, last_one=False) -> Union[List[torch.Tensor], torch.Tensor]:
         if last_one:
             return self.decode(self.quantize.embed_to_fhat(ms_h_BChw, all_to_max_scale=all_to_max_scale, last_one=True)).clamp_(-1, 1)
-        return [self.decode(f_hat).clamp_(-1, 1) for f_hat in self.quantize.embed_to_fhat(ms_h_BChw, all_to_max_scale=all_to_max_scale, last_one=False)]
+        else:
+            return [self.decode(f_hat).clamp_(-1, 1) for f_hat in self.quantize.embed_to_fhat(ms_h_BChw, all_to_max_scale=all_to_max_scale, last_one=False)]
 
-    def img_to_reconstructed_img(self, x: torch.Tensor, v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None, last_one: bool = False) -> Union[List[torch.Tensor], torch.Tensor]:
+    def img_to_reconstructed_img(self, x, v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None, last_one=False) -> Union[List[torch.Tensor], torch.Tensor]:
+        # NOTE: fixes a latent bug in the upstream VARSR method (which is dead code
+        # there — never called). Upstream assigns the whole (f_hat_or_idx_Bl,
+        # idx_N_list) tuple to ls_f_hat_BChw then indexes/iterates it, feeding a list
+        # to post_quant_conv. Here we unpack the tuple and drop the trailing
+        # quantization-residual element before decoding the SN cumulative f_hat maps.
         f = self.encode(x)
-        ls_f_hat_BChw = self.quantize.f_to_idxBl_or_fhat(f, to_fhat=True, v_patch_nums=v_patch_nums)
+        ls_f_hat_BChw, _idx_N_list = self.quantize.f_to_idxBl_or_fhat(f, to_fhat=True, v_patch_nums=v_patch_nums)
+        ls_f_hat_BChw = ls_f_hat_BChw[:-1]
         if last_one:
             return self.decode(ls_f_hat_BChw[-1]).clamp_(-1, 1)
-        return [self.decode(f_hat).clamp_(-1, 1) for f_hat in ls_f_hat_BChw]
+        else:
+            return [self.decode(f_hat).clamp_(-1, 1) for f_hat in ls_f_hat_BChw]
 
     # ---------------------------------------------------------------- checkpoints
     def load_state_dict(self, state_dict: Dict[str, Any], strict: bool = True, assign: bool = False):
@@ -226,11 +244,17 @@ if __name__ == '__main__':
     net.eval()
     with torch.no_grad():
         rec = net.img_to_reconstructed_img(x, last_one=True)
-        idxs = net.img_to_idxBl(x)
+        gt_idx_Bl, idx_N_list = net.img_to_idxBl(x)   # official 2-tuple contract
     assert rec.shape == x.shape
-    assert len(idxs) == 10 and idxs[-1].shape == (2, 16 * 16)
+    # idx_N_list = SN token maps; gt_idx_Bl = SN token maps + trailing residual (refiner target)
+    assert len(idx_N_list) == 10 and idx_N_list[-1].shape == (2, 16 * 16)
+    assert len(gt_idx_Bl) == 11                       # SN discrete maps + 1 residual
+    assert gt_idx_Bl[-2].shape == (2, 16 * 16)        # last-scale discrete tokens
+    assert gt_idx_Bl[-1].shape == (2, 16 * 16, 16)    # last-scale residual (B, l_last, Cvae=16)
     print(f'    img_to_reconstructed_img ok  rec={tuple(rec.shape)}  '
-          f'tokens/scale={[t.shape[1] for t in idxs]} (total {sum(t.shape[1] for t in idxs)})')
+          f'tokens/scale={[t.shape[1] for t in idx_N_list]} (total {sum(t.shape[1] for t in idx_N_list)})')
+    print(f'    img_to_idxBl ok  idx_N_list={len(idx_N_list)} maps  |  gt_idx_Bl={len(gt_idx_Bl)} '
+          f'(last discrete {tuple(gt_idx_Bl[-2].shape)}, residual {tuple(gt_idx_Bl[-1].shape)} = refiner target)')
 
     # ---- 2) checkpoint round-trip (grayscale) --------------------------------
     print('=' * 70)

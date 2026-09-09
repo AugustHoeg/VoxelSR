@@ -59,10 +59,14 @@ def calculate_metric_3D(img_H, img_E, border=0, metric_fn=None):
 
 def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric_val_dict, rescale_images=False):
 
+    # Convert to FP32
+    img1 = real_hi_res.float()
+    img2 = fake_hi_res.float()
+
     # Rescale images if needed
     if rescale_images:
-        img1 = rescale_intensity(real_hi_res, a_min=0.0, a_max=1.0)
-        img2 = rescale_intensity(fake_hi_res, a_min=0.0, a_max=1.0)
+        img1 = rescale_intensity(img1, a_min=0.0, a_max=1.0)
+        img2 = rescale_intensity(img2, a_min=0.0, a_max=1.0)
     else:
         img1 = real_hi_res
         img2 = fake_hi_res

@@ -1,6 +1,6 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
 
-model: vqvae
+model: vqgan
 model_architecture: VARVQVAE2D
 netG:
   net_type: VARVQVAE2D
@@ -27,3 +27,16 @@ netG:
   init_type: default             # encoder/decoder self-initialize; keep 'default'
   init_bn_type: uniform
   init_gain: 0.2
+
+
+netD:
+  net_type: PatchGAN2D
+  description: "Standard PatchGAN Discriminator"
+  in_channels: 1
+  ndf: 64
+  n_layers: 3
+  use_checkpoint: false
+
+  init_type: default
+  init_bn_type: uniform  # "uniform" | "constant"
+  init_gain: 0.1

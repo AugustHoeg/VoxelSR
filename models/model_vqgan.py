@@ -38,6 +38,11 @@ class ModelVQGAN(ModelBase):
 
         self.vae_target = opt.get('vae_target', 'HR')
         self.update = False
+        
+        # Running EMA of per-scale/depth frac_unique (smooths the per-batch value,
+        # which is noisy and token-count-capped at coarse scales)
+        self.frac_unique_ema = None
+        self.frac_unique_ema_decay = self.opt_train.get('frac_unique_ema_decay', 0.99)
 
         self.early_stop = False
         self.min_validation_loss = float('inf')
@@ -155,7 +160,8 @@ class ModelVQGAN(ModelBase):
         self.init_G_loss_trackers()
         self.init_D_loss_trackers()
 
-        self.lambda_adv = self.loss_val_dict['ADV']  # Initial value, will be dynamically updated during training
+        self.adv_loss_weight = self.loss_val_dict['ADV']  # Scale weight applied after lambda_adv for more control
+        self.lambda_adv = 0.0  # Initial value, will be dynamically updated during training
 
     def define_optimizer(self):
         self.define_G_optimizer()
@@ -167,23 +173,33 @@ class ModelVQGAN(ModelBase):
         self.vae_in = self.H if self.vae_target == 'HR' else self.L
 
     def vq_forward(self):
-        self.E, self.vq_loss, self.codes, self.z_e, self.frac_unique = self.netG(self.vae_in)
+        self.E, self.vq_loss, self.codes, self.z_no_vq, self.frac_unique = self.netG(self.vae_in)
 
     def netG_forward(self):
-        self.E, _, _, _, _ = self.netG(self.L)  # Always L as inference_zarr expects this
+        self.E, _, _, _, _ = self.netG(self.L) 
+
+    def _update_frac_unique_ema(self):
+        cur = torch.stack([f.detach().float() for f in self.frac_unique])
+        if self.frac_unique_ema is None or self.frac_unique_ema.shape != cur.shape:
+            self.frac_unique_ema = cur
+        else:
+            d = self.frac_unique_ema_decay
+            self.frac_unique_ema = d * self.frac_unique_ema + (1 - d) * cur
 
     def netD_forward(self, input):
         return self.netD(input)
 
-    def find_last_conv(self, model):
-        for layer in reversed(list(model.modules())):
-            if isinstance(layer, torch.nn.Conv3d):
+    def find_last_conv(self, decoder):
+        if hasattr(decoder, 'model'):
+            decoder = decoder.model
+        for layer in reversed(list(decoder.modules())):
+            if isinstance(layer, torch.nn.Conv3d) or isinstance(layer, torch.nn.Conv2d):
                 return layer
         raise ValueError("No convolutional layer found in the model.")
 
     def calculate_lambda(self, recon_loss, adv_loss):
         net = self.netG.module if isinstance(self.netG, (DataParallel, DistributedDataParallel)) else self.netG
-        last_layer_weight = self.find_last_conv(net.decoder.model).weight
+        last_layer_weight = self.find_last_conv(net.decoder).weight
         recon_loss_grads = torch.autograd.grad(recon_loss, last_layer_weight, retain_graph=True)[0]
         adv_loss_grads = torch.autograd.grad(adv_loss, last_layer_weight, retain_graph=True)[0]
 
@@ -242,16 +258,18 @@ class ModelVQGAN(ModelBase):
         self.netD.requires_grad_(False)
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+            self.recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             if dis_factor > 0.0:
                 self.prop_fake = self.netD_forward(self.E)
                 adv_loss = -torch.mean(self.prop_fake)
-                self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
-                self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
+                self.lambda_adv = self.calculate_lambda(self.recon_loss, adv_loss) * self.adv_loss_weight
+                self.gen_loss = self.vq_loss + self.recon_loss + self.lambda_adv * adv_loss
             else:
                 self.lambda_adv = 0.0
-                self.gen_loss = self.vq_loss + recon_loss
+                self.gen_loss = self.vq_loss + self.recon_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
+
+        self._update_frac_unique_ema()
 
         self.G_train_loss = self.gen_loss
         if self.opt['rank'] == 0:
@@ -329,15 +347,15 @@ class ModelVQGAN(ModelBase):
         # optimize G
         self.netD.requires_grad_(False)
 
-        recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+        self.recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         if dis_factor > 0.0:
             self.prop_fake = self.netD_forward(self.E)
             adv_loss = -torch.mean(self.prop_fake)
-            self.lambda_adv = self.calculate_lambda(recon_loss, adv_loss)
-            self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
+            self.lambda_adv = self.calculate_lambda(self.recon_loss, adv_loss) * self.adv_loss_weight
+            self.gen_loss = self.vq_loss + self.recon_loss + self.lambda_adv * adv_loss
         else:
             self.lambda_adv = 0.0
-            self.gen_loss = self.vq_loss + recon_loss
+            self.gen_loss = self.vq_loss + self.recon_loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -371,6 +389,10 @@ class ModelVQGAN(ModelBase):
         G_loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": G_loss})
 
+        # Log the recon / vq components separately:
+        self.run.log({"step": current_step, "G_recon_loss": self.recon_loss.item()})
+        self.run.log({"step": current_step, "G_vq_loss": self.vq_loss.item()})
+
         D_loss = self.D_train_loss.item() * self.num_accum_steps_D
         self.run.log({"step": current_step, "D_train_loss": D_loss})
 
@@ -381,12 +403,12 @@ class ModelVQGAN(ModelBase):
         self.run.log({"step": current_step, "D_train_grad_norm": D_grad_norm})
 
         table = wandb.Table(
-            data=[[d, frac] for d, frac in enumerate(self.frac_unique)],
+            data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique_ema)],
             columns=["depth", "frac_unique"],
         )
         self.run.log({
             "step": current_step,
-            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per RQ Depth"),
+            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per depth/scale"),
         })
     def record_avg_train_log(self, current_step, idx_train):
         avg_loss_G = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
@@ -438,9 +460,9 @@ class ModelVQGAN(ModelBase):
         self.prop_real = self.netD_forward(self.vae_in)
         self.prop_fake = self.netD_forward(self.E)
 
-        recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+        self.recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
         adv_loss = -torch.mean(self.prop_fake)
-        self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
+        self.gen_loss = self.vq_loss + self.recon_loss + self.lambda_adv * self.adv_loss_weight * adv_loss
         self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
 
         self.G_valid_loss += self.gen_loss
@@ -455,9 +477,9 @@ class ModelVQGAN(ModelBase):
             self.prop_real = self.netD_forward(self.vae_in)
             self.prop_fake = self.netD_forward(self.E)
 
-            recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+            self.recon_loss = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
             adv_loss = -torch.mean(self.prop_fake)
-            self.gen_loss = self.vq_loss + recon_loss + self.lambda_adv * adv_loss
+            self.gen_loss = self.vq_loss + self.recon_loss + self.lambda_adv * self.adv_loss_weight * adv_loss
             self.dis_loss = 0.5 * (torch.mean(F.relu(1. - self.prop_real)) + torch.mean(F.relu(1. + self.prop_fake)))
 
         self.G_valid_loss += self.gen_loss
@@ -473,9 +495,9 @@ class ModelVQGAN(ModelBase):
         net = self.get_bare_model(self.netG)
         if self.mixed_precision is not None:
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                E_no_vq = net.decode(self.z_e)
+                E_no_vq = net.decode(self.z_no_vq)
         else:
-            E_no_vq = net.decode(self.z_e)
+            E_no_vq = net.decode(self.z_no_vq)
         out_dict['E_no_vq'] = E_no_vq.detach()[0].float().cpu()
         return out_dict
 
@@ -483,9 +505,16 @@ class ModelVQGAN(ModelBase):
         unnorm = self.opt['dataset_opt']['norm_type'] == 'znormalization'
         slice_idx = img_dict['H'].shape[-1] // 2
 
-        E_vq_slice    = img_dict['E_vq'][:, :, :, slice_idx]
-        E_no_vq_slice = img_dict['E_no_vq'][:, :, :, slice_idx]
-        H_slice       = img_dict['H'][:, :, :, slice_idx]
+        if img_dict['H'].ndim == 3:
+            E_vq_slice = img_dict['E_vq']
+            E_no_vq_slice = img_dict['E_no_vq']
+            H_slice = img_dict['H']
+        elif img_dict['H'].ndim == 4:
+            E_vq_slice = img_dict['E_vq'][..., slice_idx]
+            E_no_vq_slice = img_dict['E_no_vq'][..., slice_idx]
+            H_slice = img_dict['H'][..., slice_idx]
+        else:
+            raise ValueError("Unsupported number of dimensions: {}".format(img_dict['H'].ndim))
 
         row = torch.stack([E_vq_slice, E_no_vq_slice, H_slice])
         grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)

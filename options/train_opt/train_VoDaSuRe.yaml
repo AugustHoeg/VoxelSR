@@ -55,8 +55,12 @@ D_optimizer_clipgrad: 15
 D_optimizer_reuse: true
 D_scheduler_type: MultiStepLR
 D_warmup_steps: 0
+D_start_iteration: 0
 D_scheduler_milestones:
-  - 800000  # Never reduce LR
+  - 50000
+  - 70000
+  - 85000
+  - 95000
 D_scheduler_gamma: 0.5
 D_eta_min: 0.0
 D_regularizer_orthstep: null

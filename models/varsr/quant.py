@@ -19,11 +19,7 @@ Deviations from the official file — all deliberate and documented:
     the official ``usages`` percentages that require the EMA-hit buffer + dist.
     The ``ema_vocab_hit_SV`` buffer is still kept and updated under DDP so that
     official RGB checkpoints load with strict key matching.
-  * ``f_to_idxBl_or_fhat`` drops the trailing quantization-residual element and the
-    second ``idx_N_list`` return that the official file appends for its diffusion
-    refiner (which this baseline does not port). It now returns a plain
-    ``list`` of per-scale token maps / cumulative ``f_hat`` maps, matching the VAR
-    reference semantics used by the transformer stage.
+  * Modified to be closer to reference file // August
 
 Progressive training (``prog_si``) is not supported (always ``-1``), same as the
 official file.
@@ -56,7 +52,7 @@ class VectorQuantizer2(nn.Module):
         self.vocab_size: int = vocab_size
         self.Cvae: int = Cvae
         self.using_znorm: bool = using_znorm
-        self.v_patch_nums: Tuple[int] = tuple(v_patch_nums)
+        self.v_patch_nums: Tuple[int] = v_patch_nums
 
         self.quant_resi_ratio = quant_resi
         if share_quant_resi == 0:   # non-shared: \phi_{1 to K} for K scales
@@ -72,8 +68,8 @@ class VectorQuantizer2(nn.Module):
         self.beta: float = beta
         self.embedding = nn.Embedding(self.vocab_size, self.Cvae)
 
-        # only used for progressive training of VAR (not supported)
-        self.prog_si = -1   # progressive training: not supported, prog_si always -1
+        # only used for progressive training of VAR (not supported yet, will be tested and supported in the future)
+        self.prog_si = -1  # progressive training: not supported yet, prog_si always -1
 
     def eini(self, eini):
         if eini > 0:
@@ -85,7 +81,7 @@ class VectorQuantizer2(nn.Module):
         return f'{self.v_patch_nums}, znorm={self.using_znorm}, beta={self.beta}  |  S={len(self.v_patch_nums)}, quant_resi={self.quant_resi_ratio}'
 
     # ===================== `forward` is only used in VAE training =====================
-    def forward(self, f_BChw: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, List[torch.Tensor]]:
+    def forward(self, f_BChw: torch.Tensor, ret_usages=False) -> Tuple[torch.Tensor, List[float], torch.Tensor]:        
         dtype = f_BChw.dtype
         if dtype != torch.float32:
             f_BChw = f_BChw.float()
@@ -101,11 +97,12 @@ class VectorQuantizer2(nn.Module):
             SN = len(self.v_patch_nums)
             for si, pn in enumerate(self.v_patch_nums):  # from small to large
                 # find the nearest embedding
-                rest_NC = F.interpolate(f_rest, size=(pn, pn), mode='area').permute(0, 2, 3, 1).reshape(-1, C) if (si != SN - 1) else f_rest.permute(0, 2, 3, 1).reshape(-1, C)
                 if self.using_znorm:
+                    rest_NC = F.interpolate(f_rest, size=(pn, pn), mode='area').permute(0, 2, 3, 1).reshape(-1, C) if (si != SN - 1) else f_rest.permute(0, 2, 3, 1).reshape(-1, C)
                     rest_NC = F.normalize(rest_NC, dim=-1)
                     idx_N = torch.argmax(rest_NC @ F.normalize(self.embedding.weight.data.T, dim=0), dim=1)
                 else:
+                    rest_NC = F.interpolate(f_rest, size=(pn, pn), mode='area').permute(0, 2, 3, 1).reshape(-1, C) if (si != SN-1) else f_rest.permute(0, 2, 3, 1).reshape(-1, C)
                     d_no_grad = torch.sum(rest_NC.square(), dim=1, keepdim=True) + torch.sum(self.embedding.weight.data.square(), dim=1, keepdim=False)
                     d_no_grad.addmm_(rest_NC, self.embedding.weight.data.T, alpha=-2, beta=1)  # (B*h*w, vocab_size)
                     idx_N = torch.argmin(d_no_grad, dim=1)
@@ -159,7 +156,8 @@ class VectorQuantizer2(nn.Module):
                 else:
                     ls_f_hat_BChw.append(f_hat.clone())
         else:
-            # WARNING: only for experimental purposes; not used in VQVAE training or inference.
+            # WARNING: this is not the case in VQ-VAE training or inference (we'll interpolate every token map to the max H W, like above)
+            # WARNING: this should only be used for experimental purpose
             f_hat = ms_h_BChw[0].new_zeros(B, self.Cvae, self.v_patch_nums[0], self.v_patch_nums[0], dtype=torch.float32)
             for si, pn in enumerate(self.v_patch_nums):  # from small to large
                 f_hat = F.interpolate(f_hat, size=(pn, pn), mode='bicubic')
@@ -172,15 +170,13 @@ class VectorQuantizer2(nn.Module):
 
         return ls_f_hat_BChw
 
-    def f_to_idxBl_or_fhat(self, f_BChw: torch.Tensor, to_fhat: bool, v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None) -> List[Union[torch.Tensor, torch.LongTensor]]:
-        # NOTE: unlike the official file this returns a plain list (no trailing
-        # quantization-residual element, no idx_N_list) because the diffusion
-        # refiner is not ported. Semantics now match the VAR reference.
+    def f_to_idxBl_or_fhat(self, f_BChw: torch.Tensor, to_fhat: bool, v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None) -> List[Union[torch.Tensor, torch.LongTensor]]:  # z_BChw is the feature from inp_img_no_grad
         B, C, H, W = f_BChw.shape
         f_no_grad = f_BChw.detach()
         f_rest = f_no_grad.clone()
         f_hat = torch.zeros_like(f_rest)
 
+        idx_N_list: List[torch.Tensor] = []
         f_hat_or_idx_Bl: List[torch.Tensor] = []
 
         patch_hws = [(pn, pn) if isinstance(pn, int) else (pn[0], pn[1]) for pn in (v_patch_nums or self.v_patch_nums)]  # from small to large
@@ -195,18 +191,27 @@ class VectorQuantizer2(nn.Module):
             else:
                 d_no_grad = torch.sum(z_NC.square(), dim=1, keepdim=True) + torch.sum(self.embedding.weight.data.square(), dim=1, keepdim=False)
                 d_no_grad.addmm_(z_NC, self.embedding.weight.data.T, alpha=-2, beta=1)  # (B*h*w, vocab_size)
-                idx_N = torch.argmin(d_no_grad, dim=1)
+                idx_gt = torch.argmin(d_no_grad, dim=1)
+
+            idx_N = idx_gt
 
             idx_Bhw = idx_N.view(B, ph, pw)
             h_BChw = F.interpolate(self.embedding(idx_Bhw).permute(0, 3, 1, 2), size=(H, W), mode='bicubic').contiguous() if (si != SN - 1) else self.embedding(idx_Bhw).permute(0, 3, 1, 2).contiguous()
-            h_BChw = self.quant_resi[si / (SN - 1)](h_BChw)
+            if si != SN - 1:
+                # consistency
+                h_BChw = self.quant_resi[si / (SN - 1)](h_BChw)
             f_hat.add_(h_BChw)
+            if si == SN - 1:
+                f_rest_wo_last_discrete = f_rest.clone()
             f_rest.sub_(h_BChw)
-            f_hat_or_idx_Bl.append(f_hat.clone() if to_fhat else idx_N.reshape(B, ph * pw))
+            idx_N_list.append(idx_N.reshape(B, ph * pw))
+            f_hat_or_idx_Bl.append(f_hat.clone() if to_fhat else idx_gt.reshape(B, ph * pw))
 
-        return f_hat_or_idx_Bl
+        f_hat_or_idx_Bl.append(f_rest_wo_last_discrete.clone().permute(0, 2, 3, 1).reshape(-1, ph * pw, self.Cvae))
 
-    # ===================== idxBl_to_var_input: teacher-forcing input for VAR training =====================
+        return f_hat_or_idx_Bl, idx_N_list
+
+    # ===================== idxBl_to_var_input: only used in VAR training, for getting teacher-forcing input =====================
     def idxBl_to_var_input(self, gt_ms_idx_Bl: List[torch.Tensor], v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None) -> torch.Tensor:
         next_scales = []
         B = gt_ms_idx_Bl[0].shape[0]
@@ -223,15 +228,15 @@ class VectorQuantizer2(nn.Module):
             f_hat.add_(self.quant_resi[si / (SN - 1)](h_BChw))
             pn_next = v_patch_nums[si + 1]
             next_scales.append(F.interpolate(f_hat, size=(pn_next, pn_next), mode='area').view(B, C, -1).transpose(1, 2))
-        return torch.cat(next_scales, dim=1) if len(next_scales) else None    # cat BlCs to BLC, float32
+        return torch.cat(next_scales, dim=1) if len(next_scales) else None    # cat BlCs to BLC, this should be float32
 
-    # ===================== get_next_autoregressive_input: next-step input during VAR inference =====================
-    def get_next_autoregressive_input(self, si: int, SN: int, f_hat: torch.Tensor, h_BChw: torch.Tensor) -> Tuple[Optional[torch.Tensor], torch.Tensor]:
+    # ===================== get_next_autoregressive_input: only used in VAR inference, for getting next step's input =====================
+    def get_next_autoregressive_input(self, si: int, SN: int, f_hat: torch.Tensor, h_BChw: torch.Tensor) -> Tuple[Optional[torch.Tensor], torch.Tensor]: # only used in VAR inference
         HW = self.v_patch_nums[-1]
-        if si != SN - 1:
-            h = self.quant_resi[si / (SN - 1)](F.interpolate(h_BChw, size=(HW, HW), mode='bicubic'))     # conv after upsample
+        if si != SN-1:
+            h = self.quant_resi[si/(SN-1)](F.interpolate(h_BChw, size=(HW, HW), mode='bicubic'))     # conv after upsample
             f_hat.add_(h)
-            return f_hat, F.interpolate(f_hat, size=(self.v_patch_nums[si + 1], self.v_patch_nums[si + 1]), mode='area')
+            return f_hat, F.interpolate(f_hat, size=(self.v_patch_nums[si+1], self.v_patch_nums[si+1]), mode='area')
         else:
             h = h_BChw
             f_hat.add_(h)

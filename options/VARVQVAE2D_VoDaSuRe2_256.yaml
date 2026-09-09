@@ -12,15 +12,15 @@ vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile & Compile
 run_profile: false
-compile: false # Enable PyTorch 2.0 compilation
+compile: true # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
-wandb_mode: offline
+wandb_mode: online
 wandb_entity: null
-wandb_project: ${dataset_opt.name}_VQ_${vae_target}_${up_factor}x # <--- change project
+wandb_project: ${dataset_opt.name}_V2_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_VAR_2D
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -41,10 +41,10 @@ path:
 train_opt:
   iterations: 100000
   validation_iterations: 50
-  checkpoint_test: 100  # 1000
-  checkpoint_save: 10000  # 10000
-  checkpoint_print: 100  # 1000
-  checkpoint_save_visuals: 100  # 1000
+  checkpoint_test: 2500
+  checkpoint_save: 10000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
 
   # Now matches VAR papers hyperparameters
@@ -62,22 +62,23 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: false
+  synthetic: true
   patch_size: 64
 
-  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
-  # expand_channels_rgb: true  # Expand single-channel images to RGB if using pretrained VQVAE
+  # VAR VQ inputs are normalized to [-1, 1]
+  norm_type: znormalization  # scale_intensity
 
   train_dataloader_params:
-    dataloader_batch_size: 2 # 32
-    num_load_workers: 2 # 32
+    dataloader_batch_size: 16
+    num_load_workers: 32
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2  # 8
-    num_load_workers: 2  # 4
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 

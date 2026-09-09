@@ -235,3 +235,35 @@ class Decoder(nn.Module):
         # end
         h = self.conv_out(F.silu(self.norm_out(h), inplace=True))
         return h
+
+
+class PatchGAN2D(nn.Module):
+    """2D PatchGAN discriminator matching the NLayerDiscriminator used in VQGAN"""
+    def __init__(self, in_channels=1, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
+        super().__init__()
+        kw, padw = 4, 1
+        sequence = [
+            nn.Conv2d(in_channels, ndf, kernel_size=kw, stride=2, padding=padw),
+            nn.LeakyReLU(0.2, True),
+        ]
+        nf = ndf
+        for n in range(1, n_layers):
+            nf_prev = nf
+            nf = min(ndf * 2 ** n, 512)
+            sequence += [
+                nn.Conv2d(nf_prev, nf, kernel_size=kw, stride=2, padding=padw, bias=False),
+                norm_layer(nf),
+                nn.LeakyReLU(0.2, True),
+            ]
+        nf_prev = nf
+        nf = min(ndf * 2 ** n_layers, 512)
+        sequence += [
+            nn.Conv2d(nf_prev, nf, kernel_size=kw, stride=1, padding=padw, bias=False),
+            norm_layer(nf),
+            nn.LeakyReLU(0.2, True),
+            nn.Conv2d(nf, 1, kernel_size=kw, stride=1, padding=padw),
+        ]
+        self.model = nn.Sequential(*sequence)
+
+    def forward(self, x):
+        return self.model(x)
