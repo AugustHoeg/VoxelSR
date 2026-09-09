@@ -71,7 +71,7 @@ dataset_opt:
   norm_type: znormalization  # scale_intensity
 
   train_dataloader_params:
-    dataloader_batch_size: 16
+    dataloader_batch_size: 32
     num_load_workers: 32
     persist_workers: true
     pin_memory: false
