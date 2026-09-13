@@ -49,6 +49,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'resshift':
         from models.model_resshift import ModelResShift as M
 
+    elif model == 'osediff':
+        from models.model_osediff import ModelOSEDiff as M
+
     elif model == 'aesop':
         from models.model_aesop import ModelAESOP as M
 

@@ -23,7 +23,7 @@ run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -33,12 +33,12 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null
+  pretrained_experiment_id: RRDBNet3D_VoDaSuRe2_REG_2x_VoDaSuRe_OME_ID005100
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
+  iterations: 100000
   validation_iterations: 50
   checkpoint_test: 2500
   checkpoint_save: 20000
@@ -55,7 +55,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    LPIPS: 0
+    LPIPS: 0.01 # 0.01
 
   manual_seed: 8800 # 8400
 
@@ -73,8 +73,8 @@ dataset_opt:
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 2
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
