@@ -4,6 +4,7 @@ import random
 import numpy as np
 import torch
 import cv2
+from PIL.ImageQt import rgb
 from torchvision.utils import make_grid
 from datetime import datetime
 from skimage.metrics import normalized_root_mse, structural_similarity
@@ -547,6 +548,20 @@ def shave(img_in, border=0):
 # --------------------------------------------
 '''
 
+def rgb2gray(img, channel_dim=0):
+    ''' Convert RGB tensor to grayscale tensor.
+    Conversion follows matlab's (NTSC/PAL) implementation: 0.2989 * r + 0.5870 * g + 0.1140 * b
+    '''
+    if img.shape[channel_dim] == 1:
+        return img  # Already grayscale
+    if not isinstance(img, torch.Tensor):
+        img = torch.from_numpy(img)
+    r = torch.select(img, dim=channel_dim, index=0)
+    g = torch.select(img, dim=channel_dim, index=1)
+    b = torch.select(img, dim=channel_dim, index=2)
+    gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+    return gray.unsqueeze(channel_dim)
+
 
 def rgb2ycbcr(img, only_y=True):
     '''same as matlab rgb2ycbcr
@@ -1076,17 +1091,20 @@ def imresize_np(img, scale, antialiasing=True):
 
 
 if __name__ == '__main__':
-    img = imread_uint('test.bmp', 3)
-#    img = uint2single(img)
-#    img_bicubic = imresize_np(img, 1/4)
-#    imshow(single2uint(img_bicubic))
-#
-#    img_tensor = single2tensor4(img)
-#    for i in range(8):
-#        imshow(np.concatenate((augment_img(img, i), tensor2single(augment_img_tensor4(img_tensor, i))), 1))
 
-#    patches = patches_from_image(img, p_size=128, p_overlap=0, p_max=200)
-#    imssave(patches,'a.png')
+    B, C, D, H, W = 2, 3, 64, 64, 64
+    img_BCDHW = torch.randn((B, C, D, H, W))
+
+    gray = rgb2gray(img_BCDHW, channel_dim=1)
+    print("BCDHW", gray.shape)
+
+    img_CDHW = torch.randn((C, D, H, W))
+    gray = rgb2gray(img_CDHW, channel_dim=0)
+    print("CDHW", gray.shape)
+
+    img_CHW = torch.randn((C, H, W))
+    gray = rgb2gray(img_CHW, channel_dim=0)
+    print("CHW", gray.shape)
 
 
 

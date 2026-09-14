@@ -17,6 +17,8 @@ from zarr.storage import LocalStore, MemoryStore, FsspecStore
 from monai.data import SmartCacheDataset, DataLoader, IterableDataset
 from time import sleep
 from time import perf_counter as time
+
+from data.train_transforms import RandSRZoomd, RandSRRotated, RandSRFlipd, RandSRContrastd
 #from multiprocessing import Process, Queue, Event
 #from queue import Empty
 #from torch.multiprocessing import Process, Queue, Event
@@ -388,10 +390,10 @@ def test_plot(train_batch):
 def main():
 
     # Example usage
-    batch_size = 8
+    batch_size = 4
     up_factor = 2
-    patch_shape = (32, 32, 32)
-    patch_shape_hr = (64, 64, 64)
+    patch_shape = (64, 64, 64)
+    patch_shape_hr = (128, 128, 128)
 
     HCP_1200_train_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
     HCP_1200_test_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
@@ -429,12 +431,13 @@ def main():
         mt.Identityd(keys=['H', 'L'], allow_missing_keys=True),
         mt.EnsureChannelFirstd(keys=['H', 'L'], channel_dim='no_channel'),
         mt.CastToTyped(keys=['H', 'L'], dtype=np.float32),
-        # mt.SignalFillEmptyd(keys=['H', 'L'], replacement=0),  # Remove any NaNs
-        # mt.ScaleIntensityd(keys=ome_levels, minv=0.0, maxv=1.0),
-        # #mt.Rand3DElasticd(keys=ome_levels, prob=0.5, sigma_range=(5, 10), magnitude_range=(0.1, 0.2), mode='bilinear'),
-        #mt.RandFlipd(keys=['H', 'L'], prob=0.5, spatial_axis=0),
-        #mt.RandFlipd(keys=['H', 'L'], prob=0.5, spatial_axis=1),
-        #mt.RandFlipd(keys=['H', 'L'], prob=0.5, spatial_axis=2)
+        RandSRContrastd(keys=["H", "L", "REG"], prob=0.5, gamma_range=(0.8, 1.2)),
+        RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=0, prob=0.5),
+        RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=1, prob=0.5),
+        RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=2, prob=0.5),
+        RandSRRotated(keys=["H", "L", "REG"], prob=0.25, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True),
+        RandSRZoomd(keys=["H", "L", "REG"], prob=0.25, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True),
+
     ])
 
     dataset = ZarrIterableDataset(dataset_dict,
@@ -443,12 +446,14 @@ def main():
                                   patch_transform,
                                   up_factor=up_factor,
                                   store_type='LocalStore',
-                                  num_samples=1000,
+                                  num_samples=100,
                                   sampling_method='random',  # 'random' or 'in_chunk'
                                   print_metadata=False,
                                   slice_dim=None)
 
-    num_workers = 0
+    num_workers = 4
+    prefetch_factor = 2
+
     persistent_workers = True if num_workers > 0 else False
     dataloader = torch.utils.data.DataLoader(dataset,
                                             batch_size=batch_size,
@@ -456,24 +461,26 @@ def main():
                                             num_workers=num_workers,
                                             pin_memory=False,
                                             persistent_workers=persistent_workers,
-                                            prefetch_factor=None)
+                                            prefetch_factor=prefetch_factor)
 
     no_epochs = 10
     plot_counter = 0
+    print_interval = 10
     plot_interval = 100
     start_time = time()
     for i in range(no_epochs):
         print(f"Epoch {i + 1}/{no_epochs}")
-        for batch in tqdm(dataloader, desc='Reconstructing patches\n', mininterval=2):
-            # for batch in dataloader:
-            pass
+        for i, batch in enumerate(dataloader):
+            if i % print_interval == 0:
+                print(f"Batch {i + 1}/{no_epochs}")
             # sleep(0.1)  # Assuming some processing time
+            # for batch in dataloader:
             # print("Loaded batch...")
             # for key in batch.keys():
             #     print(f"Key: {key}, Shape: {batch[key].shape}")
             # if plot_counter % plot_interval == 0:
             #     test_plot(batch)
-            plot_counter += 1
+            # plot_counter += 1
 
 
     time_elapsed = time() - start_time

@@ -15,6 +15,7 @@ from models.select_network import define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 from utils.load_options import load_options_from_experiment_id
+from utils.utils_image import rgb2gray
 
 
 class ModelTransformerRQ(ModelBase):
@@ -400,9 +401,9 @@ class ModelTransformerRQ(ModelBase):
             E_vq = self.vq_model_hr.decode_code(codes)
             E = self.sample_E(z_lr, batch_size=self.H.shape[0])
 
-        out_dict['H'] = self.H.detach()[0].float().cpu()
-        out_dict['E_vq'] = E_vq.detach()[0].float().cpu()
-        out_dict['E'] = E.detach()[0].float().cpu()
+        out_dict['H'] = rgb2gray(self.H.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E_vq'] = rgb2gray(E_vq.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E'] = rgb2gray(E.detach()[0].float().cpu(), channel_dim=0)
 
         return out_dict
 

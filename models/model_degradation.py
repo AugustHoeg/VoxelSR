@@ -14,6 +14,7 @@ from models.model_base import ModelBase
 from models.select_network import define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
+from utils.utils_image import rgb2gray
 
 
 class ModelDegradation(ModelBase):
@@ -240,12 +241,12 @@ class ModelDegradation(ModelBase):
 
         roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['down_factor'])
         if self.opt['dataset_opt']['patch_size'] > roi:
-            out_dict['L'] = utils_3D_image.crop_center(self.L, center_size=roi).detach()[0].float().cpu()
+            out_dict['L'] = rgb2gray(utils_3D_image.crop_center(self.L, center_size=roi).detach()[0].float().cpu(), channel_dim=0)
         else:
-            out_dict['L'] = self.L.detach()[0].float().cpu()
+            out_dict['L'] = rgb2gray(self.L.detach()[0].float().cpu(), channel_dim=0)
 
-        out_dict['E'] = self.E.detach()[0].float().cpu()
-        out_dict['H'] = self.H.detach()[0].float().cpu()
+        out_dict['E'] = rgb2gray(self.E.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['H'] = rgb2gray(self.H.detach()[0].float().cpu(), channel_dim=0)
         return out_dict
 
     def log_comparison_image(self, img_dict, current_step):

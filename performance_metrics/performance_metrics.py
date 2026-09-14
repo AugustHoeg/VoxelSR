@@ -5,7 +5,7 @@ import torch.nn as nn
 import torchio as tio
 from monai.metrics.regression import PSNRMetric, RMSEMetric, SSIMMetric
 
-from utils.utils_image import calculate_nrmse_2D, calculate_psnr_2D, calculate_ssim_2D
+from utils.utils_image import calculate_nrmse_2D, calculate_psnr_2D, calculate_ssim_2D, rgb2gray
 
 
 def rescale_intensity(x: torch.Tensor, a_min= 0.0, a_max = 1.0, eps: float = 1e-8):
@@ -70,6 +70,10 @@ def compute_performance_metrics(real_hi_res, fake_hi_res, metric_fn_dict, metric
     else:
         img1 = real_hi_res
         img2 = fake_hi_res
+
+    # Convert to grayscale
+    img1 = rgb2gray(img1, channel_dim=1)
+    img2 = rgb2gray(img2, channel_dim=1)
 
     for key in metric_fn_dict:
         val = metric_fn_dict[key](img1, img2)

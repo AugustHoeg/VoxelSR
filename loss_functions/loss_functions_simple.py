@@ -2,14 +2,15 @@ import lpips
 import matplotlib.pyplot as plt
 import torch
 import torch.cuda.amp
-import torch.utils.checkpoint
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.checkpoint
 from omegaconf import OmegaConf
 
 from models.select_model import define_Model
 from utils.fourier_ring_correlation import fourier_shell_correlation, get_shell_masks_3d
 from utils.load_options import load_options_from_experiment_id
+from utils.utils_image import rgb2gray
 
 
 def bce_dis_loss(prop_real, prop_fake, label_smooth_val=0.1):
@@ -76,6 +77,10 @@ def compute_critic_loss(critic_real, critic_fake, scaled_gradient_penalty):
 
 
 def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, device="cuda"):
+
+    # Convert to single channel if C > 1
+    real_hi_res = rgb2gray(real_hi_res, channel_dim=1)
+    fake_hi_res = rgb2gray(fake_hi_res, channel_dim=1)
 
     gen_loss = torch.tensor(0.0).to(device)
     aux_loss = torch.tensor(0.0).to(device)

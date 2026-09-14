@@ -189,8 +189,12 @@ class VARVQVAE2D(nn.Module):
         sd = torch.load(ckpt_path, map_location=map_location, weights_only=False)
         if isinstance(sd, dict) and 'state_dict' in sd:
             sd = sd['state_dict']
-        if isinstance(sd, dict) and 'trainer' in sd and 'vae_wo_ddp' in sd.get('trainer', {}):  # VAR trainer checkpoint layout
-            sd = sd['trainer']['vae_wo_ddp']
+        if isinstance(sd, dict) and 'trainer' in sd and isinstance(sd['trainer'], dict):  # VAR trainer checkpoint layout
+            # Different VAR releases nest the VAE weights under different keys.
+            for vae_key in ('vae_local', 'vae_wo_ddp', 'vae'):
+                if vae_key in sd['trainer']:
+                    sd = sd['trainer'][vae_key]
+                    break
         result = self.load_state_dict(sd, strict=strict)
         missing = list(getattr(result, 'missing_keys', []))
         unexpected = list(getattr(result, 'unexpected_keys', []))
@@ -286,7 +290,7 @@ if __name__ == '__main__':
     print(f'    built official-config VQVAE: {n_params/1e6:.1f}M params, '
           f'downsample={rgb.downsample}, scales={len(rgb.v_patch_nums)}')
 
-    ckpt = os.environ.get('VARSR_VAE_CKPT', '').strip()
+    ckpt = "../../logs/VoDaSuRe_OME/wandb/varsr_vqvae_pretrain/files/saved_models/0_G.pth"
     if ckpt and os.path.isfile(ckpt):
         missing, unexpected = rgb.load_pretrained(ckpt, strict=False)
         print(f'    loaded real checkpoint: {ckpt}')

@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import wandb
+from jupyter_client import channels
 from omegaconf import OmegaConf
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 from torchvision.utils import make_grid
@@ -14,6 +15,7 @@ from models.model_base import ModelBase
 from models.select_network import define_D, define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
+from utils.utils_image import rgb2gray
 
 
 class ModelDualVQGAN(ModelBase):
@@ -514,10 +516,10 @@ class ModelDualVQGAN(ModelBase):
             self.vq_forward()
             self.vq_forward_star()
 
-        out_dict['L'] = self.L.detach()[0].float().cpu()
-        out_dict['L_star'] = self.L_star.detach()[0].float().cpu()
-        out_dict['E'] = self.E.detach()[0].float().cpu()
-        out_dict['E_star'] = self.E_star.detach()[0].float().cpu()
+        out_dict['L'] = rgb2gray(self.L.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['L_star'] = rgb2gray(self.L_star.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E'] = rgb2gray(self.E.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E_star'] = rgb2gray(self.E_star.detach()[0].float().cpu(), channel_dim=0)
 
         return out_dict
 

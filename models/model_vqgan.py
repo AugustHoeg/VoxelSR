@@ -17,6 +17,7 @@ from models.select_network import define_D, define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 from utils.utils_dist import get_rank, reduce_sum
+from utils.utils_image import rgb2gray
 
 
 class ModelVQGAN(ModelBase):
@@ -490,15 +491,15 @@ class ModelVQGAN(ModelBase):
 
     def current_visuals(self):
         out_dict = OrderedDict()
-        out_dict['H'] = self.H.detach()[0].float().cpu()
-        out_dict['E_vq'] = self.E.detach()[0].float().cpu()
+        out_dict['H'] = rgb2gray(self.H.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E_vq'] = rgb2gray(self.E.detach()[0].float().cpu(), channel_dim=0)
         net = self.get_bare_model(self.netG)
         if self.mixed_precision is not None:
             with torch.amp.autocast("cuda", dtype=self.mixed_precision):
                 E_no_vq = net.decode(self.z_no_vq)
         else:
             E_no_vq = net.decode(self.z_no_vq)
-        out_dict['E_no_vq'] = E_no_vq.detach()[0].float().cpu()
+        out_dict['E_no_vq'] = rgb2gray(E_no_vq.detach()[0].float().cpu(), channel_dim=0)
         return out_dict
 
     def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):

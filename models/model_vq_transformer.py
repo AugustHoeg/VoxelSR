@@ -14,6 +14,7 @@ from models.select_model import define_Model
 from models.select_network import define_G
 from utils import utils_3D_image
 from utils.load_options import load_options_from_experiment_id
+from utils.utils_image import rgb2gray
 
 
 class ModelTransformerVQ(ModelBase):
@@ -320,9 +321,9 @@ class ModelTransformerVQ(ModelBase):
         E_vq = self.decode_indices(q_indices, latent_shape)
         E_gpt = self.sample_from_transformer(n_samples=1)
 
-        out_dict['H'] = self.H.detach()[0].float().cpu()
-        out_dict['E_vq'] = E_vq.detach()[0].float().cpu()
-        out_dict['E_gpt'] = E_gpt.detach()[0].float().cpu()
+        out_dict['H'] = rgb2gray(self.H.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E_vq'] = rgb2gray(E_vq.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['E_gpt'] = rgb2gray(E_gpt.detach()[0].float().cpu(), channel_dim=0)
 
         return out_dict
 

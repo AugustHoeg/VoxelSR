@@ -5,6 +5,7 @@ from collections import OrderedDict
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pyiqa
 import torch
 import torch._dynamo
 import torch.nn as nn
@@ -17,7 +18,8 @@ from performance_metrics.performance_metrics import NRMSE_2D, NRMSE_3D, PSNR_2D,
 from utils.utils_3D_image import crop_center
 from utils.utils_bnorm import merge_bn, tidy_sequential
 from utils.utils_dist import get_rank, reduce_max, reduce_sum
-import pyiqa
+from utils.utils_image import rgb2gray
+
 
 class ModelBase():
 
@@ -105,7 +107,7 @@ class ModelBase():
     # ----------------------------------------
 
     def load_G(self, eid, mode='train'):
-        path = self._find_latest_checkpoint(eid, "saved_models", "*G.h5")
+        path = self._find_latest_checkpoint(eid, "saved_models", "*G.*")
         if path is None:
             print("No G checkpoint found, skipping loading...")
             return
@@ -115,7 +117,7 @@ class ModelBase():
         self.last_iteration = int(os.path.basename(path).split('_')[0])
 
     def load_D(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_models", "*D.h5")
+        path = self._find_latest_checkpoint(eid, "saved_models", "*D.*")
         if path is None:
             print("No D checkpoint found, skipping loading...")
             return
@@ -139,7 +141,7 @@ class ModelBase():
     # ----------------------------------------
 
     def load_G_optimizer(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerG.h5")
+        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerG.*")
         if path is None:
             print("No G optimizer checkpoint found, skipping...")
             return
@@ -148,7 +150,7 @@ class ModelBase():
         self.load_optimizer(path, self.G_optimizer)
 
     def load_D_optimizer(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerD.h5")
+        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerD.*")
         if path is None:
             print("No D optimizer checkpoint found, skipping...")
             return
@@ -157,7 +159,7 @@ class ModelBase():
         self.load_optimizer(path, self.D_optimizer)
 
     def load_star_optimizer(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerStar.h5")
+        path = self._find_latest_checkpoint(eid, "saved_optimizers", "*optimizerStar.*")
         if path is None:
             print("No star optimizer checkpoint found, skipping...")
             return
@@ -179,7 +181,7 @@ class ModelBase():
     # ----------------------------------------
 
     def load_G_scheduler(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerG.h5")
+        path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerG.*")
         if path is None:
             print("No G scheduler checkpoint found, skipping...")
             return
@@ -188,7 +190,7 @@ class ModelBase():
         self.load_scheduler(path, self.schedulers[0])
 
     def load_D_scheduler(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerD.h5")
+        path = self._find_latest_checkpoint(eid, "saved_schedulers", "*schedulerD.*")
         if path is None:
             print("No D scheduler checkpoint found, skipping...")
             return
@@ -209,7 +211,7 @@ class ModelBase():
     # ----------------------------------------
 
     def load_G_gradscaler(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerG.h5")
+        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerG.*")
         if path is None:
             print("No G gradscaler checkpoint found, skipping...")
             return
@@ -218,7 +220,7 @@ class ModelBase():
         self.load_gradscaler(path, self.gen_scaler)
 
     def load_D_gradscaler(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerD.h5")
+        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerD.*")
         if path is None:
             print("No D gradscaler checkpoint found, skipping...")
             return
@@ -227,7 +229,7 @@ class ModelBase():
         self.load_gradscaler(path, self.dis_scaler)
 
     def load_star_gradscaler(self, eid):
-        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerStar.h5")
+        path = self._find_latest_checkpoint(eid, "saved_gradscalers", "*gradscalerStar.*")
         if path is None:
             print("No star gradscaler checkpoint found, skipping...")
             return
@@ -541,12 +543,12 @@ class ModelBase():
 
         roi = int(self.opt['dataset_opt']['patch_size_hr'] / self.opt['up_factor'])
         if self.opt['dataset_opt']['patch_size'] > roi:
-            out_dict['L'] = crop_center(self.L, center_size=roi).detach()[0].float().cpu()
+            out_dict['L'] = rgb2gray(crop_center(self.L, center_size=roi).detach()[0].float().cpu(), channel_dim=0)
         else:
-            out_dict['L'] = self.L.detach()[0].float().cpu()
+            out_dict['L'] = rgb2gray(self.L.detach()[0].float().cpu(), channel_dim=0)
 
-        out_dict['E'] = self.E.detach()[0].float().cpu()
-        out_dict['H'] = self.H.detach()[0].float().cpu()
+        out_dict['E'] = rgb2gray(self.E.detach()[0].float().cpu(), channel_dim=0)
+        out_dict['H'] = rgb2gray(self.H.detach()[0].float().cpu(), channel_dim=0)
         return out_dict
 
     def current_losses(self):
