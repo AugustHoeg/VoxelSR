@@ -748,16 +748,31 @@ class ModelBase():
 
         state_dict_new = network.state_dict()
 
-        model_param_mismatch = False
-        for k, v in state_dict_old.items():
-            if k not in state_dict_new or state_dict_new[k].shape != v.shape:
-                model_param_mismatch = True
-                break
-        for k in state_dict_new.keys():
-            if k not in state_dict_old:
-                model_param_mismatch = True
-                break
-        self.model_param_mismatch = model_param_mismatch
+        old_keys, new_keys = set(state_dict_old.keys()), set(state_dict_new.keys())
+        missing_keys = sorted(new_keys - old_keys)      # in model, not in checkpoint
+        unexpected_keys = sorted(old_keys - new_keys)   # in checkpoint, not in model
+        shape_mismatch = sorted(
+            k for k in (old_keys & new_keys)
+            if state_dict_new[k].shape != state_dict_old[k].shape
+        )
+        self.model_param_mismatch = bool(missing_keys or unexpected_keys or shape_mismatch)
+
+        if self.model_param_mismatch:
+            print(f"[load_network] '{load_path}' does not match '{network.__class__.__name__}' exactly:")
+            if missing_keys:
+                print(f"  missing ({len(missing_keys)}) - in model, not in checkpoint:")
+                for k in missing_keys:
+                    print(f"    {k} {tuple(state_dict_new[k].shape)}")
+            if unexpected_keys:
+                print(f"  unexpected ({len(unexpected_keys)}) - in checkpoint, not in model:")
+                for k in unexpected_keys:
+                    print(f"    {k} {tuple(state_dict_old[k].shape)}")
+            if shape_mismatch:
+                print(f"  shape mismatch ({len(shape_mismatch)}):")
+                for k in shape_mismatch:
+                    print(f"    {k}: checkpoint {tuple(state_dict_old[k].shape)} vs model {tuple(state_dict_new[k].shape)}")
+        else:
+            print(f"[load_network] '{load_path}' matched '{network.__class__.__name__}' exactly (all keys).")
 
         if strict:
             network.load_state_dict(state_dict_old, strict=True)
