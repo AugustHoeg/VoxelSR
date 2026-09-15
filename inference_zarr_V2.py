@@ -251,8 +251,8 @@ def main(opt: DictConfig):
     model.init_test(experiment_id)
 
     # Metrics to calculate
-    metric_names = ["psnr", "ssim", "lpips", "fid"]
-    # metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
+    # metric_names = ["psnr", "ssim", "lpips", "fid"]
+    metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
     print("Evaluating metrics:", metric_names)
 
     mask_zero_slices = False
