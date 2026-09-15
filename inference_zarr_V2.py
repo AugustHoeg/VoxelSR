@@ -87,6 +87,7 @@ def write_metric_statistics(file_path, sample_vals, sample_means, sample_names, 
         for metric_name, metric_vals in sample_vals.items():
             mean, ci = get_mean_and_ci(sample_vals[metric_name])
             mean_str = str(mean.round(6))
+            ci = ci[0] if isinstance(ci, list) else ci  # Handle single-element list
             file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: {mean_str} +- {ci.round(6)} \n")
 
 
