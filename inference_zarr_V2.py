@@ -87,8 +87,7 @@ def write_metric_statistics(file_path, sample_vals, sample_means, sample_names, 
         for metric_name, metric_vals in sample_vals.items():
             mean, ci = get_mean_and_ci(sample_vals[metric_name])
             mean_str = str(mean.round(6))
-            ci_str = f', '.join(str(x.round(6)) for x in ci)
-            file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: {mean_str} +- {ci_str} \n")
+            file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: {mean_str} +- {ci.round(6)} \n")
 
 
 def get_full_sample_metrics(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-9, lpips_model=None, device='cuda'):
