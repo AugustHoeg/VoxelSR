@@ -356,6 +356,12 @@ def define_G(opt, mode='train'):
             lq_channels=opt_net['in_channels'],
         )
 
+    elif model_arch == "OSEDiff":
+        from models.osediff import OSEDiff_gen as net
+        netG = net(
+            ...
+        )
+
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net
         netG = net(down_factor=opt['down_factor'],

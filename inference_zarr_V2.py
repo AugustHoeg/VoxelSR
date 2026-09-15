@@ -87,7 +87,7 @@ def write_metric_statistics(file_path, sample_vals, sample_means, sample_names, 
         for metric_name, metric_vals in sample_vals.items():
             mean, ci = get_mean_and_ci(sample_vals[metric_name])
             mean_str = str(mean.round(6))
-            ci = ci[0] if isinstance(ci, list) else ci  # Handle single-element list
+            ci = ci.squeeze() if isinstance(ci, (np.ndarray, torch.Tensor)) else ci  # Handle single-element list
             file.write(f"AVERAGE SLICE-WISE {metric_name.upper()}: {mean_str} +- {ci.round(6)} \n")
 
 
@@ -215,7 +215,7 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    # experiment_id = "mDCSRN_MRI_4x_VoDaSuRe_OME_ID004200"
+    experiment_id = "mDCSRN_MRI_4x_VoDaSuRe_OME_ID004200"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
@@ -251,9 +251,12 @@ def main(opt: DictConfig):
     model.init_test(experiment_id)
 
     # Metrics to calculate
-    # metric_names = ["psnr", "ssim", "fid"]
-    metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
+    metric_names = ["psnr", "ssim", "lpips", "fid"]
+    # metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe"]
     print("Evaluating metrics:", metric_names)
+
+    mask_zero_slices = False
+    print(f"Mask zero slices: {mask_zero_slices}")
 
     slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
     from utils.utils_3D_image import SliceMetrics3D
@@ -382,8 +385,9 @@ def main(opt: DictConfig):
                 else:
                     raise ValueError(f"Inference mode {inference_mode} not recognized.")
 
-                # Set values in SR prediction to zero where HR is zero to avoid metric bias
-                _mask_zero_slices(img_E, img_H)
+                if mask_zero_slices:
+                    # Set values in SR prediction to zero where HR is zero
+                    _mask_zero_slices(img_E, img_H)
 
                 start = time.time()
                 vals, means = slice_metrics.get_avg_metrics(img_E, img_H)
