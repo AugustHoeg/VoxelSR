@@ -121,7 +121,7 @@ def main(opt: DictConfig):
     # Warm-up runs
     for _ in range(5):
         model.feed_data({'L': input_data}, need_H=False)
-        _ = model.netG_forward()
+        model.netG_forward()
 
     inference_time_list = []
 
@@ -130,7 +130,7 @@ def main(opt: DictConfig):
         model.feed_data({'L': input_data}, need_H=False)
         torch.cuda.synchronize()
         start_time = time.time()
-        output = model.netG_forward()
+        model.netG_forward()
         torch.cuda.synchronize()
         end_time = time.time()
         inference_time = end_time - start_time

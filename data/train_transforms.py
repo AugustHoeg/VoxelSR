@@ -173,7 +173,7 @@ def get_context_pad_size(opt):
 
 class Znormalized(MapTransform):
     """
-    Standard znormalization transform that applies the standard formula:
+    Standard https://huggingface.co/Manojb/stable-diffusion-2-1-base transform that applies the standard formula:
     img = 2 * img - 1 to all specified keys in a dictionary.
     """
 

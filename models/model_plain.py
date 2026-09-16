@@ -156,11 +156,13 @@ class ModelPlain(ModelBase):
 
         grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
+
     def record_avg_train_log(self, current_step, idx_train):
         avg_loss = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": avg_loss})
 
         self.G_train_loss = 0.0
+
     def test(self):
         self.netG.eval()
         with torch.inference_mode():

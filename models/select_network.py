@@ -357,10 +357,25 @@ def define_G(opt, mode='train'):
         )
 
     elif model_arch == "OSEDiff":
-        from models.osediff import OSEDiff_gen as net
-        netG = net(
-            ...
+        ose_model_type = opt_net.get("ose_model_type", "gen")
+        args = SimpleNamespace(
+            pretrained_model_name_or_path=opt_net["pretrained_model_name_or_path"],
+            lora_rank=opt_net["lora_rank"],
+            cfg_vsd=opt_net["cfg_vsd"],
+            device=opt_net.device,
+            mixed_precision=self.mixed_precision,
+            use_tiled_vae=False,
+            merge_and_unload_lora=False,
+            latent_tiled_size=opt_net.get("latent_tiled_size", 96),
+            latent_tiled_overlap=opt_net.get("latent_tiled_overlap", 32),
         )
+        if ose_model_type == "gen":
+            from models.osediff import OSEDiff_gen as net
+            netG = net(args)
+        elif ose_model_type == "reg":
+            from models.osediff import OSEDiff_reg as net
+            netG = net(args, device=opt_net.device, weight_dtype=opt_net.weight_dtype
+            )
 
     elif model_arch == "DegradeNet":  # DegradeNet
         from models.DegradeNet import DegradeNet as net

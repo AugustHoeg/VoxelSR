@@ -349,6 +349,20 @@ class ModelBase():
     def define_loss(self):
         pass
 
+    def define_named_optimizer(self, name="test", params=None, optimizer_type="adamw", optimizer_lr=1e-4, weight_decay=0, betas=(0.9, 0.999), num_accum_steps=1):
+        setattr(self, f"{name}_accum_count", 0)
+        setattr(self, f"num_accum_steps_{name}", num_accum_steps)
+        
+        if optimizer_type == "adam":
+            optimizer = Adam(params, lr=optimizer_lr, weight_decay=weight_decay, betas=betas)
+        elif optimizer_type == "adamw":
+            optimizer = AdamW(params, lr=optimizer_lr, weight_decay=weight_decay, betas=betas)
+        else:
+            raise NotImplementedError(f"Optimizer [{optimizer_type}] is not implemented.")
+        
+        setattr(self, f"{name}_optimizer", optimizer)
+        setattr(self, f"{name}_train_grad_norm", torch.zeros(1))
+
     def define_G_optimizer(self, params=None):
         self.G_accum_count = 0
         self.num_accum_steps_G = self.opt_train["num_accum_steps_G"]
