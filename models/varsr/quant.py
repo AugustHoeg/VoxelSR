@@ -34,7 +34,7 @@ from torch.nn import functional as F
 
 
 # this file only provides the VectorQuantizer2 used in VQVAE
-__all__ = ['VectorQuantizer2']
+__all__ = ['VectorQuantizer2',]
 
 
 def _dist_ok() -> bool:
@@ -228,7 +228,29 @@ class VectorQuantizer2(nn.Module):
             f_hat.add_(self.quant_resi[si / (SN - 1)](h_BChw))
             pn_next = v_patch_nums[si + 1]
             next_scales.append(F.interpolate(f_hat, size=(pn_next, pn_next), mode='area').view(B, C, -1).transpose(1, 2))
-        return torch.cat(next_scales, dim=1) if len(next_scales) else None    # cat BlCs to BLC, this should be float32
+        return torch.cat(next_scales, dim=1) if len(next_scales) else None  # cat BlCs to BLC, this should be float32
+
+    def idxBl_to_input(
+        self, gt_ms_idx_Bl: List[torch.Tensor], v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int]]]] = None
+    ) -> torch.Tensor:
+        next_scales = []
+        B = gt_ms_idx_Bl[0].shape[0]
+        C = self.Cvae
+        if v_patch_nums is None:
+            v_patch_nums = self.v_patch_nums
+        H = W = v_patch_nums[-1]
+        SN = len(v_patch_nums)
+
+        f_hat = gt_ms_idx_Bl[0].new_zeros(B, C, H, W, dtype=torch.float32)
+        pn_next: int = v_patch_nums[0]
+        for si in range(SN):
+            pn_next = v_patch_nums[si]
+            if self.prog_si == 0 or (0 <= self.prog_si - 1 < si):
+                break  # progressive training: not supported yet, prog_si always -1
+            h_BChw = F.interpolate(self.embedding(gt_ms_idx_Bl[si]).transpose_(1, 2).view(B, C, pn_next, pn_next), size=(H, W), mode='bicubic')
+            f_hat.add_(self.quant_resi[si / (SN - 1)](h_BChw))
+            next_scales.append(F.interpolate(f_hat, size=(pn_next, pn_next), mode='area').view(B, C, -1).transpose(1, 2))
+        return torch.cat(next_scales, dim=1) if len(next_scales) else None  # cat BlCs to BLC, this should be float32
 
     # ===================== get_next_autoregressive_input: only used in VAR inference, for getting next step's input =====================
     def get_next_autoregressive_input(self, si: int, SN: int, f_hat: torch.Tensor, h_BChw: torch.Tensor) -> Tuple[Optional[torch.Tensor], torch.Tensor]: # only used in VAR inference

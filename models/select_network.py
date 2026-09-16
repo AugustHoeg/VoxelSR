@@ -255,7 +255,7 @@ def define_G(opt, mode='train'):
             )
         
     elif model_arch == "VARVQVAE2D":  # VARSR multi-scale VQVAE (2D baseline)
-        from models.varsr import VARVQVAE2D as net
+        from models.varsr import VQVAE as net
         netG = net(in_channels=opt_net["in_channels"],
                    vocab_size=opt_net["num_embeddings"],
                    z_channels=opt_net["z_channels"],
@@ -271,8 +271,7 @@ def define_G(opt, mode='train'):
                    quant_resi=opt_net.get("quant_resi", 0.5),
                    share_quant_resi=opt_net.get("share_quant_resi", 4),
                    v_patch_nums=tuple(opt_net["v_patch_nums"]),
-                   eini=opt_net.get("eini", 0.0),
-                   resolution=opt["dataset_opt"]["patch_size_hr"])
+                   eini=opt_net.get("eini", 0.0))
 
     elif model_arch == "BSQVAE3D":
         from models.BSQVAE3D import BSQVAE3D as net
