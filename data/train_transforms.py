@@ -314,7 +314,10 @@ class RandSRZoomd(Randomizable):
                 if key not in d:
                     continue
                 if do_transform:
-                    d[key] = zoomer(d[key])
+                    if d[key].shape[1] == 1:  # Single channel, squeeze and unsqueeze to avoid issues with Zoom
+                        d[key] = zoomer(d[key].squeeze(1)).unsqueeze(1)
+                    else:
+                        d[key] = zoomer(d[key])
 
         return d
 

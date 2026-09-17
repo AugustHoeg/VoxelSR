@@ -152,6 +152,7 @@ def extract_patch_levels_prealloc_v2(data, group_pair, patch_size=(32, 32, 32), 
     volume_H = data[group_pair["H"]]
 
     patch_size_lr = np.floor_divide(patch_size_hr, f)
+    patch_size_lr = np.clip(patch_size_lr, a_min=1, a_max=None)
     valid_shape = np.maximum(np.subtract(volume_L.shape, patch_size_lr), (1, 1, 1))
 
     patch_valid = False
@@ -392,27 +393,15 @@ def main():
     # Example usage
     batch_size = 4
     up_factor = 2
-    patch_shape = (1, 64, 64)
-    patch_shape_hr = (1, 128, 128)
+    patch_shape = (64, 64, 64)
+    patch_shape_hr = (128, 128, 128)
 
-    HCP_1200_train_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
-    HCP_1200_test_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
-
-    IXI_train_paths = glob.glob("../../3D_datasets/datasets/IXI/ome/train/*.zarr")
-    IXI_test_paths = glob.glob("../../3D_datasets/datasets/IXI/ome/test/*.zarr")
+    train_paths = glob.glob("../3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
+    test_paths = glob.glob("../3D_datasets/datasets/HCP_1200/ome/test/*.zarr")
 
     dataset_dict = {
         "HCP_1200": {
-            "paths": HCP_1200_train_paths,
-            "group_pairs": {
-                "4": [{"H": "HR/0", "L": "HR/2"}],  # {"H": "HR/1", "L": "HR/3"}
-                "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
-            },
-            "sampling_weight": 1,
-            "store_type": "LocalStore"
-        },
-        "IXI": {
-            "paths": IXI_train_paths,
+            "paths": train_paths,
             "group_pairs": {
                 "4": [{"H": "HR/0", "L": "HR/2"}],  # {"H": "HR/1", "L": "HR/3"}
                 "2": [{"H": "HR/0", "L": "HR/1"}],  # {"H": "HR/1", "L": "HR/3"}
@@ -449,10 +438,10 @@ def main():
                                   num_samples=100,
                                   sampling_method='random',  # 'random' or 'in_chunk'
                                   print_metadata=False,
-                                  slice_dim=None)
+                                  slice_dim=0)
 
-    num_workers = 4
-    prefetch_factor = 2
+    num_workers = 0
+    prefetch_factor = 2 if num_workers > 0 else None
 
     persistent_workers = True if num_workers > 0 else False
     dataloader = torch.utils.data.DataLoader(dataset,
@@ -466,13 +455,15 @@ def main():
     no_epochs = 10
     plot_counter = 0
     print_interval = 10
-    plot_interval = 100
+    plot_interval = 10
     start_time = time()
     for i in range(no_epochs):
         print(f"Epoch {i + 1}/{no_epochs}")
         for i, batch in enumerate(dataloader):
-            if i % print_interval == 0:
-                print(f"Batch {i + 1}/{no_epochs}")
+            pass
+            # if i % print_interval == 0:
+            #     print(f"Batch {i + 1}/{no_epochs}")
+            # print_interval += 1
             # sleep(0.1)  # Assuming some processing time
             # for batch in dataloader:
             # print("Loaded batch...")
