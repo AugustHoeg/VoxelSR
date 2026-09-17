@@ -41,6 +41,7 @@ class ModelWGAN_GP(ModelBase):
         self.min_delta = 0
 
         self.lambda_gp = opt['train_opt']['lambda_gp']
+        self._gp_gen = torch.Generator(device=self.device).manual_seed(999)
 
     def set_eval_mode(self):
         self.netG.eval()
@@ -170,7 +171,7 @@ class ModelWGAN_GP(ModelBase):
             self.netG_forward()
             self.prop_real = self.netD_forward(self.H)
             self.prop_fake = self.netD_forward(self.E.detach())
-            self.gp = gradient_penalty(self.netD, self.H.float(), self.E.detach().float(), self.device, self.dis_scaler.get_scale())
+            self.gp = gradient_penalty(self.netD, self.H.float(), self.E.detach().float(), self.device, self.dis_scaler.get_scale(), self._gp_gen)
             self.dis_loss = -(torch.mean(self.prop_real) - torch.mean(self.prop_fake)) + self.lambda_gp * self.gp
             self.dis_loss = self.dis_loss / self.num_accum_steps_D
 
@@ -208,9 +209,9 @@ class ModelWGAN_GP(ModelBase):
 
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.prop_fake = self.netD_forward(self.E)
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-            adv_loss = -torch.mean(self.prop_fake)
-            self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss
+            self.recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+            self.adv_loss = -torch.mean(self.prop_fake)
+            self.gen_loss = self.recon_loss + self.loss_val_dict['ADV'] * self.adv_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -249,7 +250,7 @@ class ModelWGAN_GP(ModelBase):
         self.netG_forward()
         self.prop_real = self.netD_forward(self.H)
         self.prop_fake = self.netD_forward(self.E.detach())
-        self.gp = gradient_penalty(self.netD, self.H, self.E.detach(), self.device)
+        self.gp = gradient_penalty(self.netD, self.H, self.E.detach(), self.device, gp_gen=self._gp_gen)
         self.dis_loss = -(torch.mean(self.prop_real) - torch.mean(self.prop_fake)) + self.lambda_gp * self.gp
         self.dis_loss = self.dis_loss / self.num_accum_steps_D
 
@@ -283,9 +284,9 @@ class ModelWGAN_GP(ModelBase):
         # optimize G
         self.netD.requires_grad_(False)
         self.prop_fake = self.netD_forward(self.E)
-        recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-        adv_loss = -torch.mean(self.prop_fake)
-        self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss
+        self.recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+        self.adv_loss = -torch.mean(self.prop_fake)
+        self.gen_loss = self.recon_loss + self.loss_val_dict['ADV'] * self.adv_loss
         self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -318,6 +319,9 @@ class ModelWGAN_GP(ModelBase):
     def record_train_log(self, current_step):
         G_loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": G_loss})
+
+        self.run.log({"step": current_step, "G_adv_loss": self.adv_loss.item()})
+        self.run.log({"step": current_step, "G_recon_loss": self.recon_loss.item()})
 
         D_loss = self.D_train_loss.item() * self.num_accum_steps_D
         self.run.log({"step": current_step, "D_train_loss": D_loss})
@@ -379,9 +383,9 @@ class ModelWGAN_GP(ModelBase):
         self.prop_real = self.netD_forward(self.H)
         self.prop_fake = self.netD_forward(self.E)
 
-        recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-        adv_loss = -torch.mean(self.prop_fake)
-        self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss
+        self.recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+        self.adv_loss = -torch.mean(self.prop_fake)
+        self.gen_loss = self.recon_loss + self.loss_val_dict['ADV'] * self.adv_loss
         self.dis_loss = -(torch.mean(self.prop_real) - torch.mean(self.prop_fake))
 
         self.G_valid_loss += self.gen_loss
@@ -396,9 +400,9 @@ class ModelWGAN_GP(ModelBase):
             self.netG_forward()
             self.prop_real = self.netD_forward(self.H)
             self.prop_fake = self.netD_forward(self.E)
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
-            adv_loss = -torch.mean(self.prop_fake)
-            self.gen_loss = recon_loss + self.loss_val_dict['ADV'] * adv_loss
+            self.recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, self.device)
+            self.adv_loss = -torch.mean(self.prop_fake)
+            self.gen_loss = self.recon_loss + self.loss_val_dict['ADV'] * self.adv_loss
             self.dis_loss = -(torch.mean(self.prop_real) - torch.mean(self.prop_fake))
 
         self.G_valid_loss += self.gen_loss

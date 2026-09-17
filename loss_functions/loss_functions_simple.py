@@ -54,9 +54,9 @@ def ragan_gen_loss(prop_real, prop_fake):
     return gen_loss
 
 
-def gradient_penalty(critic, real, fake, device="cuda", scale=1.0):
+def gradient_penalty(critic, real, fake, device="cuda", scale=1.0, gp_gen=None):
     B, C, D, H, W = real.shape
-    alpha = torch.rand((B, 1, 1, 1, 1)).expand_as(real).to(device)
+    alpha = torch.rand((B, 1, 1, 1, 1), device=device, generator=gp_gen).expand_as(real)
     interpolated_images = real * alpha + fake * (1 - alpha)
     interpolated_images.requires_grad_(True)
 
