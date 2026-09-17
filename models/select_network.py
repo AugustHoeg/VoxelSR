@@ -680,12 +680,7 @@ def define_D(opt, mode='train'):
                    k_size=opt_net['k_size'],
                    use_checkpoint=opt_net['use_checkpoint'])
 
-    elif model_arch == "ESRGAN3D":  # ESRGAN3D Discriminator
-        # from models.RRDBNet3D_official import VGGStyleDiscriminator as net
-        # netD = net(patch_size=opt['dataset_opt']['patch_size_hr'],
-        #            num_in_ch=opt_net['in_channels'],
-        #            num_feat=opt_net['num_channels'])
-
+    elif model_arch == "ESRGAN3D":  # ESRGAN3D Discriminator (same as mDCSRN-GAN)
         from models.mDCSRN_GAN import DiscriminatorV2 as net
         netD = net(
             patch_size=opt["dataset_opt"]["patch_size"],
