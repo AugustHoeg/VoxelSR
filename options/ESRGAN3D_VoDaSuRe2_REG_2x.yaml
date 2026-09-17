@@ -33,7 +33,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null
+  pretrained_experiment_id: RRDBNet3D_VoDaSuRe2_REG_2x_VoDaSuRe_OME_ID005100
   pretrained_netE: null
 
 # Overwrite default training parameters
@@ -51,7 +51,7 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
   G_optimizer_betas: [0.9, 0.999]
-  G_warmup_steps: 0
+  G_warmup_steps: 10000 # Slow warmup on G to let D stabilize before G starts training
 
   D_optimizer_type: adam
   D_optimizer_lr: 1e-4
@@ -63,6 +63,7 @@ train_opt:
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01 # 0.01
+    ADV: 0.005
 
   manual_seed: 8800 # 8400
 

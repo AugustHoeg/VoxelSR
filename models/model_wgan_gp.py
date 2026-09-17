@@ -24,7 +24,7 @@ class ModelWGAN_GP(ModelBase):
         self.netG = self.model_to_device(self.netG, data_parallel=data_parallel)
         if mode == 'train':
             self.netD = define_D(opt, mode=mode)
-            self.netD = self.model_to_device(self.netD, data_parallel=data_parallel)
+            self.netD = self.model_to_device(self.netD, data_parallel=data_parallel, allow_compile=False) # Disable compile for netD as double-backward is not supported
             if self.opt_train['E_decay'] > 0:
                 self.netE = self.init_netE(opt)
 

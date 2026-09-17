@@ -694,7 +694,7 @@ class ModelBase():
             return self.get_bare_model(network._orig_mod)
         return network
 
-    def model_to_device(self, network, data_parallel=True):
+    def model_to_device(self, network, data_parallel=True, allow_compile=True):
         """Model to device. It also warps models with DistributedDataParallel or DataParallel.
         Args:
             network (nn.Module)
@@ -716,7 +716,7 @@ class ModelBase():
         if self.opt['gpu_ids'] is None:
             network = network.module.to(self.device)
 
-        if self.compile:
+        if self.compile and allow_compile:
             network = self.compile_network(network, self.compile_mode)
 
         return network
