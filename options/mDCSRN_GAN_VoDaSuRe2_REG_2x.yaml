@@ -23,7 +23,7 @@ run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -62,7 +62,7 @@ train_opt:
 
   G_loss_weights:
     L1: 1.0
-    LPIPS: 0.01 # 0.01
+    LPIPS: 0.01
     ADV: 0.1
 
   manual_seed: 8800 # 8400
