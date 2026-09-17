@@ -51,7 +51,7 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
   G_optimizer_betas: [0.9, 0.999]
-  G_warmup_steps: 10000 # Slow warmup on G to let D stabilize before G starts training
+  G_warmup_steps: 20000 # Slow warmup on G to let D stabilize before G starts training
 
   D_optimizer_type: adam
   D_optimizer_lr: 5e-6
