@@ -478,11 +478,12 @@ if __name__ == "__main__":
     total_gpu_mem = torch.cuda.get_device_properties(0).total_memory / 10 ** 9 if torch.cuda.is_available() else 0
 
     n_conv_vec = [64, 64, 128, 128, 256, 256, 512, 512]
+    n_dense = 1024
     # n_conv_vec = [32, 32, 64, 64, 128, 128, 256, 256]
     #n_conv_vec = [16, 16, 32, 32, 64, 64, 128, 128]
     #n_conv_vec = [8, 8, 16, 16, 32, 32, 64, 64]
     #n_dense = [1024, 1]
-    n_dense = [512, 1]
+    #n_dense = [512, 1]
     #n_dense = [64, 1]  # n_dense = [512, 1]
     #n_dense = [128, 1]
 
