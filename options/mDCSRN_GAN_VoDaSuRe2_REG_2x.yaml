@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: mDCSRN_GAN              # Default model config
+  - model_opt: mDCSRN_WGAN_GP              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -51,7 +51,7 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
   G_optimizer_betas: [0.9, 0.999]
-  G_warmup_steps: 0
+  G_warmup_steps: 10000 # Slow warmup on G to let D stabilize before G starts training
 
   D_optimizer_type: adam
   D_optimizer_lr: 5e-6
@@ -63,7 +63,9 @@ train_opt:
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
-    ADV: 0.005
+    ADV: 0.1
+
+  lambda_gp: 10.0 # Gradient penalty weight for WGAN-GP
 
   manual_seed: 8800 # 8400
 

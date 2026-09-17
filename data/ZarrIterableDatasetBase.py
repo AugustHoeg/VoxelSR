@@ -392,8 +392,8 @@ def main():
     # Example usage
     batch_size = 4
     up_factor = 2
-    patch_shape = (64, 64, 64)
-    patch_shape_hr = (128, 128, 128)
+    patch_shape = (1, 64, 64)
+    patch_shape_hr = (1, 128, 128)
 
     HCP_1200_train_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/train/*.zarr")
     HCP_1200_test_paths = glob.glob("../../3D_datasets/datasets/HCP_1200/ome/test/*.zarr")

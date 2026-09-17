@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: mDCSRN                  # Default model config
+  - model_opt: mDCSRN_WGAN_GP                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -23,7 +23,7 @@ run_name: ${model_opt.model_architecture}_001
 note: Note
 
 # GPU configuration
-train_mode: "scratch"   # "scratch", "finetune" or "resume"
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
 gpu_ids: [0]
 dist: false
 cluster: DTU_HPC # DTU_HPC or TITANS
@@ -33,29 +33,36 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: null  # "mDCSRN_ID000000"
+  pretrained_experiment_id: mDCSRN_VoDaSuRe2_DOWN_2x_VoDaSuRe_OME_ID004200  # "mDCSRN_ID000000"
   pretrained_netE: null
 
 # Overwrite default training parameters
 train_opt:
   iterations: 1000
-  validation_iterations: 50
+  validation_iterations: 10
   checkpoint_test: 100
   checkpoint_save: 100
   checkpoint_print: 100
   checkpoint_save_visuals: 100
+
   num_accum_steps_G: 1
-  G_optimizer_lr: 1e-4
+  G_optimizer_lr: 5e-5
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
+  G_warmup_steps: 500 # Warmup on G to let D stabilize before G starts training
+
+  num_accum_steps_D: 1
+  D_optimizer_lr: 5e-5
+  D_optimizer_wd: 0
+  D_optimizer_clipgrad: 10
+  D_warmup_steps: 0
 
   G_loss_weights:
-    L1: 0.0  # Disabled inplace of AESOP3D loss
-    # AESOP3D: 1.0  # Enabled AESOP3D loss with weight 1.0
+    L1: 1.0
     LPIPS: 0.01
+    ADV: 0.1
 
-  # pretrained_G_loss_IDs:
-  #   AESOP3D: "AESOP3D_VoDaSuRe_OME_ID000000"
+  lambda_gp: 10.0  # Gradient penalty weight for WGAN-GP
 
 # Overwrite default dataset parameters
 dataset_opt:

@@ -54,26 +54,28 @@ def ragan_gen_loss(prop_real, prop_fake):
     return gen_loss
 
 
-def compute_gradient_penalty(interpolated_images, mixed_scores, device="cuda"):
+def gradient_penalty(critic, real, fake, device="cuda", scale=1.0):
+    B, C, D, H, W = real.shape
+    alpha = torch.rand((B, 1, 1, 1, 1)).expand_as(real).to(device)
+    interpolated_images = real * alpha + fake * (1 - alpha)
+    interpolated_images.requires_grad_(True)
+
+    # Calculate critic scores
+    mixed_scores = critic(interpolated_images)
 
     # Take the gradient of the scores with respect to the images
     gradient = torch.autograd.grad(
         inputs=interpolated_images,
         outputs=mixed_scores,
-        grad_outputs=torch.ones_like(mixed_scores),
+        grad_outputs=torch.ones_like(mixed_scores) * scale,
         create_graph=True,
         retain_graph=True,
     )[0]
-    gradient = gradient.view(gradient.shape[0], -1)
-    gradient_norm = gradient.norm(2, dim=1)
+    gradient = gradient / scale
+    gradient = gradient.view(gradient.shape[0], -1).float()
+    gradient_norm = torch.sqrt(torch.sum(gradient ** 2, dim=1) + 1e-12)
     gradient_penalty = torch.mean((gradient_norm - 1) ** 2)
     return gradient_penalty
-
-
-def compute_critic_loss(critic_real, critic_fake, scaled_gradient_penalty):
-
-    loss_critic = -(torch.mean(critic_real.reshape(-1)) - torch.mean(critic_fake.reshape(-1))) + scaled_gradient_penalty
-    return loss_critic
 
 
 def compute_generator_loss(real_hi_res=None, fake_hi_res=None, loss_fn_dict=None, loss_val_dict=None, device="cuda"):

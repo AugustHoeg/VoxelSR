@@ -19,6 +19,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'ragan':
         from models.model_ragan import ModelRaGAN as M
 
+    elif model == 'wgan_gp':     # one input: L
+        from models.model_wgan_gp import ModelWGAN_GP as M
+
     elif model == 'vqvae':     # one input: L
         from models.model_vqvae import ModelVQVAE as M
 
