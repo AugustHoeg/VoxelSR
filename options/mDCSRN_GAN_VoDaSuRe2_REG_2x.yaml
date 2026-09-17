@@ -60,9 +60,10 @@ train_opt:
   D_optimizer_betas: [0.9, 0.999]
   D_warmup_steps: 0
 
+  # from mDCSRN-GAN paper, but maybe needs tuning for VoDaSuRe2 data
   G_loss_weights:
     L1: 1.0
-    LPIPS: 0.01
+    LPIPS: 0.01  # Added for fairness
     ADV: 0.1
 
   lambda_gp: 10.0 # Gradient penalty weight for WGAN-GP

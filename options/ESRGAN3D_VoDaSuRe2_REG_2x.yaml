@@ -47,22 +47,23 @@ train_opt:
   num_accum_steps_G: 1
 
   G_optimizer_type: adam
-  G_optimizer_lr: 1e-4
+  G_optimizer_lr: 5e-6  # same LR as mDCSRN-GAN
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
   G_optimizer_betas: [0.9, 0.999]
-  G_warmup_steps: 10000 # Slow warmup on G to let D stabilize before G starts training
+  G_warmup_steps: 20000 # Slow warmup on G to let D stabilize before G starts training
 
   D_optimizer_type: adam
-  D_optimizer_lr: 1e-4
+  D_optimizer_lr: 5e-6  # same LR as mDCSRN-GAN
   D_optimizer_wd: 0
   D_optimizer_clipgrad: 10
   D_optimizer_betas: [0.9, 0.999]
   D_warmup_steps: 0
 
+  # from ESRGAN paper, but maybe needs tuning for VoDaSuRe2 data
   G_loss_weights:
-    L1: 1.0
-    LPIPS: 0.01 # 0.01
+    L1: 0.01
+    LPIPS: 1.0
     ADV: 0.005
 
   manual_seed: 8800 # 8400

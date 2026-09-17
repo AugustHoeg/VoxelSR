@@ -35,7 +35,7 @@ def ragan_dis_loss(prop_real, prop_fake):
     relative_prop_real = prop_real - prop_fake.mean()
     relative_prop_fake = prop_fake - prop_real.mean()
 
-    dis_loss = 0.5 * bce_dis_loss(relative_prop_real, relative_prop_fake, label_smooth_val=0.0)
+    dis_loss = 0.5 * bce_dis_loss(relative_prop_real, relative_prop_fake, label_smooth_val=0.1)
 
     return dis_loss
 
