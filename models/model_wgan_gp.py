@@ -331,6 +331,7 @@ class ModelWGAN_GP(ModelBase):
         G_loss = self.G_train_loss.item() * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": G_loss})
 
+        self.run.log({"step": current_step, "Gradient_penalty": self.gp.item()})
         self.run.log({"step": current_step, "G_adv_loss": self.adv_loss.item()})
         self.run.log({"step": current_step, "G_recon_loss": self.recon_loss.item()})
 
