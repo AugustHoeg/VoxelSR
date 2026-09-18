@@ -54,11 +54,11 @@ train_opt:
   G_warmup_steps: 10000 # Slow warmup on G to let D stabilize before G starts training
 
   D_optimizer_type: adam
-  D_optimizer_lr: 1e-6 #
+  D_optimizer_lr: 5e-6 #
   D_optimizer_wd: 0
   D_optimizer_clipgrad: 100
   D_optimizer_betas: [0.0, 0.9]
-  D_warmup_steps: 1000
+  D_warmup_steps: 10000
 
   # from mDCSRN-GAN paper, but maybe needs tuning for VoDaSuRe2 data
   G_loss_weights:
