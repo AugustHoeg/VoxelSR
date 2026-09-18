@@ -6,6 +6,7 @@ validation_iterations: 250
 epochs: 0
 
 mixed_precision: 'BF16'
+gradscaler_enabled: true
 early_stop_patience: 100
 
 # Loss weights
