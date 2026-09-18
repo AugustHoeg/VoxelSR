@@ -123,8 +123,9 @@ class ModelWGAN_GP(ModelBase):
         self.load_D_gradscaler(eid)
 
     def define_gradscaler(self):
-        self.define_G_gradscaler()
-        self.define_D_gradscaler()
+        enabled = self.opt_train.get('gradscaler_enabled', True)
+        self.define_G_gradscaler(enabled)
+        self.define_D_gradscaler(enabled)
 
     def define_scheduler(self):
         self.define_G_scheduler()

@@ -60,6 +60,8 @@ train_opt:
   D_optimizer_betas: [0.9, 0.999]
   D_warmup_steps: 0
 
+  gradscaler_enabled: false  # test disabling gradscaler for WGAN-GP for better stability
+
   # from mDCSRN-GAN paper, but maybe needs tuning for VoDaSuRe2 data
   G_loss_weights:
     L1: 1.0

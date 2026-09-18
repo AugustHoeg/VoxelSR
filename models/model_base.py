@@ -411,11 +411,11 @@ class ModelBase():
         """Default: G only. GAN models override to also call define_D_optimizer()."""
         self.define_G_optimizer()
 
-    def define_G_gradscaler(self):
-        self.gen_scaler = torch.amp.GradScaler("cuda")
+    def define_G_gradscaler(self, enabled=True):
+        self.gen_scaler = torch.amp.GradScaler("cuda", enabled=enabled)
 
-    def define_D_gradscaler(self):
-        self.dis_scaler = torch.amp.GradScaler("cuda")
+    def define_D_gradscaler(self, enabled=True):
+        self.dis_scaler = torch.amp.GradScaler("cuda", enabled=enabled)
 
     def define_gradscaler(self):
         """Default: G only. GAN models override to also call define_D_gradscaler()."""
