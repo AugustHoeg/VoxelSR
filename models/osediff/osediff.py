@@ -97,6 +97,7 @@ class OSEDiff_gen(torch.nn.Module):
                 _p.requires_grad = True
         self.unet.set_adapter(["default_encoder", "default_decoder", "default_others"])  # ensure adapters are active
 
+    @torch.compiler.disable(recursive=True)
     def encode_prompt(self, prompt_batch):
         prompt_embeds_list = []
         with torch.no_grad():
@@ -338,6 +339,7 @@ class OSEDiff_test(torch.nn.Module):
         self.vae.to(dtype=self.weight_dtype)
         self.text_encoder.to(dtype=self.weight_dtype)
 
+    @torch.compiler.disable(recursive=True)
     def encode_prompt(self, prompt_batch):
         prompt_embeds_list = []
         with torch.no_grad():
@@ -421,6 +423,7 @@ class OSEDiff_inference_time(torch.nn.Module):
                 p.data.copy_(model["state_dict_vae"][n])
         self.vae.set_adapter(['default_encoder'])
 
+    @torch.compiler.disable(recursive=True)
     def encode_prompt(self, prompt_batch):
         prompt_embeds_list = []
         with torch.no_grad():
