@@ -239,6 +239,8 @@ class ModelRaGAN(ModelBase):
         else:
             self.G_accum_count += 1
 
+        self.update = self.G_update  # set flag for lr update in training loop
+
     def optimize_parameters(self, current_step, update=False):
 
         # optimize D
@@ -310,6 +312,8 @@ class ModelRaGAN(ModelBase):
             self.G_accum_count = 0
         else:
             self.G_accum_count += 1
+
+        self.update = self.G_update  # set flag for lr update in training loop
 
     def record_train_log(self, current_step):
         G_loss = self.G_train_loss.item() * self.num_accum_steps_G
