@@ -139,8 +139,9 @@ class ModelVQGAN(ModelBase):
         self.define_D_scheduler()
 
     def update_learning_rate(self):
-        self.schedulers[0].step()
-        if self.current_step >= self.opt_train['D_start_iteration']:
+        if self.G_update:
+            self.schedulers[0].step()
+        if self.D_update and (self.current_step >= self.opt_train['D_start_iteration']):
             self.schedulers[1].step()
 
     def define_wandb_run(self):
@@ -301,6 +302,8 @@ class ModelVQGAN(ModelBase):
         else:
             self.G_accum_count += 1
 
+        self.update = self.G_update or self.D_update  # set flag for lr update in training loop
+
     def optimize_parameters(self, current_step, update=False):
         self.current_step = current_step
         dis_factor = 1.0 if current_step >= self.opt_train['D_start_iteration'] else 0.0
@@ -385,6 +388,8 @@ class ModelVQGAN(ModelBase):
             self.G_accum_count = 0
         else:
             self.G_accum_count += 1
+
+        self.update = self.G_update or self.D_update  # set flag for lr update in training loop
 
     def record_train_log(self, current_step):
         G_loss = self.G_train_loss.item() * self.num_accum_steps_G

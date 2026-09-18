@@ -243,9 +243,9 @@ class ModelOSEDiff(ModelBase):
         
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.gen_forward()
-            recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
-            loss_vsd = self.netReg.distribution_matching_loss(self.x_denoised, self.prompt_embeds, self.neg_prompt_embeds, self.ose_args)
-            self.gen_loss = recon_loss + self.lambda_vsd * loss_vsd
+            self.recon_loss = compute_generator_loss(self.H, self.E, self.loss_fn_dict, self.loss_val_dict, device=self.device)
+            self.loss_vsd = self.netReg.distribution_matching_loss(self.x_denoised, self.prompt_embeds, self.neg_prompt_embeds, self.ose_args)
+            self.gen_loss = self.recon_loss + self.lambda_vsd * self.loss_vsd
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
@@ -317,6 +317,7 @@ class ModelOSEDiff(ModelBase):
         self.run.log({"step": current_step, "Reg_train_loss": self.Reg_train_loss.item() * self.num_accum_steps_G})
         self.run.log({"step": current_step, "G_train_grad_norm": self.G_train_grad_norm.item()})
         self.run.log({"step": current_step, "Reg_train_grad_norm": self.Reg_train_grad_norm.item()})
+        self.run.log({"step": current_step, "G_recon_loss": self.recon_loss.item()})
 
     def record_avg_train_log(self, current_step, idx_train):
         self.run.log({"step": current_step, "G_train_loss": (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G})

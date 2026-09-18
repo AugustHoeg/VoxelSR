@@ -127,6 +127,12 @@ class ModelGAN(ModelBase):
         self.define_G_scheduler()
         self.define_D_scheduler()
 
+    def update_learning_rate(self):
+        if self.G_update:
+            self.schedulers[0].step()
+        if self.D_update:
+            self.schedulers[1].step()
+
     def define_wandb_run(self):
         self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
         self.model_artifact_G = wandb.Artifact(
@@ -239,7 +245,7 @@ class ModelGAN(ModelBase):
         else:
             self.G_accum_count += 1
 
-        self.update = self.G_update  # set flag for lr update in training loop
+        self.update = self.G_update or self.D_update  # set flag for lr update in training loop
 
     def optimize_parameters(self, current_step, update=False):
 
@@ -313,7 +319,7 @@ class ModelGAN(ModelBase):
         else:
             self.G_accum_count += 1
 
-        self.update = self.G_update  # set flag for lr update in training loop
+        self.update = self.G_update or self.D_update  # set flag for lr update in training loop
 
     def record_train_log(self, current_step):
         G_loss = self.G_train_loss.item() * self.num_accum_steps_G
