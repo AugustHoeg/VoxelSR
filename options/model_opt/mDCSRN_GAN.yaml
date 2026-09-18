@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-model: gan
+model: ragan
 model_architecture: mDCSRN_GAN
 netG:
   net_type: mDCSRN
