@@ -422,7 +422,7 @@ class DiscriminatorV2(nn.Module):
                     n_conv_vec[idx+1],
                     k_size=3 if stride == 1 else 4, # set kernel size 4 when stride is 2 to avoid artifacts
                     stride=stride,  # set stride to 2 for every other block
-                    padding=1 if stride == 1 else 2,
+                    padding=1,
                     bias=True,
                 )
             )
@@ -478,7 +478,7 @@ if __name__ == "__main__":
 
     in_c = 1
     patch_size = 32
-    up_factor = 4
+    up_factor = 2
     k_size = 3
 
     # Create an instance of the Discriminator model
