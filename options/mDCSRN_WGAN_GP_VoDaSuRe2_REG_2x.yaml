@@ -66,6 +66,8 @@ train_opt:
     LPIPS: 0.01  # Added for fairness
     ADV: 0.1
 
+  lambda_gp: 10.0 # Gradient penalty weight for WGAN-GP
+
   manual_seed: 8800 # 8400
 
 # Overwrite default dataset parameters
