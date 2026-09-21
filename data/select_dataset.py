@@ -266,9 +266,17 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
     elif dataset_type == "ZarrDatasetCache":
         from data.ZarrIterableDatasetCache import ZarrIterableDataset
 
-        slice_dim = None if opt.input_type == '3D' else 0
-        patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
-        patch_shape_hr = (opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr)
+        size_lr = opt.dataset_opt.patch_size
+        size_hr = opt.dataset_opt.patch_size_hr
+        slice_dim = None if opt.input_type == "3D" else 0
+
+        if opt.dataset_opt.get("load_single_slice", False) and slice_dim == 0:
+            patch_shape = (1, size_lr, size_lr)
+            patch_shape_hr = (1, size_hr, size_hr)
+        else:
+            patch_shape = (size_lr, size_lr, size_hr)
+            patch_shape_hr = (size_hr, size_hr, size_hr)
+
         train_dataset = ZarrIterableDataset(dataset_dict_train,
                                             patch_shape,
                                             patch_shape_hr,
@@ -298,9 +306,17 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
     elif dataset_type == "ZarrDatasetBase":
         from data.ZarrIterableDatasetBase import ZarrIterableDataset
 
-        slice_dim = None if opt.input_type == '3D' else 0
-        patch_shape = (opt.dataset_opt.patch_size, opt.dataset_opt.patch_size, opt.dataset_opt.patch_size)
-        patch_shape_hr = (opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr, opt.dataset_opt.patch_size_hr)
+        size_lr = opt.dataset_opt.patch_size
+        size_hr = opt.dataset_opt.patch_size_hr
+        slice_dim = None if opt.input_type == "3D" else 0
+        
+        if opt.dataset_opt.get("load_single_slice", False) and slice_dim == 0:
+            patch_shape = (1, size_lr, size_lr)
+            patch_shape_hr = (1, size_hr, size_hr)
+        else:
+            patch_shape = (size_lr, size_lr, size_hr)
+            patch_shape_hr = (size_hr, size_hr, size_hr)
+
         train_dataset = ZarrIterableDataset(dataset_dict_train,
                                             patch_shape,
                                             patch_shape_hr,
