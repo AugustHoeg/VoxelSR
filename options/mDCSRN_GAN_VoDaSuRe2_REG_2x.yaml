@@ -63,7 +63,7 @@ train_opt:
   # Reuse loss weights from ESRGAN for mDCSRN_GAN for consistency
   G_loss_weights:
     L1: 0.01
-    LPIPS: 1.0
+    LPIPS: 0.01
     ADV: 0.005
 
   manual_seed: 8800 # 8400
