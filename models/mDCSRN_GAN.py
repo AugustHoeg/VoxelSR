@@ -478,7 +478,7 @@ if __name__ == "__main__":
 
     in_c = 1
     patch_size = 32
-    up_factor = 2
+    up_factor = 4
     k_size = 3
 
     # Create an instance of the Discriminator model

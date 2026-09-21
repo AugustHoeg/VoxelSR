@@ -15,6 +15,7 @@ def initialize_vae(args):
     vae.train()
 
     l_target_modules_encoder = []
+    l_target_modules_decoder = []
     l_grep = ["conv1", "conv2", "conv_in", "conv_shortcut", "conv", "conv_out", "to_k", "to_q", "to_v", "to_out.0"]
     for n, p in vae.named_parameters():
         if "bias" in n or "norm" in n:
@@ -25,10 +26,22 @@ def initialize_vae(args):
             elif ('quant_conv' in n) and ('post_quant_conv' not in n):
                 l_target_modules_encoder.append(n.replace(".weight", ""))
 
+            # Add LoRA to vae decoder
+            if args.add_decoder_lora:
+                if pattern in n and ("decoder" in n):
+                    l_target_modules_decoder.append(n.replace(".weight", ""))
+                elif ("post_quant_conv" in n):
+                    l_target_modules_decoder.append(n.replace(".weight", ""))
+
     lora_conf_encoder = LoraConfig(r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_target_modules_encoder)
     vae.add_adapter(lora_conf_encoder, adapter_name="default_encoder")
 
-    return vae, l_target_modules_encoder
+    # Add LoRA to vae decoder
+    if args.add_decoder_lora:
+        lora_conf_decoder = LoraConfig(r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_target_modules_decoder)
+        vae.add_adapter(lora_conf_decoder, adapter_name="default_decoder")
+
+    return vae, l_target_modules_encoder, l_target_modules_decoder
 
 
 def initialize_unet(args, return_lora_module_names=False, pretrained_model_name_or_path=None):
@@ -52,8 +65,12 @@ def initialize_unet(args, return_lora_module_names=False, pretrained_model_name_
                 l_modules_others.append(n.replace(".weight", ""))
                 break
 
-    lora_conf_encoder = LoraConfig(r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_target_modules_encoder)
-    lora_conf_decoder = LoraConfig(r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_target_modules_decoder)
+    lora_conf_encoder = LoraConfig(
+        r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_target_modules_encoder
+    )
+    lora_conf_decoder = LoraConfig(
+        r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_target_modules_decoder
+    )
     lora_conf_others = LoraConfig(r=args.lora_rank, init_lora_weights="gaussian", target_modules=l_modules_others)
     unet.add_adapter(lora_conf_encoder, adapter_name="default_encoder")
     unet.add_adapter(lora_conf_decoder, adapter_name="default_decoder")
@@ -68,13 +85,15 @@ class OSEDiff_gen(torch.nn.Module):
 
         self.device = getattr(args, "device", "cuda")
         self.tokenizer = AutoTokenizer.from_pretrained(args.pretrained_model_name_or_path, subfolder="tokenizer")
-        self.text_encoder = CLIPTextModel.from_pretrained(args.pretrained_model_name_or_path, subfolder="text_encoder").to(self.device)
+        self.text_encoder = CLIPTextModel.from_pretrained(
+            args.pretrained_model_name_or_path, subfolder="text_encoder"
+        ).to(self.device)
         self.noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
         self.noise_scheduler.set_timesteps(1, device=self.device)
         self.noise_scheduler.alphas_cumprod = self.noise_scheduler.alphas_cumprod.to(self.device)
         self.args = args
 
-        self.vae, self.lora_vae_modules_encoder = initialize_vae(self.args)
+        self.vae, self.lora_vae_modules_encoder, self.lora_vae_modules_decoder = initialize_vae(self.args)
         self.unet, self.lora_unet_modules_encoder, self.lora_unet_modules_decoder, self.lora_unet_others = initialize_unet(self.args)
         self.lora_rank_unet = self.args.lora_rank
         self.lora_rank_vae = self.args.lora_rank
@@ -96,7 +115,11 @@ class OSEDiff_gen(torch.nn.Module):
             if "lora" in n:
                 _p.requires_grad = True
         self.unet.set_adapter(["default_encoder", "default_decoder", "default_others"])  # ensure unet adapters are active
-        self.vae.set_adapter(["default_encoder"])  # ensure vae adapters are active
+
+        if self.args.add_decoder_lora:
+            self.vae.set_adapter(["default_encoder", "default_decoder"])  # ensure vae adapters are active
+        else:
+            self.vae.set_adapter(["default_encoder"])  # ensure vae adapters are active
 
     @torch.compiler.disable(recursive=True)
     def encode_prompt(self, prompt_batch):
@@ -115,15 +138,20 @@ class OSEDiff_gen(torch.nn.Module):
         return prompt_embeds
 
     def forward(self, c_t, batch=None, args=None):
-
         encoded_control = self.vae.encode(c_t).latent_dist.sample() * self.vae.config.scaling_factor
 
         # calculate prompt_embeddings and neg_prompt_embeddings
         prompt_embeds = self.encode_prompt(batch["prompt"])
         neg_prompt_embeds = self.encode_prompt(batch["neg_prompt"])
 
-        model_pred = self.unet(encoded_control, self.timesteps, encoder_hidden_states=prompt_embeds.to(torch.float32),).sample
-        x_denoised = self.noise_scheduler.step(model_pred, self.timesteps, encoded_control, return_dict=True).prev_sample
+        model_pred = self.unet(
+            encoded_control,
+            self.timesteps,
+            encoder_hidden_states=prompt_embeds.to(torch.float32),
+        ).sample
+        x_denoised = self.noise_scheduler.step(
+            model_pred, self.timesteps, encoded_control, return_dict=True
+        ).prev_sample
         output_image = (self.vae.decode(x_denoised / self.vae.config.scaling_factor).sample).clamp(-1, 1)
 
         return output_image, x_denoised, prompt_embeds, neg_prompt_embeds
@@ -131,6 +159,7 @@ class OSEDiff_gen(torch.nn.Module):
     def save_model(self, outf):
         sd = {}
         sd["vae_lora_encoder_modules"] = self.lora_vae_modules_encoder
+        sd["vae_lora_decoder_modules"] = self.lora_vae_modules_decoder
         sd["unet_lora_encoder_modules"], sd["unet_lora_decoder_modules"], sd["unet_lora_others_modules"] = \
             self.lora_unet_modules_encoder, self.lora_unet_modules_decoder, self.lora_unet_others
         sd["rank_unet"] = self.lora_rank_unet
@@ -151,7 +180,11 @@ class OSEDiff_gen(torch.nn.Module):
         for n, p in self.vae.named_parameters():
             if "lora" in n:
                 p.data.copy_(model["state_dict_vae"][n])
-        self.vae.set_adapter(['default_encoder'])
+
+        if self.args.add_decoder_lora:
+            self.vae.set_adapter(["default_encoder", "default_decoder"])
+        else:
+            self.vae.set_adapter(["default_encoder"])
 
 
 class OSEDiff_reg(torch.nn.Module):
@@ -190,14 +223,17 @@ class OSEDiff_reg(torch.nn.Module):
         for n, _p in self.unet_update.named_parameters():
             if "lora" in n:
                 _p.requires_grad = True
-        self.unet_update.set_adapter(["default_encoder", "default_decoder", "default_others"])  # ensure adapters are active
+        self.unet_update.set_adapter(
+            ["default_encoder", "default_decoder", "default_others"]
+        )  # ensure adapters are active
 
     def diff_loss(self, latents, prompt_embeds, args):
-
         latents, prompt_embeds = latents.detach(), prompt_embeds.detach()
         noise = torch.randn_like(latents)
         bsz = latents.shape[0]
-        timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device).long()
+        timesteps = torch.randint(
+            0, self.noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device
+        ).long()
         noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
         noise_pred = self.unet_update(
@@ -211,7 +247,6 @@ class OSEDiff_reg(torch.nn.Module):
         return loss_d
 
     def eps_to_mu(self, scheduler, model_output, sample, timesteps):
-
         alphas_cumprod = scheduler.alphas_cumprod.to(device=sample.device, dtype=sample.dtype)
         alpha_prod_t = alphas_cumprod[timesteps]
         while len(alpha_prod_t.shape) < len(sample.shape):
@@ -227,7 +262,6 @@ class OSEDiff_reg(torch.nn.Module):
         noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
         with torch.no_grad():
-
             noise_pred_update = self.unet_update(
                 noisy_latents,
                 timestep=timesteps,
@@ -275,14 +309,17 @@ class OSEDiff_reg(torch.nn.Module):
                 p.data.copy_(model["state_dict_unet"][n])
         self.unet_update.set_adapter(["default_encoder", "default_decoder", "default_others"])
 
+
 class OSEDiff_test(torch.nn.Module):
     def __init__(self, args):
         super().__init__()
 
         self.args = args
-        self.device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(self.args.pretrained_model_name_or_path, subfolder="tokenizer")
-        self.text_encoder = CLIPTextModel.from_pretrained(self.args.pretrained_model_name_or_path, subfolder="text_encoder")
+        self.text_encoder = CLIPTextModel.from_pretrained(
+            self.args.pretrained_model_name_or_path, subfolder="text_encoder"
+        )
         self.noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
         self.noise_scheduler.set_timesteps(1, device=self.device)
         self.vae = AutoencoderKL.from_pretrained(self.args.pretrained_model_name_or_path, subfolder="vae")
@@ -316,9 +353,15 @@ class OSEDiff_test(torch.nn.Module):
 
     def load_ckpt(self, model):
         # load unet lora
-        lora_conf_encoder = LoraConfig(r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_encoder_modules"])
-        lora_conf_decoder = LoraConfig(r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_decoder_modules"])
-        lora_conf_others = LoraConfig(r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_others_modules"])
+        lora_conf_encoder = LoraConfig(
+            r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_encoder_modules"]
+        )
+        lora_conf_decoder = LoraConfig(
+            r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_decoder_modules"]
+        )
+        lora_conf_others = LoraConfig(
+            r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_others_modules"]
+        )
         self.unet.add_adapter(lora_conf_encoder, adapter_name="default_encoder")
         self.unet.add_adapter(lora_conf_decoder, adapter_name="default_decoder")
         self.unet.add_adapter(lora_conf_others, adapter_name="default_others")
@@ -328,13 +371,27 @@ class OSEDiff_test(torch.nn.Module):
         self.unet.set_adapter(["default_encoder", "default_decoder", "default_others"])
 
         # load vae lora
-        vae_lora_conf_encoder = LoraConfig(r=model["rank_vae"], init_lora_weights="gaussian", target_modules=model["vae_lora_encoder_modules"])
+        vae_lora_conf_encoder = LoraConfig(
+            r=model["rank_vae"], init_lora_weights="gaussian", target_modules=model["vae_lora_encoder_modules"]
+        )
         self.vae.add_adapter(vae_lora_conf_encoder, adapter_name="default_encoder")
+
+        if self.args.add_decoder_lora:
+            vae_lora_conf_decoder = LoraConfig(
+                r=model["rank_vae"], init_lora_weights="gaussian", target_modules=model["vae_lora_decoder_modules"]
+            )
+            self.vae.add_adapter(vae_lora_conf_decoder, adapter_name="default_decoder")
+
         for n, p in self.vae.named_parameters():
             if "lora" in n:
                 p.data.copy_(model["state_dict_vae"][n])
-        self.vae.set_adapter(['default_encoder'])
-        
+
+        if self.args.add_decoder_lora:
+            self.vae.set_adapter(['default_encoder', 'default_decoder'])
+        else:
+            self.vae.set_adapter(['default_encoder'])
+
+
         # Cast dtype after loading
         self.unet.to(dtype=self.weight_dtype)
         self.vae.to(dtype=self.weight_dtype)
@@ -358,13 +415,18 @@ class OSEDiff_test(torch.nn.Module):
 
     @torch.no_grad()
     def forward(self, lq, batch=None, args=None):
-
         prompt_embeds = self.encode_prompt(batch["prompt"])
         lq_latent = self.vae.encode(lq.to(self.weight_dtype)).latent_dist.sample() * self.vae.config.scaling_factor
 
-        model_pred = self.unet(lq_latent, self.timesteps, encoder_hidden_states=prompt_embeds.to(self.weight_dtype),).sample  # torch.float32 ?
+        model_pred = self.unet(
+            lq_latent,
+            self.timesteps,
+            encoder_hidden_states=prompt_embeds.to(self.weight_dtype),
+        ).sample  # torch.float32 ?
         x_denoised = self.noise_scheduler.step(model_pred, self.timesteps, lq_latent, return_dict=True).prev_sample
-        output_image = (self.vae.decode(x_denoised.to(self.weight_dtype) / self.vae.config.scaling_factor).sample).clamp(-1, 1)
+        output_image = (
+            self.vae.decode(x_denoised.to(self.weight_dtype) / self.vae.config.scaling_factor).sample
+        ).clamp(-1, 1)
 
         return output_image
 
@@ -374,7 +436,7 @@ class OSEDiff_inference_time(torch.nn.Module):
         super().__init__()
 
         self.args = args
-        self.device =  torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.tokenizer = AutoTokenizer.from_pretrained(self.args.pretrained_model_name_or_path, subfolder="tokenizer")
         self.text_encoder = CLIPTextModel.from_pretrained(
             self.args.pretrained_model_name_or_path, subfolder="text_encoder"
@@ -405,9 +467,15 @@ class OSEDiff_inference_time(torch.nn.Module):
 
     def load_ckpt(self, model):
         # load unet lora
-        lora_conf_encoder = LoraConfig(r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_encoder_modules"])
-        lora_conf_decoder = LoraConfig(r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_decoder_modules"])
-        lora_conf_others = LoraConfig(r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_others_modules"])
+        lora_conf_encoder = LoraConfig(
+            r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_encoder_modules"]
+        )
+        lora_conf_decoder = LoraConfig(
+            r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_decoder_modules"]
+        )
+        lora_conf_others = LoraConfig(
+            r=model["rank_unet"], init_lora_weights="gaussian", target_modules=model["unet_lora_others_modules"]
+        )
         self.unet.add_adapter(lora_conf_encoder, adapter_name="default_encoder")
         self.unet.add_adapter(lora_conf_decoder, adapter_name="default_decoder")
         self.unet.add_adapter(lora_conf_others, adapter_name="default_others")
@@ -417,7 +485,9 @@ class OSEDiff_inference_time(torch.nn.Module):
         self.unet.set_adapter(["default_encoder", "default_decoder", "default_others"])
 
         # load vae lora
-        vae_lora_conf_encoder = LoraConfig(r=model["rank_vae"], init_lora_weights="gaussian", target_modules=model["vae_lora_encoder_modules"])
+        vae_lora_conf_encoder = LoraConfig(
+            r=model["rank_vae"], init_lora_weights="gaussian", target_modules=model["vae_lora_encoder_modules"]
+        )
         self.vae.add_adapter(vae_lora_conf_encoder, adapter_name="default_encoder")
         for n, p in self.vae.named_parameters():
             if "lora" in n:

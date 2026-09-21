@@ -9,7 +9,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
-from models.osediff import OSEDiff_gen, OSEDiff_reg, OSEDiff_test
+from models.osediff.osediff_dec_lora import OSEDiff_gen, OSEDiff_reg, OSEDiff_test
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 
@@ -30,6 +30,7 @@ class ModelOSEDiff(ModelBase):
             mixed_precision=opt["train_opt"]["mixed_precision"],
             use_tiled_vae=False,
             merge_and_unload_lora=False,
+            add_decoder_lora=opt_net["add_decoder_lora"],
         )
         
         if mode == 'train':
