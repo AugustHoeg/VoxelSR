@@ -316,10 +316,10 @@ class SRBlock(nn.Module):
         return out
 
 class LRconvBlock3D(nn.Module):
-    def __init__(self, in_c, n, k_size, stride):
+    def __init__(self, in_c, n, k_size, stride, padding=1, bias=True):
         super().__init__()
 
-        self.conv0 = nn.Conv3d(in_c, n, kernel_size=k_size, stride=stride, padding=1)
+        self.conv0 = nn.Conv3d(in_c, n, kernel_size=k_size, stride=stride, padding=padding, bias=bias)
         #self.norm0 = nn.LayerNorm([DCSRN_config.BATCH_SIZE, n, 16, 16, 16])
         self.norm0 = nn.LayerNorm(n)
         self.act0 = nn.LeakyReLU(0.2, inplace=True)
@@ -410,8 +410,6 @@ class DiscriminatorV2(nn.Module):
         self.conv0 = nn.Conv3d(in_c, n_conv_vec[0], kernel_size=k_size, padding=1, stride=1)
         self.act0 = nn.LeakyReLU(0.2, inplace=True)
 
-        #dim = [int(np.ceil(patch_size*up_factor / 2 ** i)) for i in range(1, len(n_conv_vec) // 2)]
-        #dim = [int(torch.ceil(input_size/2**i)) for i in range(1,5)]
         dim = patch_size * up_factor
 
         self.blocks = nn.ModuleList()
@@ -422,10 +420,10 @@ class DiscriminatorV2(nn.Module):
                 LRconvBlock3D(
                     n_conv_vec[idx],
                     n_conv_vec[idx+1],
-                    k_size=3,
+                    k_size=3 if stride == 1 else 4, # set kernel size 4 when stride is 2 to avoid artifacts
                     stride=stride,  # set stride to 2 for every other block
-                    #padding=1,
-                    #bias=True,
+                    padding=1 if stride == 1 else 2,
+                    bias=True,
                 )
             )
 
@@ -449,15 +447,6 @@ class DiscriminatorV2(nn.Module):
                 x = checkpoint.checkpoint(block, x)
             else:
                 x = block(x)
-
-
-        #x = self.LRconv0(x)
-        #x = self.LRconv1(x)
-        #x = self.LRconv2(x)
-        #x = self.LRconv3(x)
-        #x = self.LRconv4(x)
-        #x = self.LRconv5(x)
-        #x = self.LRconv6(x)
 
         # Dense block network + LeakyRelu
         x = self.dense0(self.flatten(x))
