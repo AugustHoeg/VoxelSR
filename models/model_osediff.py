@@ -40,7 +40,8 @@ class ModelOSEDiff(ModelBase):
             self.netReg = OSEDiff_reg(self.ose_args, device=self.device)
             self.Reg_optimizer = None
     
-            # null-prompt conditioning
+            # prompt conditioning
+            self.sample_names_as_prompt = self.opt['model_opt']['netG'].get('sample_names_as_prompt', True)
             self.prompt = self.opt['model_opt']['netG'].get("prompt", "")
             self.neg_prompt = self.opt['model_opt']['netG'].get("neg_prompt", "")
     
@@ -228,17 +229,26 @@ class ModelOSEDiff(ModelBase):
         self.H = data["H"].as_tensor().to(self.device, non_blocking=True)
         self.sample_names = data["sample_name"]  # [sample_name, sample_name, ...]
 
-    def _null_prompt(self, b):
-        return {'prompt': [self.prompt] * b, 'neg_prompt': [self.neg_prompt] * b}
+    def _split_filename(self, filename):
+        str1 = filename.split("_")[0]
+        return f"{str1.lower()}"
+
+    def _prompt(self, b):
+        neg_prompt = [self.neg_prompt] * b
+        if self.sample_names_as_prompt:
+            prompt = [f"Micro-CT scan of {self._split_filename(name)} sample" for name in self.sample_names]
+        else:
+            prompt = [self.prompt] * b
+        return {'prompt': prompt, 'neg_prompt': neg_prompt}
 
     def gen_forward(self):
         self.L_up = F.interpolate(self.L, size=self.H.shape[2:], mode='bicubic', align_corners=False)
-        batch_prompt = self._null_prompt(self.L_up.shape[0])
+        batch_prompt = self._prompt(self.L_up.shape[0])
         self.E, self.x_denoised, self.prompt_embeds, self.neg_prompt_embeds = self.netG(self.L_up, batch=batch_prompt)
 
     def netG_forward(self):
         self.L_up = F.interpolate(self.L, size=self.H.shape[2:], mode='bicubic', align_corners=False)
-        batch_prompt = self._null_prompt(self.L_up.shape[0])
+        batch_prompt = self._prompt(self.L_up.shape[0])
         self.E = self.netG(self.L_up, batch=batch_prompt)
 
     def optimize_parameters_amp(self, current_step, update=False):

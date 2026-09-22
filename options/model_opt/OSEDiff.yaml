@@ -18,6 +18,10 @@ netG:
   lambda_vsd: 1.0  # 1.0
   lambda_vsd_lora: 1.0
 
+  sample_names_as_prompt: true  # Use sample names as prompts for training.
+  prompt: "Grayscale CT scan"  # Generic fixed prompt, used if use_sample_prompt is false.
+  neg_prompt: "painting, oil painting, illustration, drawing, art, sketch, cartoon, CG Style, 3D render, unreal engine, blurring, dirty, messy, worst quality, low quality, frames, watermark, signature, jpeg artifacts, deformed, lowres, over-smooth"
+
   init_type: default
   init_bn_type: uniform
   init_gain: 0.2

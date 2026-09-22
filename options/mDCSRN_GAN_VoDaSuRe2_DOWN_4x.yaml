@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: mDCSRN_RAGAN              # Default model config
+  - model_opt: mDCSRN_GAN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -61,7 +61,7 @@ train_opt:
   D_warmup_steps: 1000
 
   G_loss_weights:
-    L1: 1.00  # Same as all other methods for consistency
+    L1: 1.0  # Same as all other methods for consistency
     LPIPS: 0.01  # Same as all other methods for consistency
     ADV: 0.005   # Loss weight from ESRGAN
 

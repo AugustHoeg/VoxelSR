@@ -1,5 +1,5 @@
 ## @package _global_ # remove first # to enable merging into top-level namespace
-model: ragan
+model: gan
 model_architecture: ESRGAN3D
 netG:
   net_type: ESRGAN3D
