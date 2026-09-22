@@ -1,13 +1,13 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: mDCSRN_GAN              # Default model config
+  - model_opt: mDCSRN_RAGAN              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
 task: superresolution
 input_type: 3D # Input type, 2D or 3D
-up_factor: 4  # upscaling factor
+up_factor: 2  # upscaling factor
 
 # Profile & Compile
 run_profile: false
@@ -47,24 +47,23 @@ train_opt:
   num_accum_steps_G: 1
 
   G_optimizer_type: adam
-  G_optimizer_lr: 5e-5  # halved from PSNR-oriented training
+  G_optimizer_lr: 5e-6  # from mDCSRN-GAN paper
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 10
-  G_optimizer_betas: [0.9, 0.999]
+  G_optimizer_betas: [0.5, 0.999]
   G_warmup_steps: 10000 # Slow warmup on G to let D stabilize before G starts training
 
   D_optimizer_type: adam
-  D_optimizer_lr: 5e-5  # halved from PSNR-oriented training
+  D_optimizer_lr: 5e-6  # from mDCSRN-GAN paper
   D_optimizer_wd: 0
-  D_optimizer_clipgrad: 10
-  D_optimizer_betas: [0.9, 0.999]
-  D_warmup_steps: 0
+  D_optimizer_clipgrad: 100
+  D_optimizer_betas: [0.5, 0.999]
+  D_warmup_steps: 1000
 
-  # Reuse loss weights from ESRGAN for mDCSRN_GAN for consistency
   G_loss_weights:
-    L1: 0.01
-    LPIPS: 1.0
-    ADV: 0.005
+    L1: 1.00  # Same as all other methods for consistency
+    LPIPS: 0.01  # Same as all other methods for consistency
+    ADV: 0.005   # Loss weight from ESRGAN
 
   manual_seed: 8800 # 8400
 
