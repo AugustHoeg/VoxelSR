@@ -15,7 +15,7 @@ netG:
 
   add_decoder_lora: true  # Adds LoRA adapters to the decoder of the VAE.
 
-  lambda_vsd: 0.0  # 1.0
+  lambda_vsd: 1.0  # 1.0
   lambda_vsd_lora: 1.0
 
   init_type: default

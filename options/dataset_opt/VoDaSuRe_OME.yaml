@@ -17,6 +17,7 @@ norm_type: scale_intensity
 patch_crop_type: random_spatial
 expand_channels_rgb: false
 mask_mode: LR
+load_single_slice: false  # Speeds up data loading for 2D models but
 
 # Sample crop and padding
 sample_crop_pad_type : sample_divisible_padding # "sample_divisible_padding" "sample_crop_foreground"

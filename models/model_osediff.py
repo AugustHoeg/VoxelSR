@@ -226,6 +226,7 @@ class ModelOSEDiff(ModelBase):
     def feed_data(self, data):
         self.L = data["L"].as_tensor().to(self.device, non_blocking=True)
         self.H = data["H"].as_tensor().to(self.device, non_blocking=True)
+        self.sample_names = data["sample_name"]  # [sample_name, sample_name, ...]
 
     def _null_prompt(self, b):
         return {'prompt': [self.prompt] * b, 'neg_prompt': [self.neg_prompt] * b}

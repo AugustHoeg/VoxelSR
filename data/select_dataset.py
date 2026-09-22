@@ -314,7 +314,7 @@ def define_Dataset(opt, return_filepaths=False, apply_split=True):
             patch_shape = (1, size_lr, size_lr)
             patch_shape_hr = (1, size_hr, size_hr)
         else:
-            patch_shape = (size_lr, size_lr, size_hr)
+            patch_shape = (size_lr, size_lr, size_lr)
             patch_shape_hr = (size_hr, size_hr, size_hr)
 
         train_dataset = ZarrIterableDataset(dataset_dict_train,

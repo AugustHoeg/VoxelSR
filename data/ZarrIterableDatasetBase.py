@@ -339,6 +339,8 @@ class ZarrIterableDataset(IterableDataset):
             patch['L'] = extract_patch_slice(patch['L'], slice_idx=idx_L, slice_dim=self.slice_dim)
             patch['H'] = extract_patch_slice(patch['H'], slice_idx=idx_H, slice_dim=self.slice_dim)
 
+        patch['sample_name'] = z.store.root.name.split(".")[0]  # Add sample name
+
         return patch
 
     def __iter__(self):
@@ -426,7 +428,6 @@ def main():
         RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=2, prob=0.5),
         RandSRRotated(keys=["H", "L", "REG"], prob=0.25, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True),
         RandSRZoomd(keys=["H", "L", "REG"], prob=0.25, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True),
-
     ])
 
     dataset = ZarrIterableDataset(dataset_dict,
