@@ -470,9 +470,9 @@ def main():
             # print("Loaded batch...")
             # for key in batch.keys():
             #     print(f"Key: {key}, Shape: {batch[key].shape}")
-            # if plot_counter % plot_interval == 0:
-            #     test_plot(batch)
-            # plot_counter += 1
+            if plot_counter % plot_interval == 0:
+                test_plot(batch)
+            plot_counter += 1
 
 
     time_elapsed = time() - start_time
