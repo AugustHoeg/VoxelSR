@@ -255,7 +255,7 @@ def define_G(opt, mode='train'):
             )
         
     elif model_arch == "VARVQVAE2D":  # VARSR multi-scale VQVAE (2D baseline)
-        from models.varsr import VQVAE as net
+        from models.varsr.vqvae import VQVAE as net
         netG = net(in_channels=opt_net["in_channels"],
                    vocab_size=opt_net["num_embeddings"],
                    z_channels=opt_net["z_channels"],

@@ -73,6 +73,8 @@ dataset_opt:
   synthetic: true
   patch_size: 64
 
+  load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
+
   datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   # VAR VQ inputs are normalized to [-1, 1]

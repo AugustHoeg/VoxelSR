@@ -21,6 +21,7 @@ class VQVAE(nn.Module):
         z_channels=32,
         ch=128,
         ch_mult=(1, 1, 2, 2, 4),
+        num_res_blocks=2,
         dropout=0.0,
         using_sa=True,          # whether to use self-attention in the encoder/decoder
         using_mid_sa=True,      # whether to use self-attention in the middle block of
@@ -40,7 +41,7 @@ class VQVAE(nn.Module):
         # ddconfig is copied from https://github.com/CompVis/latent-diffusion/blob/e66308c7f2e64cb581c6d27ab6fbeb846828253b/models/first_stage_models/vq-f16/config.yaml
         ddconfig = dict(
             dropout=dropout, ch=ch, z_channels=z_channels,
-            in_channels=in_channels, ch_mult=ch_mult, num_res_blocks=2,   # from vq-f16/config.yaml above
+            in_channels=in_channels, ch_mult=ch_mult, num_res_blocks=num_res_blocks,   # from vq-f16/config.yaml above
             using_sa=using_sa, using_mid_sa=using_mid_sa,                           # from vq-f16/config.yaml above
             # resamp_with_conv=True,   # always True, removed.
         )
