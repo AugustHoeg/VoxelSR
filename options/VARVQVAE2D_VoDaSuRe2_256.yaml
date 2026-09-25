@@ -72,6 +72,7 @@ dataset_opt:
 
   # VAR VQ inputs are normalized to [-1, 1]
   norm_type: znormalization  # scale_intensity
+  expand_channels_rgb: true  # Expand single-channel images to 3 channels for pretrained network
 
   train_dataloader_params:
     dataloader_batch_size: 32
