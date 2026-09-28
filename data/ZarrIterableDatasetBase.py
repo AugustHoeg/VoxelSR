@@ -329,7 +329,7 @@ class ZarrIterableDataset(IterableDataset):
             patch = self.patch_transform(patch)
 
         # Select a random slice from the patch along the specified dimension if slice_dim is not None
-        if self.slice_dim is not None:
+        if self.slice_dim is not None:  # TODO add slicing for REG if available
             idx_L = np.random.randint(0, patch['L'].shape[1 + self.slice_dim])
             idx_H = idx_L * self.up_factor
             # patch['L'] = np.take(patch['L'], indices=idx_L, axis=self.slice_dim + 2)
@@ -417,6 +417,9 @@ def main():
     torch.manual_seed(seed)
     np.random.seed(seed)
 
+    #angles = np.pi / 6
+    angles = ((-np.pi / 6, np.pi / 6), (-np.pi / 6, np.pi / 6), (-np.pi / 6, np.pi / 6))
+
     # Define patch transforms
     patch_transform = mt.Compose([
         mt.Identityd(keys=['H', 'L'], allow_missing_keys=True),
@@ -426,7 +429,7 @@ def main():
         RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=0, prob=0.5),
         RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=1, prob=0.5),
         RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=2, prob=0.5),
-        RandSRRotated(keys=["H", "L", "REG"], prob=0.25, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True),
+        RandSRRotated(keys=["H", "L", "REG"], prob=0.25, angles=angles, mode="bilinear", align_corners=True, keep_size=True),
         RandSRZoomd(keys=["H", "L", "REG"], prob=0.25, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True),
     ])
 

@@ -243,14 +243,12 @@ class RandSRRotated(Randomizable):
     to all specified keys in a dictionary.
     """
 
-    def __init__(self, keys, prob=0.5, range_x=(0,0), range_y=(0,0), range_z=(0,0), mode="bilinear", align_corners=True, keep_size=True):
+    def __init__(self, keys, prob=0.5, angles=((0,0), (0,0), (0,0)), mode="bilinear", align_corners=True, keep_size=True):
         super().__init__()
         self.keys = keys
         self.prob = prob
         self.mode = mode
-        self.range_x = range_x
-        self.range_y = range_y
-        self.range_z = range_z
+        self.angles = angles
         self.align_corners = align_corners
         self.keep_size = keep_size
 
@@ -260,12 +258,16 @@ class RandSRRotated(Randomizable):
         do_transform = np.random.rand() < self.prob
 
         if do_transform:
-            angle_x = np.random.uniform(*self.range_x)
-            angle_y = np.random.uniform(*self.range_y)
-            angle_z = np.random.uniform(*self.range_z)
+            if isinstance(self.angles, float):  # if angles is float, assume 2D rotation with angle range
+                angle = np.random.uniform(low=-self.angles, high=self.angles)
+            else:
+                angle_x = np.random.uniform(*self.angles[0])
+                angle_y = np.random.uniform(*self.angles[1])
+                angle_z = np.random.uniform(*self.angles[2])
+                angle = (angle_x, angle_y, angle_z)
 
             rotator = Rotate(
-                angle=(angle_x, angle_y, angle_z),
+                angle=angle,
                 mode=self.mode,
                 align_corners=self.align_corners,
                 keep_size=self.keep_size
@@ -275,7 +277,10 @@ class RandSRRotated(Randomizable):
                 if key not in d:
                     continue
                 if do_transform:
-                    d[key] = rotator(d[key])
+                    if d[key].shape[1] == 1:  # Single channel, squeeze and unsqueeze to avoid issues with Rotate
+                        d[key] = rotator(d[key].squeeze(1)).unsqueeze(1)
+                    else:
+                        d[key] = rotator(d[key])
 
         return d
 

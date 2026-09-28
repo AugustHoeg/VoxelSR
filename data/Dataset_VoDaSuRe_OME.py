@@ -234,6 +234,11 @@ class Dataset_VoDaSuRe_OME():
         pdata = p.dataset_opt
         pdata.pad_size = get_context_pad_size(p)
 
+        if pdata.load_single_slice:
+            angles = np.pi / 6  # 2D rotation when loading single slices
+        else:
+            angles = ((-np.pi / 6, np.pi / 6), (-np.pi / 6, np.pi / 6), (-np.pi / 6, np.pi / 6))  # 3D rotation
+
         trans_list = []
         trans_list.append(mt.EnsureChannelFirstd(keys=["H", "L", "REG"], channel_dim=pdata.channel_dim, allow_missing_keys=True))  # Load the image
         trans_list.append(mt.CastToTyped(keys=["H", "L", "REG"], dtype=torch.float32, allow_missing_keys=True))  # Cast to float32
@@ -255,7 +260,7 @@ class Dataset_VoDaSuRe_OME():
             trans_list.append(RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=1, prob=0.5))
             trans_list.append(RandSRFlipd(keys=["H", "L", "REG"], spatial_axis=2, prob=0.5))
 
-            trans_list.append(RandSRRotated(keys=["H", "L", "REG"], prob=0.25, range_x=(-np.pi / 6, np.pi / 6), range_y=(-np.pi / 6, np.pi / 6), range_z=(-np.pi / 6, np.pi / 6), mode="bilinear", align_corners=True, keep_size=True))
+            trans_list.append(RandSRRotated(keys=["H", "L", "REG"], prob=0.25, angles=angles, mode="bilinear", align_corners=True, keep_size=True))
             trans_list.append(RandSRZoomd(keys=["H", "L", "REG"], prob=0.25, min_zoom=0.9, max_zoom=1.1, mode="bilinear", align_corners=True, keep_size=True))
 
             # trans_list.append(mt.Rand3DElasticd(keys=["H", "L"], prob=0.80, sigma_range=(4, 8), magnitude_range=(-0.1, 0.1), mode="bilinear"))
