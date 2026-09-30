@@ -273,6 +273,40 @@ def define_G(opt, mode='train'):
                    v_patch_nums=tuple(opt_net["v_patch_nums"]),
                    eini=opt_net.get("eini", 0.0))
 
+    elif model_arch == "VARSR":
+        from models.varsr.var import VAR_RoPE as net
+
+        # From VARSR/models/__init__.py
+        heads = opt_net['depth']
+        width = opt_net['depth'] * 64
+        dpr = 0.1 * opt_net['depth'] / 24
+        netG = net(
+            vocab_size=opt_net["vocab_size"],  # Added argument (V)
+            z_channels=opt_net["z_channels"],  # Added argument (Cvae)
+            num_classes=1+1,
+            depth=opt_net["depth"],
+            controlnet_depth=opt_net["depth"],
+            embed_dim=width,
+            num_heads=heads,
+            drop_rate=0.0,
+            attn_drop_rate=0.0,
+            drop_path_rate=dpr,
+            norm_eps=1e-6,
+            shared_aln=opt_net["shared_aln"],
+            cond_drop_rate=0.0,
+            attn_l2_norm=opt_net["attn_l2_norm"],
+            patch_nums=tuple(opt_net["v_patch_nums"]),
+            flash_if_available=opt_net["flash_if_available"],
+            fused_if_available=opt_net["fused_if_available"],
+        )
+
+        netG.init_weights(
+            init_adaln=opt_net['init_adaln'],
+            init_adaln_gamma=opt_net['init_adaln_gamma'],
+            init_head=opt_net['init_head'],
+            init_std=opt_net['init_std']
+        )
+
     elif model_arch == "BSQVAE3D":
         from models.BSQVAE3D import BSQVAE3D as net
         netG = net(

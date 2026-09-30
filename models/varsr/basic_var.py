@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
-from models.helpers import DropPath, drop_path
+from models.varsr.helpers import DropPath, drop_path
 
 
 # this file only provides the 3 blocks used in VAR transformer

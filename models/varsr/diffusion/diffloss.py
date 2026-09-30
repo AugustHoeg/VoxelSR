@@ -8,7 +8,7 @@ import math
 import torch
 import torch.nn as nn
 
-from models.diffusion import create_diffusion
+from models.varsr.diffusion import create_diffusion
 import torch.utils.checkpoint as checkpoint
 
 

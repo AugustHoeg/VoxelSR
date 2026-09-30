@@ -111,7 +111,7 @@ class Dataset_VoDaSuRe_OME():
                 group_pairs["VoDaSuRe2"] = {
                     "4": [{"H": "HR/0", "L": "REG/0"}],
                     "2": [{"H": "HR/1", "L": "REG/0"}],
-                    "1": [{"H": "HR/0", "L": "HR/0"}],
+                    "1": [{"H": "HR/2", "L": "HR/0"}],
                 }
 
         if "VoDaSuRe" in opt['dataset_opt']['datasets']:
@@ -190,7 +190,7 @@ class Dataset_VoDaSuRe_OME():
                     group_pairs["VoDaSuRe"] = {
                         "4": [{"H": "HR/0", "L": "REG/0"}],
                         "2": [{"H": "HR/1", "L": "REG/0"}],
-                        "1": [{"H": "HR/0", "L": "HR/0"}]
+                        "1": [{"H": "HR/2", "L": "HR/0"}]
                     }
 
         self.dataset_dict_train = {}

@@ -365,6 +365,126 @@ def get_shell_masks_3d(
     return shells, spatial_freq
 
 
+def fourier_ring_correlation(image1, image2, ring_masks, spatial_freq, drop_DC=True, remove_negative=False, alpha=None):
+    """
+    2D analogue of fourier_shell_correlation, for computing FRC on 2D SR slices.
+    image1, image2: (B, C, H, W)
+    ring_masks:     (R, 1, 1, H, W)
+    spatial_freq:   (R, 1)
+    From paper: Image quality measurements and denoising using Fourier Ring Correlations
+    Github: https://github.com/frcCVPR/frc-loss/blob/master/models.py#L106
+
+    :return: (frc, spatial_freq, integral)
+             frc:          (R', B) per-ring correlation curve.
+             spatial_freq: (R', 1) matching frequency axis (trimmed if drop_DC).
+             integral:     frequency-integrated FRC scalar per batch item, shape (B,) (or scalar if B == 1).
+             R' = R, or R - 1 when drop_DC is True.
+    """
+
+    # Subtract mean (optional, but can improve stability)
+    image1 = image1 - image1.mean(dim=(-2, -1), keepdim=True)
+    image2 = image2 - image2.mean(dim=(-2, -1), keepdim=True)
+
+    image1 = image1.to(torch.complex64)
+    image2 = image2.to(torch.complex64)
+    ring_masks = ring_masks.to(torch.complex64)
+
+    # 2D FFT + shift
+    fft_img1 = torch.fft.fftshift(
+        torch.fft.fftn(image1, dim=(-2, -1)),
+        dim=(-2, -1)
+    )
+    fft_img2 = torch.fft.fftshift(
+        torch.fft.fftn(image2, dim=(-2, -1)),
+        dim=(-2, -1)
+    )
+
+    # Apply ring masks
+    t1 = fft_img1.unsqueeze(0) * ring_masks
+    t2 = fft_img2.unsqueeze(0) * ring_masks
+    # (R, B, C, H, W)
+
+    # FRC numerator
+    c1 = torch.real(
+        torch.sum(t1 * torch.conj(t2), dim=(2, 3, 4))
+    )
+
+    # FRC denominator
+    c2 = torch.sum(torch.abs(t1) ** 2, dim=(2, 3, 4))
+    c3 = torch.sum(torch.abs(t2) ** 2, dim=(2, 3, 4))
+
+    frc = c1 / torch.sqrt(c2 * c3 + 1e-12)
+    frc = torch.nan_to_num(frc, nan=0.0, posinf=0.0, neginf=0.0)
+
+    # Remove negative values corresponding to anti-correlation to ensure frc is in the range [0, 1]
+    if remove_negative:
+        frc = torch.clamp(frc, min=0.0)
+
+    # Drop first ring (DC component)
+    if drop_DC:
+        frc = frc[1:]
+        spatial_freq = spatial_freq[1:]
+
+    # Integrate over spatial frequency (trapezoidal rule)
+    t = spatial_freq.squeeze(-1)   # (R,)
+    y = frc                        # (R, B)
+
+    if alpha is None:
+        # disable weighting, equivalent to simple trapezoidal integration
+        weight = torch.ones(len(t) - 1, device=t.device)
+    else:
+        weight = torch.arange(1, len(t), device=t.device) ** alpha
+        weight = weight / weight.max() + 1  # Starts from 1, and ramps to 2 at the highest frequency by the power of alpha
+
+    integral = torch.sum(
+        (t[1:] - t[:-1]).unsqueeze(-1) * weight.unsqueeze(-1) * (y[:-1] + y[1:]) / 2.0,
+        dim=0
+    ).squeeze()
+
+    return frc, spatial_freq, integral
+
+
+def radial_mask(r, cx, cy, sx, sy, delta=1):
+    dist2 = (
+        (sx[np.newaxis, :] - cx) ** 2 +
+        (sy[:, np.newaxis] - cy) ** 2
+    )
+
+    outer = dist2 <= (r + delta) ** 2
+    inner = dist2 > r ** 2
+    return outer & inner
+
+
+def get_radial_masks_2d(
+    size=(256, 256),
+    delta=1,
+    device="cpu"
+):
+    H, W = size
+    cy, cx = H // 2, W // 2
+
+    freq_nyq = min(H, W) // 2
+    radii = np.arange(freq_nyq)
+
+    sy = np.arange(H)
+    sx = np.arange(W)
+
+    rings = np.stack([
+        radial_mask(r, cx, cy, sx, sy, delta)
+        for r in radii
+    ], axis=0)
+
+    # (R, 1, 1, H, W)
+    rings = torch.from_numpy(rings).float()
+    rings = rings.unsqueeze(1).unsqueeze(1).to(device)
+
+    spatial_freq = radii.astype(np.float32) / freq_nyq
+    spatial_freq = spatial_freq / spatial_freq.max()
+    spatial_freq = torch.from_numpy(spatial_freq).unsqueeze(1).to(device)
+
+    return rings, spatial_freq
+
+
 def radial_power_spectrum_2d(image, apply_window=True):
 
     H, W = image.shape
@@ -484,6 +604,13 @@ if __name__ == "__main__":
     fsc = fourier_shell_correlation(vol1, vol2, shells.cuda(), freq.cuda())
     print("FSC mean:", fsc)
 
+    # Test 2D FRC from frcCVPR on a central slice of the volumes
+    img_batch1 = vol1[:, :, 64, :, :]  # (B, C, H, W)
+    img_batch2 = vol2[:, :, 64, :, :]
+    rings, freq2d = get_radial_masks_2d(size=(128, 128), delta=1, device="cuda")
+    frc_curve, frc_freq, frc_integral = fourier_ring_correlation(img_batch1, img_batch2, rings, freq2d)
+    print("FRC curve shape:", frc_curve.shape, "| FRC integral:", frc_integral)
+
 
     # Test FRC from Martin Bech
     example_path = "C:/Users/aulho/OneDrive - Danmarks Tekniske Universitet/Billeder/august.jpg"
@@ -522,3 +649,5 @@ if __name__ == "__main__":
     print("Intersection index: ", intersect)
 
     plot_frc(corr, smoothed, thl, intersect[0], p_eff, p_unit='µm', thl_label='1-bit threshold')
+
+    print("Done")

@@ -1,20 +1,15 @@
-import os
-
 import torch
 import torch.nn.functional as F
 import wandb
 from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
-from torch.optim import Adam, AdamW
 
-from loss_functions.loss_functions_simple import compute_generator_loss
 from models.model_base import ModelBase
 from models.select_model import define_Model
 from models.select_network import define_G
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 from utils.load_options import load_options_from_experiment_id
-from utils.utils_image import rgb2gray
 
 
 class ModelVARSR(ModelBase):
@@ -22,16 +17,14 @@ class ModelVARSR(ModelBase):
     def __init__(self, opt, mode='train', data_parallel=True):
         super(ModelVARSR, self).__init__(opt)
         self.last_iteration = 0
-        self.netG = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG, data_parallel=data_parallel)
+        self.netG_wo_ddp = define_G(opt, mode=mode)
+        self.netG = self.model_to_device(self.netG_wo_ddp, data_parallel=data_parallel)
+
         if self.opt_train['E_decay'] > 0:
             self.netE = self.init_netE(opt)
 
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
-
-        # TODO set self.label_B_flag = False in VAR config
-        self.v_patch_nums = opt['model_opt']['netG']['v_patch_nums']
 
         self.update = False
 
@@ -41,7 +34,123 @@ class ModelVARSR(ModelBase):
         self.patience_counter = 0
         self.min_delta = 0
 
-    def from_pretrained_orig(self, var, state_dict):
+    # ----------------------------------------
+    # VQ model loading
+    # ----------------------------------------
+
+    def _load_vq_model(self, eid):
+        opt_path = load_options_from_experiment_id(eid, root_dir="", file_type="yaml")
+        opt_vq = OmegaConf.load(opt_path)
+        opt_vq['dist'] = False  # Disable DDP on VQ
+        opt_vq['compile'] = False  # Disable overarching compile on VQ
+
+        net = define_Model(opt_vq, mode='test', data_parallel=False)
+        net.load(eid, mode='test')
+        vq_model = net.get_bare_model(net.netG).to(self.device)
+        vq_model.eval()
+        for p in vq_model.parameters():
+            p.requires_grad_(False)
+        return vq_model
+
+    def load_hr_vq_model(self):
+        assert "pretrained_hr_vqmodel_id" in self.opt["path"], (
+            "Must specify pretrained_hr_vqmodel_id in path for ModelVARSR."
+        )
+        eid = self.opt["path"]["pretrained_hr_vqmodel_id"]
+        self.vq_model_hr = self._load_vq_model(eid)
+
+        if self.opt["compile"]:
+            self.vq_model_hr.fhat_to_img = torch.compile(self.vq_model_hr.fhat_to_img, mode="max-autotune-no-cudagraphs")
+            self.vq_model_hr.img_to_idxBl = torch.compile(self.vq_model_hr.img_to_idxBl, mode="max-autotune-no-cudagraphs")
+            self.vq_model_hr.quantize.idxBl_to_var_input = torch.compile(self.vq_model_hr.quantize.idxBl_to_var_input, mode="max-autotune-no-cudagraphs")
+
+    # ----------------------------------------
+    # Encoding / decoding / sampling (VQ model always frozen)
+    # ----------------------------------------
+
+    @torch.no_grad()
+    def encode_to_indices(self, x: torch.Tensor, vq_model: torch.nn.Module):
+        """Encode a volume to codes via the frozen VQ encoder and creates VAR train input
+
+        Args:
+            x:        patch (B, C, H, W)
+            vq_model: frozen VARVQVAE2D model
+        Returns:
+            gt_idx_Bl:         TODO
+            gt_BL:             TODO
+            x_BLCv_wo_first_l: TODO
+
+        """
+        gt_idx_Bl, idx_N_list = vq_model.img_to_idxBl(x)
+        gt_BL = torch.cat(gt_idx_Bl[0:len(vq_model.quantize.v_patch_nums)], dim=1)
+        x_BLCv_wo_first_l = vq_model.quantize.idxBl_to_var_input(idx_N_list)
+
+        return gt_idx_Bl, gt_BL, x_BLCv_wo_first_l
+
+    def _const_label(self, batch_size):
+        """Constant class label for VARSR's class token."""
+        return torch.zeros(batch_size, dtype=torch.long, device=self.device)
+
+    @torch.no_grad()
+    def sample_E(self, lr_inp, batch_size = None, top_k=1, top_p=0.75, cfg=0.0, more_smooth=False):
+
+        # Sample (cfg=0 -> image-based CFG disabled, see _const_label)
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
+            f_hat = self.netG_wo_ddp.autoregressive_infer_cfg(
+                B=batch_size,
+                cfg=cfg,
+                top_k=top_k,
+                top_p=top_p,
+                text_hidden=None,
+                lr_inp=lr_inp,
+                negative_text=None,
+                label_B=self._const_label(batch_size),
+                lr_inp_scale=None,
+                more_smooth=more_smooth,
+                tile_flag=True, # forces return of f_hat for decoding
+                vae_proxy=(self.vq_model_hr,),
+                vae_quant_proxy=(self.vq_model_hr.quantize,)
+            )
+
+        E = self.vq_model_hr.fhat_to_img(f_hat)
+        return E
+
+    def init_test(self, experiment_id):
+        self.load(experiment_id, mode='test')
+        self.load_hr_vq_model()
+        self.netG.eval()
+        self.define_metrics()
+        self.define_mixed_precision()
+        self.define_visual_eval()
+
+    def init_train(self):
+        self.load(from_pretrained_orig=self.opt['path']['from_pretrained_orig'])
+        self.load_hr_vq_model()
+        self.netG.train()
+
+        self.define_loss()
+        self.define_metrics()
+
+        self.define_optimizer()
+        self.load_optimizers()
+
+        self.define_mixed_precision()
+        self.load_gradscalers()
+
+        self.define_scheduler()
+        self.load_schedulers()
+
+        self.define_visual_eval()
+
+    def define_wandb_run(self):
+        self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
+        self.model_artifact_G = wandb.Artifact(
+            "Generator", type=self.opt['model_opt']['netG']['net_type'],
+            description=self.opt['model_opt']['netG']['description'],
+            metadata=OmegaConf.to_container(self.opt['model_opt']['netG'], resolve=True)
+        )
+
+    def _from_pretrained_orig(self, var, state_dict):
         for k, v in var.state_dict().items():
             if ".cross_attn." in k:
                 if "mat_q" in k:
@@ -71,113 +180,32 @@ class ModelVARSR(ModelBase):
 
         return var
 
-    # ----------------------------------------
-    # VQ model loading
-    # ----------------------------------------
+    def _import_pretrained_orig(self, eid):
+        """imports official VAR pretrained weights"""
+        filename = self.opt['path'].get('pretrained_orig_filename', None)
+        path = self._find_latest_checkpoint(eid, "saved_models", f"{filename}*")
 
-    def _load_vq_model(self, eid):
-        opt_path = load_options_from_experiment_id(eid, root_dir="", file_type="yaml")
-        opt_vq = OmegaConf.load(opt_path)
-        opt_vq['dist'] = False  # Disable DDP on VQ
-        opt_vq['compile'] = False  # Disable overarching compile on VQ
+        if self.opt['rank'] == 0:
+            print(f"Importing VAR official weights [{self._short_path(path)}] ...")
+        state_dict = torch.load(path, map_location='cpu', weights_only=False)
+        # Official checkpoints are sometimes nested; unwrap the raw model state dict.
+        if isinstance(state_dict, dict) and 'trainer' in state_dict:
+            state_dict = state_dict['trainer'].get('var_wo_ddp', state_dict)
+        self._from_pretrained_orig(self.get_bare_model(self.netG), state_dict)
+        self.last_iteration = 0
 
-        net = define_Model(opt_vq, mode='test', data_parallel=False)
-        net.load(eid, mode='test')
-        vq_model = net.get_bare_model(net.netG).to(self.device)
-        vq_model.eval()
-        for p in vq_model.parameters():
-            p.requires_grad_(False)
-        return vq_model
-
-    def load_hr_vq_model(self):
-        assert "pretrained_hr_vqmodel_id" in self.opt["path"], (
-            "Must specify pretrained_hr_vqmodel_id in path for ModelVARSR."
-        )
-        eid = self.opt["path"]["pretrained_hr_vqmodel_id"]
-        self.vq_model_hr = self._load_vq_model(eid)
-
-        if self.opt["compile"]:
-            self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
-            self.vq_model_hr.decode_code = torch.compile(self.vq_model_hr.decode_code, mode="max-autotune-no-cudagraphs")
-
-    # ----------------------------------------
-    # Encoding / decoding / sampling (VQ model always frozen)
-    # ----------------------------------------
-
-    @torch.no_grad()
-    def encode_to_indices(self, x: torch.Tensor, vq_model: torch.nn.Module):
-        """Encode a volume to codes via the frozen VQ encoder and creates VAR train input
-
-        Args:
-            x:        patch (B, C, H, W)
-            vq_model: frozen VARVQVAE2D model
-        Returns:
-            gt_idx_Bl:         TODO
-            gt_BL:             TODO
-            x_BLCv_wo_first_l: TODO
-
-        """
-        gt_idx_Bl, idx_N_list = vq_model.img_to_idxBl(x)
-        gt_BL = torch.cat(gt_idx_Bl[0:len(self.v_patch_nums)], dim=1)
-        x_BLCv_wo_first_l = vq_model.quantize.idxBl_to_var_input(idx_N_list)
-
-        return gt_idx_Bl, gt_BL, x_BLCv_wo_first_l
-
-    @torch.no_grad()
-    def sample_E(self, lr_inp, batch_size = None, top_k=1, top_p=0.75, cfg=6.0, more_smooth=False):
-
-        # Sample
-        var_model = self.get_bare_model(self.netG)
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            f_hat = var_model.autoregressive_infer_cfg(
-                B=batch_size,
-                cfg=cfg,
-                top_k=top_k,
-                top_p=top_p,
-                text_hidden=None,
-                lr_inp=lr_inp,
-                negative_text=None,
-                label_B=None,
-                lr_inp_scale=None,
-                more_smooth=more_smooth,
-                tile_flag=True # forces return of f_hat for decoding
-            )
-
-        E = self.vq_model_hr.fhat_to_img(f_hat)
-        return E
-
-    def init_test(self, experiment_id):
-        self.load(experiment_id, mode='test')
-        self.netG.eval()
-        self.define_metrics()
-        self.define_mixed_precision()
-        self.define_visual_eval()
-
-    def init_train(self):
-        self.load()
-        self.netG.train()
-
-        self.define_loss()
-        self.define_metrics()
-
-        self.define_optimizer()
-        self.load_optimizers()
-
-        self.define_mixed_precision()
-        self.load_gradscalers()
-
-        self.define_scheduler()
-        self.load_schedulers()
-
-        self.define_visual_eval()
-
-    def define_wandb_run(self):
-        self._init_wandb_run(extra_config={"up_factor": self.opt['up_factor']})
-        self.model_artifact_G = wandb.Artifact(
-            "Generator", type=self.opt['model_opt']['netG']['net_type'],
-            description=self.opt['model_opt']['netG']['description'],
-            metadata=OmegaConf.to_container(self.opt['model_opt']['netG'], resolve=True)
-        )
+    def load(self, experiment_id=None, mode='train', from_pretrained_orig=False):
+        eid = self._resolve_eid(experiment_id)
+        if mode == 'train':
+            if self.opt['train_mode'] == 'scratch':
+                return
+            if from_pretrained_orig:                # finetune from official weights
+                self._import_pretrained_orig(eid)
+                return
+            assert eid is not None, f"Pretrained experiment ID required for train_mode='{self.opt['train_mode']}'."
+        else:
+            assert eid is not None, "Experiment ID required for test mode."
+        self.load_G(eid, mode)
 
     def define_loss(self):
         self.build_loss_fn_dict()
@@ -192,30 +220,30 @@ class ModelVARSR(ModelBase):
         self.L_up = F.interpolate(self.L, size=self.H.shape[2:], mode='bicubic', align_corners=False)
 
     def netG_forward(self):
-        self.E = self.netG(self.L)
+        self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0])
 
     def optimize_parameters_amp(self, current_step, update=False):
 
-        B, V = self.H.shape[0], self.vq_model_hr.vocab_size
+        B, V = self.H.shape[0], self.vq_model_hr.vocab_size  # batch size, vocabulary size
 
         # Encode VQ under mixed-precision and no-grad
-        # NOTE: in the reference inplementation they keep full precision during VQ encoding
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            gt_idx_Bl, gt_BL, x_BLCv_wo_first_l = self.encode_to_indices(self.H, self.vq_model_hr)
+        # TODO: Test if full precision during VQ encoding is really necessary
+        gt_idx_Bl, gt_BL, x_BLCv_wo_first_l = self.encode_to_indices(self.H, self.vq_model_hr)
 
         # Forward VARSR
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             logits_BLV, self.diff_loss, out_rgbs, mask_wo_prev_stages = self.netG(
                 x_BLCv_wo_first_l,
-                label_B=None,  # Our datasets do not have labels
+                label_B=self._const_label(B),  # constant label; image-based CFG disabled (see D2)
                 lr_inp=self.L_up,  # Use bicubic upsampled LR image as input to VARSR
                 text_hidden=None,
                 last_layer_gt=gt_idx_Bl[-1],
                 last_layer_gt_discrete=gt_idx_Bl[-2],
                 lr_inp_scale=None,
+                vae_quant_proxy=(self.vq_model_hr.quantize,)
             )
-            gt_BL = torch.cat((gt_BL[:, :-self.get_bare_model(self.netG).last_level_pns], gt_BL[:, -self.get_bare_model(self.netG).last_level_pns:][mask_wo_prev_stages].view(B, -1)), dim=1)
-            logits_loss = F.cross_entropy(logits_BLV.contiguous().view(-1, V), gt_BL.view(-1)).view(B, -1)
+            gt_BL = torch.cat((gt_BL[:, :-self.netG_wo_ddp.last_level_pns], gt_BL[:, -self.netG_wo_ddp.last_level_pns:][mask_wo_prev_stages].view(B, -1)), dim=1)
+            logits_loss = F.cross_entropy(logits_BLV.contiguous().view(-1, V), gt_BL.view(-1), reduction='none').view(B, -1)
             self.logits_loss = logits_loss.mean(dim=-1).mean()
             self.gen_loss = (self.logits_loss + self.diff_loss * 2.0) / self.num_accum_steps_G
 
@@ -276,21 +304,21 @@ class ModelVARSR(ModelBase):
         B, V = self.H.shape[0], self.vq_model_hr.vocab_size
 
         # Encode VQ under mixed-precision and no-grad
-        # NOTE: in the reference inplementation they keep full precision during VQ encoding
         gt_idx_Bl, gt_BL, x_BLCv_wo_first_l = self.encode_to_indices(self.H, self.vq_model_hr)
 
         # Forward VARSR
         logits_BLV, self.diff_loss, out_rgbs, mask_wo_prev_stages = self.netG(
             x_BLCv_wo_first_l,
-            label_B=None,  # Our datasets do not have labels
+            label_B=self._const_label(B),  # constant label; image-based CFG disabled (see D2)
             lr_inp=self.L_up,  # Use bicubic upsampled LR image as input to VARSR
             text_hidden=None,
             last_layer_gt=gt_idx_Bl[-1],
             last_layer_gt_discrete=gt_idx_Bl[-2],
             lr_inp_scale=None,
+            vae_quant_proxy=(self.vq_model_hr.quantize,)
         )
-        gt_BL = torch.cat((gt_BL[:, : -self.get_bare_model(self.netG).last_level_pns], gt_BL[:, -self.get_bare_model(self.netG).last_level_pns :][mask_wo_prev_stages].view(B, -1)), dim=1)
-        logits_loss = F.cross_entropy(logits_BLV.contiguous().view(-1, V), gt_BL.view(-1)).view(B, -1)
+        gt_BL = torch.cat((gt_BL[:, : -self.netG_wo_ddp.last_level_pns], gt_BL[:, -self.netG_wo_ddp.last_level_pns :][mask_wo_prev_stages].view(B, -1)), dim=1)
+        logits_loss = F.cross_entropy(logits_BLV.contiguous().view(-1, V), gt_BL.view(-1), reduction='none').view(B, -1)
         self.logits_loss = logits_loss.mean(dim=-1).mean()
         self.gen_loss = (self.logits_loss + self.diff_loss * 2.0) / self.num_accum_steps_G
 
@@ -307,23 +335,23 @@ class ModelVARSR(ModelBase):
         B, V = self.H.shape[0], self.vq_model_hr.vocab_size
 
         # Encode VQ under mixed-precision and no-grad
-        # NOTE: in the reference inplementation they keep full precision during VQ encoding
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            gt_idx_Bl, gt_BL, x_BLCv_wo_first_l = self.encode_to_indices(self.H, self.vq_model_hr)
+        # TODO: Test if full precision during VQ encoding is really necessary
+        gt_idx_Bl, gt_BL, x_BLCv_wo_first_l = self.encode_to_indices(self.H, self.vq_model_hr)
 
         # Forward VARSR
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             logits_BLV, self.diff_loss, out_rgbs, mask_wo_prev_stages = self.netG(
                 x_BLCv_wo_first_l,
-                label_B=None,  # Our datasets do not have labels
+                label_B=self._const_label(B),  # constant label; image-based CFG disabled (see D2)
                 lr_inp=self.L_up,  # Use bicubic upsampled LR image as input to VARSR
                 text_hidden=None,
                 last_layer_gt=gt_idx_Bl[-1],
                 last_layer_gt_discrete=gt_idx_Bl[-2],
                 lr_inp_scale=None,
+                vae_quant_proxy=(self.vq_model_hr.quantize,)
             )
-            gt_BL = torch.cat((gt_BL[:, :-self.get_bare_model(self.netG).last_level_pns], gt_BL[:, -self.get_bare_model(self.netG).last_level_pns:][mask_wo_prev_stages].view(B, -1)), dim=1)
-            logits_loss = F.cross_entropy(logits_BLV.contiguous().view(-1, V), gt_BL.view(-1)).view(B, -1)
+            gt_BL = torch.cat((gt_BL[:, :-self.netG_wo_ddp.last_level_pns], gt_BL[:, -self.netG_wo_ddp.last_level_pns:][mask_wo_prev_stages].view(B, -1)), dim=1)
+            logits_loss = F.cross_entropy(logits_BLV.contiguous().view(-1, V), gt_BL.view(-1), reduction='none').view(B, -1)
             self.logits_loss = logits_loss.mean(dim=-1).mean()
             self.gen_loss = (self.logits_loss + self.diff_loss * 2.0) / self.num_accum_steps_G
 

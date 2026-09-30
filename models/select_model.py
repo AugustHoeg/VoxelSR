@@ -55,6 +55,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'osediff':
         from models.model_osediff import ModelOSEDiff as M
 
+    elif model == 'varsr':
+        from models.model_varsr import ModelVARSR as M
+
     elif model == 'aesop':
         from models.model_aesop import ModelAESOP as M
 

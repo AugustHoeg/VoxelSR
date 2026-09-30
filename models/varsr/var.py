@@ -7,14 +7,19 @@ import torch.nn as nn
 from huggingface_hub import PyTorchModelHubMixin
 import numpy as np
 from torch.nn import functional as F
-import dist
-from models.basic_var import AdaLNBeforeHead
-from models.basic_var import AdaLNSelfAttn_RoPE, precompute_freqs_cis, precompute_freqs_cis_cross, precompute_freqs_cis_zeros
-from models.helpers import gumbel_softmax_with_rng, sample_with_top_k_top_p_
-from models.vqvae import VQVAE, VectorQuantizer2
-from models.diffusion.diffloss import DiffLoss
+
+from models.varsr.basic_var import AdaLNBeforeHead
+from models.varsr.basic_var import AdaLNSelfAttn_RoPE, precompute_freqs_cis, precompute_freqs_cis_cross, precompute_freqs_cis_zeros
+from models.varsr.helpers import gumbel_softmax_with_rng, sample_with_top_k_top_p_
+from models.varsr.vqvae import VQVAE, VectorQuantizer2
+from models.varsr.diffusion.diffloss import DiffLoss
 import scipy.stats as stats
 import torch.utils.checkpoint as checkpoint
+
+def _get_device():
+    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
 def zero_module(module):
     for p in module.parameters():
         nn.init.zeros_(p)
@@ -81,7 +86,7 @@ class ControlNetConditioningEmbedding(nn.Module):
 
 class VAR_RoPE(nn.Module):
     def __init__(
-        self, vae_local: VQVAE,
+        self, vocab_size=4096, z_channels=32,
         num_classes=1000, depth=16, controlnet_depth=6, embed_dim=1024, num_heads=16, mlp_ratio=4., drop_rate=0., attn_drop_rate=0., drop_path_rate=0.,
         norm_eps=1e-6, shared_aln=False, cond_drop_rate=0.1,
         attn_l2_norm=False,
@@ -91,7 +96,7 @@ class VAR_RoPE(nn.Module):
         super().__init__()
         # 0. hyperparameters
         assert embed_dim % num_heads == 0
-        self.Cvae, self.V = vae_local.Cvae, vae_local.vocab_size
+        self.Cvae, self.V = z_channels, vocab_size
         self.depth, self.C, self.D, self.num_heads = depth, embed_dim, embed_dim, num_heads
         
         self.cond_drop_rate = cond_drop_rate
@@ -113,7 +118,7 @@ class VAR_RoPE(nn.Module):
         self.last_level_pns = self.patch_nums[-1] ** 2
         
         self.num_stages_minus_1 = len(self.patch_nums) - 1
-        self.rng = torch.Generator(device=dist.get_device())
+        self.rng = torch.Generator(device=_get_device())
         mask_ratio_min = 0.5
         self.mask_ratio_generator = stats.truncnorm(
             (mask_ratio_min - 1.0) / 0.25, 0, loc=1.0, scale=0.25
@@ -121,9 +126,9 @@ class VAR_RoPE(nn.Module):
 
         
         # 1. input (word) embedding
-        quant: VectorQuantizer2 = vae_local.quantize
-        self.vae_proxy: Tuple[VQVAE] = (vae_local,)
-        self.vae_quant_proxy: Tuple[VectorQuantizer2] = (quant,)
+        # quant: VectorQuantizer2 = vae_local.quantize
+        # self.vae_proxy: Tuple[VQVAE] = (vae_local,)  // added as argument
+        # self.vae_quant_proxy: Tuple[VectorQuantizer2] = (quant,) // added as argument
         self.con_embedding = ControlNetConditioningEmbedding(self.C, 3, (32, 128, 256, 512, 1536) , return_rgbs=False)
         self.word_embed = nn.Linear(self.Cvae, self.C)
         
@@ -132,7 +137,7 @@ class VAR_RoPE(nn.Module):
         init_std = math.sqrt(1 / self.C / 3)
         self.num_classes = num_classes
         norm_layer = partial(nn.LayerNorm, eps=norm_eps)     
-        self.uniform_prob = torch.full((1, num_classes), fill_value=1.0 / num_classes, dtype=torch.float32, device=dist.get_device())
+        self.uniform_prob = torch.full((1, num_classes), fill_value=1.0 / num_classes, dtype=torch.float32, device=_get_device())
         if self.label_B_flag:
             self.class_emb = nn.Embedding(self.num_classes, self.C)
             nn.init.trunc_normal_(self.class_emb.weight.data, mean=0, std=init_std)
@@ -261,7 +266,7 @@ class VAR_RoPE(nn.Module):
     def autoregressive_infer_cfg(
         self, B: int, text_hidden, lr_inp, negative_text, label_B,
         g_seed: Optional[int] = None, cfg=1.5, top_k=0, top_p=0.0, 
-        more_smooth=False, lr_inp_scale=None, tile_flag=False,
+        more_smooth=False, lr_inp_scale=None, tile_flag=False, vae_proxy=None, vae_quant_proxy=None
     ) -> torch.Tensor:   # returns reconstructed image (B, 3, H, W) in [0, 1]
         """
         only used for inference, on autoregressive mode
@@ -292,7 +297,7 @@ class VAR_RoPE(nn.Module):
         
         cur_L = 0
         f_hat = sos.new_zeros(B, self.Cvae, self.patch_nums[-1], self.patch_nums[-1])
-        self.freqs_cis = self.freqs_cis.to(dist.get_device())
+        self.freqs_cis = self.freqs_cis.to(_get_device())
         
         cur_Lr = 1
         if lr_inp_scale is not None:
@@ -325,13 +330,13 @@ class VAR_RoPE(nn.Module):
             
             idx_Bl = sample_with_top_k_top_p_(logits_BlV, rng=rng, top_k=top_k, top_p=top_p, num_samples=1)[:, :, 0]
             if not more_smooth: # this is the default case
-                h_BChw = self.vae_quant_proxy[0].embedding(idx_Bl)   # B, l, Cvae
+                h_BChw = vae_quant_proxy[0].embedding(idx_Bl)   # B, l, Cvae
             else:   # not used when evaluating FID/IS/Precision/Recall
                 gum_t = max(0.27 * (1 - ratio * 0.95), 0.005)   # refer to mask-git
                 h_BChw = gumbel_softmax_with_rng(logits_BlV.mul(1 + ratio), tau=gum_t, hard=False, dim=-1, rng=rng) @ self.vae_quant_proxy[0].embedding.weight.unsqueeze(0)
             
             h_BChw = h_BChw.transpose_(1, 2).reshape(B, self.Cvae, pn, pn)
-            f_hat, next_token_map = self.vae_quant_proxy[0].get_next_autoregressive_input(si, len(self.patch_nums), f_hat, h_BChw)
+            f_hat, next_token_map = vae_quant_proxy[0].get_next_autoregressive_input(si, len(self.patch_nums), f_hat, h_BChw)
             if si != self.num_stages_minus_1:   # prepare for next stage
                 next_token_map = next_token_map.view(B, self.Cvae, -1).transpose(1, 2)
                 next_token_map = self.word_embed(next_token_map) + lvl_pos[:, cur_L:cur_L + self.patch_nums[si+1] ** 2]
@@ -345,7 +350,7 @@ class VAR_RoPE(nn.Module):
 
         final_stage = 0
         if final_stage == 0:  
-            last_stage_discrete_cond = self.vae_quant_proxy[0].embedding(idx_Bl)
+            last_stage_discrete_cond = vae_quant_proxy[0].embedding(idx_Bl)
             last_stage_discrete_cond = self.word_embed(last_stage_discrete_cond)
             last_stage_discrete_cond = torch.cat([last_stage_discrete_cond, last_stage_discrete_cond], dim=0)
             last_stage_cond = self.decoder_norm(last_layer_cond + last_stage_discrete_cond)
@@ -364,12 +369,12 @@ class VAR_RoPE(nn.Module):
         if tile_flag:
             return f_hat
         else:
-            return self.vae_proxy[0].fhat_to_img(f_hat).add_(1).mul_(0.5)   # de-normalize, from [-1, 1] to [0, 1]
+            return vae_proxy[0].fhat_to_img(f_hat).add_(1).mul_(0.5)   # de-normalize, from [-1, 1] to [0, 1]
 
     def forward(self, x_BLCv_wo_first_l: torch.Tensor, label_B, lr_inp, text_hidden,
         last_layer_gt: torch.Tensor = None,
         last_layer_gt_discrete: torch.Tensor = None,
-        lr_inp_scale = None,
+        lr_inp_scale = None, vae_quant_proxy=None,
     ) -> torch.Tensor:  # returns logits_BLV
         bg, ed = (
             self.begin_ends[self.prog_si]
@@ -446,7 +451,7 @@ class VAR_RoPE(nn.Module):
             except:
                 idx_BL_sampled = last_layer_gt_discrete
         
-        last_stage_discrete_embed = self.vae_quant_proxy[0].embedding(idx_BL_sampled)
+        last_stage_discrete_embed = vae_quant_proxy[0].embedding(idx_BL_sampled)
         last_stage_discrete_cond = self.word_embed(last_stage_discrete_embed)
         last_layer_cond = self.decoder_norm(last_layer_cond + last_stage_discrete_cond)
 
@@ -565,7 +570,7 @@ class ImgVAR_RoPE(nn.Module):
         self.last_level_pns = self.patch_nums[-1] ** 2
         
         self.num_stages_minus_1 = len(self.patch_nums) - 1
-        self.rng = torch.Generator(device=dist.get_device())
+        self.rng = torch.Generator(device=_get_device())
         
         # 1. input (word) embedding
         quant: VectorQuantizer2 = vae_local.quantize
@@ -578,7 +583,7 @@ class ImgVAR_RoPE(nn.Module):
         init_std = math.sqrt(1 / self.C / 3)
         self.num_classes = num_classes
         norm_layer = partial(nn.LayerNorm, eps=norm_eps)     
-        self.uniform_prob = torch.full((1, num_classes), fill_value=1.0 / num_classes, dtype=torch.float32, device=dist.get_device())
+        self.uniform_prob = torch.full((1, num_classes), fill_value=1.0 / num_classes, dtype=torch.float32, device=_get_device())
         if self.label_B_flag:
             self.class_emb = nn.Embedding(self.num_classes + 1, self.C)
             nn.init.trunc_normal_(self.class_emb.weight.data, mean=0, std=init_std)
@@ -704,7 +709,7 @@ class ImgVAR_RoPE(nn.Module):
         
         cur_L = 0
         f_hat = sos.new_zeros(B, self.Cvae, self.patch_nums[-1], self.patch_nums[-1])
-        self.freqs_cis = self.freqs_cis.to(dist.get_device())
+        self.freqs_cis = self.freqs_cis.to(_get_device())
         
         for b in self.blocks: 
             b.attn.kv_caching(True)
