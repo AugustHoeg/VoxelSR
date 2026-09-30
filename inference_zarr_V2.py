@@ -215,7 +215,7 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    experiment_id = "mDCSRN_MRI_4x_VoDaSuRe_OME_ID004200"
+    # experiment_id = "mDCSRN_MRI_4x_VoDaSuRe_OME_ID004200"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
@@ -251,8 +251,8 @@ def main(opt: DictConfig):
     model.init_test(experiment_id)
 
     # Metrics to calculate
-    metric_names = ["psnr", "ssim", "lpips", "fid", "frc"]
-    # metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe", "frc"]
+    # metric_names = ["psnr", "ssim", "lpips", "fid", "frc"]
+    metric_names = ["psnr", "ssim", "lpips", "fid", "maniqa", "clipiqa", "musiq", "dists", "niqe", "frc"]
     print("Evaluating metrics:", metric_names)
 
     mask_zero_slices = False
