@@ -1,0 +1,106 @@
+defaults:
+  - train_opt: train_VoDaSuRe          # Default training config
+  - dataset_opt: VoDaSuRe_OME          # Default dataset config
+  - model_opt: VARSR_d24                  # Default model config
+  - _self_  # Ensure compliance with Hydra 1.1
+
+# Main configuration
+task: superresolution
+input_type: 2D # Input type, 2D or 3D
+up_factor: 4  # upscaling factor
+vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
+
+# Profile & Compile
+run_profile: false
+compile: true # Enable PyTorch 2.0 compilation
+compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
+
+# WandB parameters
+wandb_mode: online  # remember to set to "online" for actual training runs
+wandb_entity: null
+wandb_project: ${dataset_opt.name}_V2_REG_${up_factor}x # <--- change project
+experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_V2_ID000000
+run_name: ${model_opt.model_architecture}_000
+note: Note
+
+# GPU configuration
+train_mode: "finetune"   # "scratch", "finetune" or "resume"
+gpu_ids: [0]
+dist: false
+cluster: DTU_HPC # DTU_HPC or TITANS
+
+save_model: true  # flag to save model
+save_time: 60  # Backup save of model after 35 hours
+
+path:
+  root: superresolution
+  pretrained_experiment_id: varsr_pretrain  #  Folder containing pretrained weights for VAR/VARSR model
+  from_pretrained_orig: true  # whether to load pretrained weights from VAR or VARSR
+  pretrained_orig_filename: var_d24  # filename of the pretrained model to load (without extension)
+  pretrained_netE: null
+
+  pretrained_hr_vqmodel_id: VARVQVAE2D_VoDaSuRe2_256_VoDaSuRe_OME_ID000115  # experiment ID of pretrained VQ model
+
+# Overwrite default training parameters
+train_opt:
+  iterations: 100000
+  validation_iterations: 50
+  checkpoint_test: 2500
+  checkpoint_save: 20000
+  checkpoint_print: 2500
+  checkpoint_save_visuals: 2500
+  num_accum_steps_G: 1
+
+  # Now matches VARSR papers hyperparameters
+  G_optimizer_type: adamw
+  G_optimizer_lr: 5e-5  # base lr
+  G_optimizer_wd: 0.05
+  G_optimizer_clipgrad: 2
+  G_optimizer_betas: [0.9, 0.95]
+  G_warmup_steps: 1000
+
+  # disable recon loss weights, VARSR is trained with CE loss only
+  G_loss_weights:
+    L1: 0
+    LPIPS: 0
+
+  manual_seed: 8800 # 8400
+
+# Overwrite default dataset parameters
+dataset_opt:
+  synthetic: true
+  patch_size: 64 # --> patch_size_hr = 256
+
+  load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
+
+  datasets: [VoDaSuRe2]
+
+  # VAR VQ inputs are normalized to [-1, 1]
+  norm_type: znormalization  # scale_intensity
+  expand_channels_rgb: true  # Expand single-channel images to 3 channels for ResShift2D
+
+  train_dataloader_params:
+    dataloader_batch_size: 4  # VARSR uses batch size 4 per GPU
+    num_load_workers: 16
+    persist_workers: true
+    pin_memory: false
+
+  test_dataloader_params:
+    dataloader_batch_size: 2
+    num_load_workers: 2
+    persist_workers: true
+    pin_memory: false
+
+# Hydra configuration
+hydra:
+  run:
+    dir: .  # Prevents Hydra from changing the working directory
+  job:
+    chdir: False  # Prevents changing working directory
+  output_subdir: null  # Prevents automatic output directory creation
+  sweep:
+    dir: .  # Keeps sweep results in the current directory
+  job_logging:
+    disable_existing_loggers: False  # Allows you to control logging manually
+
+#config_path: ${hydra:runtime.config_sources}
