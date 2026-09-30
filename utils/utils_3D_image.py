@@ -17,7 +17,7 @@ from pyiqa.archs.inception import InceptionV3
 from pyiqa.archs.fid_arch import frechet_distance as frechet_distance
 
 from utils.fourier_ring_correlation import fourier_ring_correlation as frc
-from utils.fourier_ring_correlation import get_radial_masks_2d
+from utils.fourier_ring_correlation import get_radial_bins_2d
 from utils.utils_zarr import write_ome_pyramid
 
 # from numcodecs import Blosc
@@ -111,7 +111,7 @@ class SliceMetrics3D():
             metric_vals[metric_name] = []
             if metric_name == "frc":
                 size = (vol_ref.shape[1], vol_ref.shape[2])  # H, W
-                self.rings, self.freq = get_radial_masks_2d(size, delta=1, device=self.device)  # precompute per volume
+                self.ring_idx, self.freq, self.n_rings = get_radial_bins_2d(size, device=self.device)  # precompute per volume
 
         num_slices = vol_ref.shape[self.slice_dim]
         for slice_idx in range(num_slices):
@@ -135,7 +135,7 @@ class SliceMetrics3D():
                     self.src_feats.append(self.get_fid_feats(slice_src))
                     self.ref_feats.append(self.get_fid_feats(slice_ref))
                 elif metric_name == "frc":  # Parse rings and freq to fourier ring correlation
-                    frc_curve, frc_freq, frc_integral = frc(slice_src, slice_ref, self.rings, self.freq, drop_DC=False)
+                    frc_curve, frc_freq, frc_integral = frc(slice_src, slice_ref, self.ring_idx, self.freq, self.n_rings, drop_DC=False)
                     metric_vals[metric_name].append(frc_integral.cpu().numpy())
                 else:  # Other metrics work fine on grayscale
                     metric = self.metric_funcs[metric_name](slice_src, slice_ref).cpu().numpy()

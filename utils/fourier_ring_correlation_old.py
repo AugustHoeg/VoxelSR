@@ -365,21 +365,12 @@ def get_shell_masks_3d(
     return shells, spatial_freq
 
 
-def fourier_ring_correlation(image1, image2, ring_idx, spatial_freq, n_rings, drop_DC=True, remove_negative=False, alpha=None):
+def fourier_ring_correlation(image1, image2, ring_masks, spatial_freq, drop_DC=True, remove_negative=False, alpha=None):
     """
-    Memory-efficient 2D Fourier Ring Correlation for computing FRC on 2D SR slices.
-
-    Rather than materializing a stack of R ring masks and multiplying it against the
-    FFT (which costs O(R*H*W) memory and OOMs for large slices, e.g. 1920x1920 needs
-    ~26 GB), pixels are binned by radius with an index_add reduction (O(H*W) memory).
-    Mathematically equivalent to the mask-based frcCVPR formulation.
-
+    2D analogue of fourier_shell_correlation, for computing FRC on 2D SR slices.
     image1, image2: (B, C, H, W)
-    ring_idx:       (H*W,) long, ring index per pixel (fftshifted layout), from get_radial_bins_2d.
+    ring_masks:     (R, 1, 1, H, W)
     spatial_freq:   (R, 1)
-    n_rings:        int, number of rings R. Pixels beyond the Nyquist radius are binned
-                    into a dump bin (index n_rings) that is dropped here.
-
     From paper: Image quality measurements and denoising using Fourier Ring Correlations
     Github: https://github.com/frcCVPR/frc-loss/blob/master/models.py#L106
 
@@ -389,8 +380,6 @@ def fourier_ring_correlation(image1, image2, ring_idx, spatial_freq, n_rings, dr
              integral:     frequency-integrated FRC scalar per batch item, shape (B,) (or scalar if B == 1).
              R' = R, or R - 1 when drop_DC is True.
     """
-    B, C = image1.shape[0], image1.shape[1]
-    ring_idx = ring_idx.to(image1.device)
 
     # Subtract mean (optional, but can improve stability)
     image1 = image1 - image1.mean(dim=(-2, -1), keepdim=True)
@@ -398,6 +387,7 @@ def fourier_ring_correlation(image1, image2, ring_idx, spatial_freq, n_rings, dr
 
     image1 = image1.to(torch.complex64)
     image2 = image2.to(torch.complex64)
+    ring_masks = ring_masks.to(torch.complex64)
 
     # 2D FFT + shift
     fft_img1 = torch.fft.fftshift(
@@ -409,25 +399,22 @@ def fourier_ring_correlation(image1, image2, ring_idx, spatial_freq, n_rings, dr
         dim=(-2, -1)
     )
 
-    # Per-pixel FRC terms, flattened over the spatial dims -> (B, C, H*W)
-    num = torch.real(fft_img1 * torch.conj(fft_img2)).reshape(B, C, -1)  # numerator
-    p1 = (torch.abs(fft_img1) ** 2).reshape(B, C, -1)                    # |F1|^2
-    p2 = (torch.abs(fft_img2) ** 2).reshape(B, C, -1)                    # |F2|^2
+    # Apply ring masks
+    t1 = fft_img1.unsqueeze(0) * ring_masks
+    t2 = fft_img2.unsqueeze(0) * ring_masks
+    # (R, B, C, H, W)
 
-    # Sum each term per ring via index_add (dump bin at index n_rings for out-of-Nyquist pixels)
-    n_bins = n_rings + 1
-    c1 = torch.zeros(B, C, n_bins, device=num.device, dtype=num.dtype).index_add_(2, ring_idx, num)
-    c2 = torch.zeros(B, C, n_bins, device=p1.device, dtype=p1.dtype).index_add_(2, ring_idx, p1)
-    c3 = torch.zeros(B, C, n_bins, device=p2.device, dtype=p2.dtype).index_add_(2, ring_idx, p2)
+    # FRC numerator
+    c1 = torch.real(
+        torch.sum(t1 * torch.conj(t2), dim=(2, 3, 4))
+    )
 
-    # Drop the dump bin and sum over channels -> (B, R)
-    c1 = c1[:, :, :n_rings].sum(dim=1)
-    c2 = c2[:, :, :n_rings].sum(dim=1)
-    c3 = c3[:, :, :n_rings].sum(dim=1)
+    # FRC denominator
+    c2 = torch.sum(torch.abs(t1) ** 2, dim=(2, 3, 4))
+    c3 = torch.sum(torch.abs(t2) ** 2, dim=(2, 3, 4))
 
     frc = c1 / torch.sqrt(c2 * c3 + 1e-12)
     frc = torch.nan_to_num(frc, nan=0.0, posinf=0.0, neginf=0.0)
-    frc = frc.transpose(0, 1).contiguous()   # (R, B) to match the integration below
 
     # Remove negative values corresponding to anti-correlation to ensure frc is in the range [0, 1]
     if remove_negative:
@@ -457,40 +444,45 @@ def fourier_ring_correlation(image1, image2, ring_idx, spatial_freq, n_rings, dr
     return frc, spatial_freq, integral
 
 
-def get_radial_bins_2d(
+def radial_mask(r, cx, cy, sx, sy, delta=1):
+    dist2 = (
+        (sx[np.newaxis, :] - cx) ** 2 +
+        (sy[:, np.newaxis] - cy) ** 2
+    )
+
+    outer = dist2 <= (r + delta) ** 2
+    inner = dist2 > r ** 2
+    return outer & inner
+
+
+def get_radial_masks_2d(
     size=(256, 256),
+    delta=1,
     device="cpu"
 ):
-    """
-    Compact radial binning for the memory-efficient fourier_ring_correlation.
-
-    Replaces the O(R*H*W) ring-mask stack with a single per-pixel ring-index map
-    (O(H*W) memory), which is what makes FRC feasible on large slices.
-
-    :return: (ring_idx, spatial_freq, n_rings)
-             ring_idx:     (H*W,) long, ring index per pixel in fftshifted layout. Pixels
-                           beyond the Nyquist radius map to a dump bin (index n_rings).
-             spatial_freq: (R, 1) normalized spatial frequency in [0, 1].
-             n_rings:      int, number of rings R (= Nyquist radius).
-    """
     H, W = size
     cy, cx = H // 2, W // 2
+
     freq_nyq = min(H, W) // 2
-    n_rings = freq_nyq
+    radii = np.arange(freq_nyq)
 
-    y = torch.arange(H, device=device) - cy
-    x = torch.arange(W, device=device) - cx
-    yy, xx = torch.meshgrid(y, x, indexing='ij')
+    sy = np.arange(H)
+    sx = np.arange(W)
 
-    r = torch.ceil(torch.sqrt(xx.float() ** 2 + yy.float() ** 2)).long() - 1  # (H, W)
-    r = torch.where((r >= 0) & (r < n_rings), r, torch.full_like(r, n_rings))
-    ring_idx = r.reshape(-1)   # (H*W,)
+    rings = np.stack([
+        radial_mask(r, cx, cy, sx, sy, delta)
+        for r in radii
+    ], axis=0)
 
-    spatial_freq = torch.arange(n_rings, device=device, dtype=torch.float32) / freq_nyq
+    # (R, 1, 1, H, W)
+    rings = torch.from_numpy(rings).float()
+    rings = rings.unsqueeze(1).unsqueeze(1).to(device)
+
+    spatial_freq = radii.astype(np.float32) / freq_nyq
     spatial_freq = spatial_freq / spatial_freq.max()
-    spatial_freq = spatial_freq.unsqueeze(1)   # (R, 1)
+    spatial_freq = torch.from_numpy(spatial_freq).unsqueeze(1).to(device)
 
-    return ring_idx, spatial_freq, n_rings
+    return rings, spatial_freq
 
 
 def radial_power_spectrum_2d(image, apply_window=True):
@@ -616,8 +608,8 @@ if __name__ == "__main__":
     # Test 2D FRC from frcCVPR on a central slice of the volumes
     img_batch1 = vol1[:, :, 64, :, :]  # (B, C, H, W)
     img_batch2 = vol2[:, :, 64, :, :]
-    ring_idx, freq2d, n_rings = get_radial_bins_2d(size=(128, 128), device="cuda")
-    frc_curve, frc_freq, frc_integral = fourier_ring_correlation(img_batch1, img_batch2, ring_idx, freq2d, n_rings)
+    rings, freq2d = get_radial_masks_2d(size=(128, 128), delta=1, device="cuda")
+    frc_curve, frc_freq, frc_integral = fourier_ring_correlation(img_batch1, img_batch2, rings, freq2d)
     print("FRC curve shape:", frc_curve.shape, "| FRC integral:", frc_integral)
 
 
