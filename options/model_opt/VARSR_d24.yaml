@@ -6,7 +6,7 @@ netG:
   net_type: VARSR
   description: "VARSR"
   in_channels: 3                 # grayscale; set 3 only for loading pretrained weights from 3-channel model
-  vocab_size: 4096           # codebook size V (VARSR: 4096)
+  vocab_size: 4096               # codebook size V (VARSR: 4096)
   z_channels: 32                 # latent / codebook vector dim Cvae (VARSR: 32)
 
   depth: 24                      # number of transformer blocks (VARSR: 24)
@@ -32,8 +32,6 @@ netG:
 
   v_patch_nums: [1, 2, 3, 4, 5, 6, 8, 10, 13, 16]
   control_patch_nums: [1, 2, 3, 4, 5, 6, 8, 10, 13, 16]
-
-  label_B_flag: false  # disable label_B for VARSR; only used for 2D datasets
 
   init_type: default             # encoder/decoder self-initialize; keep 'default'
   init_bn_type: uniform

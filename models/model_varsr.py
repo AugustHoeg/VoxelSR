@@ -88,7 +88,7 @@ class ModelVARSR(ModelBase):
         return gt_idx_Bl, gt_BL, x_BLCv_wo_first_l
 
     def _const_label(self, batch_size):
-        """Constant class label for VARSR's class token."""
+        """Constant zero-class label for VARSR's class token."""
         return torch.zeros(batch_size, dtype=torch.long, device=self.device)
 
     @torch.no_grad()
