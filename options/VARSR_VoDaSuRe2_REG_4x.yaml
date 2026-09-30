@@ -53,7 +53,7 @@ train_opt:
 
   # Now matches VARSR papers hyperparameters
   G_optimizer_type: adamw
-  G_optimizer_lr: 5e-5  # base lr
+  G_optimizer_lr: 5e-5  # VARSR base lr: 5e-5
   G_optimizer_wd: 0.05
   G_optimizer_clipgrad: 2
   G_optimizer_betas: [0.9, 0.95]
@@ -80,7 +80,7 @@ dataset_opt:
   expand_channels_rgb: true  # Expand single-channel images to 3 channels for ResShift2D
 
   train_dataloader_params:
-    dataloader_batch_size: 4  # VARSR uses batch size 4 per GPU
+    dataloader_batch_size: 8  # VARSR uses batch size 4 per GPU
     num_load_workers: 16
     persist_workers: true
     pin_memory: false

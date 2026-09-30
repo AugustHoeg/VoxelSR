@@ -39,7 +39,7 @@ path:
   pretrained_orig_filename: var_d24  # filename of the pretrained model to load (without extension)
   pretrained_netE: null
 
-  pretrained_hr_vqmodel_id: VARVQVAE2D_VoDaSuRe2_256_VoDaSuRe_OME_ID000200  # experiment ID of pretrained VQ model
+  pretrained_hr_vqmodel_id: VARVQVAE2D_VoDaSuRe2_256_2x_VoDaSuRe_OME_ID000200  # experiment ID of pretrained VQ model
 
 # Overwrite default training parameters
 train_opt:
@@ -53,7 +53,7 @@ train_opt:
 
   # Now matches VARSR papers hyperparameters
   G_optimizer_type: adamw
-  G_optimizer_lr: 5e-5  # base lr
+  G_optimizer_lr: 5e-5  # VARSR base lr: 5e-5
   G_optimizer_wd: 0.05
   G_optimizer_clipgrad: 2
   G_optimizer_betas: [0.9, 0.95]
@@ -69,7 +69,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 64 # --> patch_size_hr = 256
+  patch_size: 128 # --> patch_size_hr = 256
 
   load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
 
