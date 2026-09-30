@@ -246,6 +246,9 @@ def main(opt: DictConfig):
     inference_mode = 'in_memory'  # 'zarr' or 'in_memory'
     print(f"Running inference with mode: {inference_mode}")
 
+    # Disable torch.compile
+    opt['compile'] = False
+
     from models.select_model import define_Model
     model = define_Model(opt, mode='test', data_parallel=False)  # currently supports only 1 GPU
     model.init_test(experiment_id)
@@ -297,7 +300,7 @@ def main(opt: DictConfig):
     if not os.path.exists(image_path + "full_slice_comparisons/"):
         os.makedirs(image_path + "full_slice_comparisons/")
 
-    batch_size = 2 # opt.dataset_opt.train_dataloader_params.dataloader_batch_size
+    batch_size = opt.dataset_opt.train_dataloader_params.dataloader_batch_size
     if opt['input_type'] == '2D' and batch_size > 1:
         batch_size = 1  # Force batch size of 1 for 2D models
 
