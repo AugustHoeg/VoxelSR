@@ -18,7 +18,7 @@ class ModelVARSR(ModelBase):
         super(ModelVARSR, self).__init__(opt)
         self.last_iteration = 0
         self.netG_wo_ddp = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG_wo_ddp, data_parallel=data_parallel)
+        self.netG = self.model_to_device(self.netG_wo_ddp, data_parallel=data_parallel, allow_compile=False)
 
         if self.opt_train['E_decay'] > 0:
             self.netE = self.init_netE(opt)
