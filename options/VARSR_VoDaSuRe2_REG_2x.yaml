@@ -68,7 +68,7 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: true
+  synthetic: false
   patch_size: 128 # --> patch_size_hr = 256
 
   load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
@@ -80,14 +80,14 @@ dataset_opt:
   expand_channels_rgb: true  # Expand single-channel images to 3 channels for ResShift2D
 
   train_dataloader_params:
-    dataloader_batch_size: 8  # VARSR uses batch size 4 per GPU
-    num_load_workers: 16
+    dataloader_batch_size: 16  # VARSR uses batch size 4 per GPU
+    num_load_workers: 32
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 2
-    num_load_workers: 2
+    dataloader_batch_size: 4
+    num_load_workers: 4
     persist_workers: true
     pin_memory: false
 
