@@ -146,14 +146,6 @@ class BSQ3D(nn.Module):
         self.gamma0 = gamma0
         self.zeta = zeta
         self.return_loss_breakdown = return_loss_breakdown
-        # 2**L overflows int64 past 62 bits; only then materialize integer indices
-        self.can_make_indices = codebook_bits <= 62
-        if self.can_make_indices:
-            self.register_buffer(
-                "_bit_weights",
-                (2 ** torch.arange(codebook_bits, dtype=torch.long)),
-                persistent=False,
-            )
 
     def quantize(self, z: torch.Tensor) -> torch.Tensor:
         # reference keeps quantize unscaled (zhat in {-1, +1}); q_scale is applied
@@ -195,6 +187,7 @@ class BSQ3D(nn.Module):
         # Force F32 precision
         z = z.float()
 
+        indices = None  # BitVAE leaves indices = None presumably due to overflow at 64 bits
         with torch.amp.autocast('cuda', enabled=False):
 
             # binarize with straight-through estimator, then scale onto unit sphere
@@ -215,11 +208,6 @@ class BSQ3D(nn.Module):
             aux_loss = (commit_loss * self.commitment_loss_weight
                         + (self.zeta * entropy_penalty / self.inv_temperature) * self.entropy_loss_weight)
 
-            # --- discrete outputs ---
-            indices = None
-            if self.can_make_indices:
-                indices = (bit_indices.long() * self._bit_weights).sum(dim=-1)  # (B,D,H,W)
-
             quantized = code.permute(0, 4, 1, 2, 3).contiguous()      # (B, L, D, H, W)
 
             if self.return_loss_breakdown:
@@ -227,6 +215,7 @@ class BSQ3D(nn.Module):
                              codebook_entropy.detach(),
                              commit_loss.detach())
                 return quantized, indices, bit_indices, aux_loss, breakdown
+
             return quantized, indices, bit_indices, aux_loss
 
     def indices_to_code(self, indices: torch.Tensor) -> torch.Tensor:

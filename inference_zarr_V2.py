@@ -449,7 +449,7 @@ def main(opt: DictConfig):
             for metric_name in sample_means:
                 total_avg = np.mean(sample_means[metric_name])
                 print("Sample %s: %0.6f" % (metric_name, total_avg))
-                file.write("METRIC AVERAGE: " + str(total_avg.round(6)) + "\n")
+                file.write(f"METRIC AVERAGE {metric_name.upper()}: " + str(total_avg.round(6)) + "\n")
 
 
 if __name__ == "__main__":
