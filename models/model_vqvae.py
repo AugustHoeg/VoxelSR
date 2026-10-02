@@ -97,12 +97,22 @@ class ModelVQVAE(ModelBase):
         self.E, _, _, _, _ = self.netG(self.L)
 
     def _update_frac_unique_ema(self):
+        # cur[si] is NaN when scale si was dropped this step (BSQ scale dropout).
+        # Treat NaN as "no observation": seed a scale on its first finite value,
+        # EMA-update observed scales, and hold the last value for dropped ones.
+        # Reduces to the plain EMA when nothing is NaN (other VQ models unaffected).
         cur = torch.stack([f.detach().float() for f in self.frac_unique])
+        observed = torch.isfinite(cur)
         if self.frac_unique_ema is None or self.frac_unique_ema.shape != cur.shape:
-            self.frac_unique_ema = cur
-        else:
-            d = self.frac_unique_ema_decay
-            self.frac_unique_ema = d * self.frac_unique_ema + (1 - d) * cur
+            self.frac_unique_ema = torch.full_like(cur, float('nan'))
+        ema = self.frac_unique_ema
+        d = self.frac_unique_ema_decay
+        seed = observed & ~torch.isfinite(ema)      # first finite obs for this scale
+        blend = observed & torch.isfinite(ema)      # already-seeded scale -> EMA step
+        new = ema.clone()
+        new[seed] = cur[seed]
+        new[blend] = d * ema[blend] + (1 - d) * cur[blend]
+        self.frac_unique_ema = new
 
     def optimize_parameters_amp(self, current_step, update=False):
 

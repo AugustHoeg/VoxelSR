@@ -114,7 +114,8 @@ class SliceMetrics3D():
                 self.ring_idx, self.freq, self.n_rings = get_radial_bins_2d(size, device=self.device)  # precompute per volume
 
         num_slices = vol_ref.shape[self.slice_dim]
-        for slice_idx in range(num_slices):
+
+        for slice_idx in range(0, num_slices, self.slice_step):
             if slice_idx % 10 == 0:
                 print(f"Evaluating slice: {slice_idx}/{num_slices}")
             

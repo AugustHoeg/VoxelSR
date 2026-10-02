@@ -30,7 +30,7 @@ Token representation (Infinity-style, bitwise):
 Defaults picked for a 64^3 input -> 8^3 latent (down_factor=8).
 """
 
-from typing import Callable, List, Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -63,48 +63,47 @@ def get_entropy(count, dim=-1):
 
 
 # ---------------------------------------------------------------------------
-# Phi refinement convs (per-scale 3x3x3 residual convs)
+# Phi refinement convs (per-scale 3x3x3 residual convs with optional activation)
 # ---------------------------------------------------------------------------
-# Optional learned alternative to the hand-set `out_fact` decay: a small conv
-# applied AFTER upsampling each scale's code, so it can compensate the
-# high-frequency loss of trilinear interpolation (VAR's Phi mechanism). Mirrors
-# MSVQVAE3D's Phi so the two tokenizers stay comparable; kept local to keep
-# BSQVAE3D self-contained.
-class Phi3D(nn.Conv3d):
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+class Phi3D(nn.Module):
     """(1 - r) * x + r * conv(x). Small learned refine applied after upsampling."""
-    def __init__(self, embed_dim, quant_resi):
-        super().__init__(embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
+    def __init__(self, embed_dim, quant_resi, act: nn.Module = nn.Identity()):
+        super().__init__()
+        self.conv = nn.Conv3d(embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
         self.resi_ratio = abs(quant_resi)
+        self.act = act
 
     def forward(self, x):
-        return x.mul(1 - self.resi_ratio) + super().forward(x).mul_(self.resi_ratio)
+        return x.mul(1 - self.resi_ratio) + self.act(self.conv(x)).mul_(self.resi_ratio)
 
-
-class PhiShared3D(nn.Module):
-    """One Phi for every scale."""
-    def __init__(self, qresi: Phi3D):
+class PhiProgressive3D(nn.Module):
+    """Progressive version of Phi refinement mechanism from the VAR paper.
+    Instead of upsampling the quantized code to the full latent grid and then applying Phi,
+    We upsample progressively K times using trilinear, and apply Phi conv after each upsampling.  
+    """
+    def __init__(self, embed_dim, quant_resi, v_patch_nums, z_up="trilinear", act: nn.Module = nn.Identity()):
         super().__init__()
-        self.qresi = qresi
+        self.patches = [_as_dhw(pn) for pn in v_patch_nums]
+        self.phi_convs = nn.ModuleList([Phi3D(embed_dim, quant_resi, act) for _ in range(len(self.patches) - 1)])
+        self.z_up = z_up
+    
+    def forward(self, x: torch.Tensor, scale_start=1) -> torch.Tensor:
 
-    def __getitem__(self, _):
-        return self.qresi
+        for abs_si in range(scale_start, len(self.patches)):
+            pd, ph, pw = self.patches[abs_si]
+            x = F.interpolate(x, size=(pd, ph, pw), mode=self.z_up)  # interpolate to next scale
+            x = self.phi_convs[abs_si - 1](x)  # refine scale: x = (1 - quant_resi) * x + quant_resi * conv(x)
 
+        # for si, (pd, ph, pw) in enumerate(self.patches[scale_start:]):
+        #     x = F.interpolate(x, size=(pd, ph, pw), mode=self.z_up)  # interpolate to next scale
+        #     x = self.phi_convs[si](x)  # refine scale: x = (1 - quant_resi) * x + quant_resi * conv(x)
 
-class PhiPartiallyShared3D(nn.Module):
-    """N Phi's, resolved to the nearest scale by tick on [0, 1]."""
-    def __init__(self, qresi_ls: nn.ModuleList):
-        super().__init__()
-        self.qresi_ls = qresi_ls
-        K = len(qresi_ls)
-        self.ticks = (np.linspace(1/3/K, 1 - 1/3/K, K) if K == 4
-                      else np.linspace(1/2/K, 1 - 1/2/K, K))
-
-    def __getitem__(self, at_from_0_to_1: float) -> Phi3D:
-        return self.qresi_ls[int(np.argmin(np.abs(self.ticks - at_from_0_to_1)))]
-
-    def extra_repr(self) -> str:
-        return f'ticks={self.ticks}'
-
+        return x
 
 # ---------------------------------------------------------------------------
 # Binary Spherical Quantizer (single scale, lookup-free)
@@ -254,15 +253,15 @@ class MultiScaleBSQ3D(nn.Module):
         use_decay_factor:    if True, scale-s code magnitude = max(0.1, 1-0.1*s);
                              the BitVAE mechanism that lets unit-norm codes act as
                              shrinking residual corrections. If False, out_fact=1.
-                             Only used on the out_fact fallback path (share_quant_resi=None).
+                             Applied on BOTH refine paths (matches BitVAE, which
+                             multiplies the optionally out_phi-refined code by
+                             out_fact at every scale), not just the fallback path.
         quant_resi:          residual ratio for the learned Phi refine conv.
                              0.5 => 0.5*conv(x) + 0.5*x. Only used when
-                             share_quant_resi is not None.
-        share_quant_resi:    None (default) => no Phi; fall back to the out_fact
-                             decay (original BitVAE behaviour). Otherwise a learned
-                             Phi conv is applied after each upsample instead:
-                             1 = single shared Phi; N>1 = N Phi's mapped by tick;
-                             0 = one Phi per scale (heavy).
+                             use_prog_quant_resi is True.
+        use_prog_quant_resi: False (default) => fall back to the out_fact
+                             decay (original BitVAE behaviour). Otherwise progressive
+                             upsampling is done using Phi convs for each scale
         z_down / z_up:       interpolation modes for residual down / code up.
         entropy_loss_weight, commitment_loss_weight, inv_temperature,
         diversity_gamma:     passed to BSQ3D.
@@ -274,7 +273,7 @@ class MultiScaleBSQ3D(nn.Module):
         v_patch_nums: Sequence[Union[int, Tuple[int, int, int]]],
         use_decay_factor: bool = True,
         quant_resi: float = 0.5,
-        share_quant_resi: Optional[int] = None,
+        use_prog_quant_resi: bool = False,
         z_down: str = "area",
         z_up: str = "trilinear",
         entropy_loss_weight: float = 0.1,
@@ -284,6 +283,10 @@ class MultiScaleBSQ3D(nn.Module):
         gamma0: float = 1.0,
         zeta: float = 1.0,
         lfq_weight: float = 1.0,
+        use_stochastic_depth: bool = True,
+        scale_drop_rate: float = 0.25,
+        keep_last_quant: bool = True,
+        keep_first_quant: bool = False,
     ):
         super().__init__()
         self.L = codebook_bits
@@ -294,22 +297,24 @@ class MultiScaleBSQ3D(nn.Module):
         self.z_up = z_up
         self.lfq_weight = lfq_weight
 
-        # ---- Phi refinement convs (learned upsampler; replaces out_fact decay) ----
-        # share_quant_resi=None -> disabled: fall back to the out_fact magnitude decay.
+        self.use_stochastic_depth = use_stochastic_depth
+        self.scale_drop_rate = scale_drop_rate
+        self.keep_first_quant = keep_first_quant
+        self.keep_last_quant = keep_last_quant
+
+        # ---- Phi refinement convs (learned progressive upsampler; replaces out_fact decay) ----
+        # use_prog_quant_resi = False -> disabled: fall back to the out_fact magnitude decay.
         self.quant_resi_ratio = quant_resi
-        if share_quant_resi is None:
-            self.quant_resi = None
+        if use_prog_quant_resi:
+            self.quant_resi = PhiProgressive3D(
+                embed_dim=codebook_bits,
+                quant_resi=quant_resi,
+                v_patch_nums=v_patch_nums,
+                z_up=z_up,
+                act=Swish()
+            )
         else:
-            def _mk_phi():
-                return Phi3D(codebook_bits, quant_resi) if abs(quant_resi) > 1e-6 else nn.Identity()
-            if share_quant_resi == 0:      # non-shared: one per scale
-                self.quant_resi = PhiPartiallyShared3D(nn.ModuleList([_mk_phi() for _ in range(self.K)]))
-            elif share_quant_resi == 1:    # fully shared
-                self.quant_resi = PhiShared3D(_mk_phi())
-            else:                          # partially shared
-                self.quant_resi = PhiPartiallyShared3D(
-                    nn.ModuleList([_mk_phi() for _ in range(share_quant_resi)])
-                )
+            self.quant_resi = None  # Fall back to out_fact decay
 
         self.bsq = BSQ3D(
             codebook_bits=codebook_bits,
@@ -321,33 +326,29 @@ class MultiScaleBSQ3D(nn.Module):
             zeta=zeta,
         )
 
+        # RNG for scale dropout (for training only)
+        self._rng = torch.Generator().manual_seed(999)
+
     def _out_fact(self, si: int) -> float:
         """BitVAE decay schedule: 1.0, 0.9, ... clamped at 0.1 (or constant 1.0)."""
         return max(0.1, 1.0 - 0.1 * si) if self.use_decay_factor else 1.0
 
-    def _upsample_and_refine(self, q: torch.Tensor, si: int,
-                             n_scales: Optional[int] = None) -> torch.Tensor:
-        """Upsample this scale's code to the full latent grid and apply per-scale
-        refinement. With Phi enabled (share_quant_resi != None) the learned conv is
-        applied *after* upsampling (like VAR) so it can compensate trilinear loss;
-        otherwise fall back to the scalar out_fact decay (order-invariant on that
-        path). Single source of truth shared by every f_hat-building method.
+    def _upsample_and_refine(self, q: torch.Tensor, si: int) -> torch.Tensor:
 
-        n_scales overrides self.K for the analysis path that runs a custom-length
-        v_patch_nums, so is_last / the Phi tick index resolve against the right K.
-        """
         D, H, W = self.v_patch_nums[-1]
-        K = self.K if n_scales is None else n_scales
-        is_last = (si == K - 1)
+        is_last = (si == self.K - 1)
         if self.quant_resi is not None:
+            # learned progressive Phi refine (upsamples to full grid internally)
             if not is_last:
-                q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
-            q = self.quant_resi[si / max(K - 1, 1)](q)
+                q = self.quant_resi(q, si + 1)
         else:
-            q = q * self._out_fact(si)
+            # plain trilinear upsample to the full grid
             if not is_last:
                 q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
-        return q.contiguous()
+
+        # BitVAE multiplies the code by out_fact at every scale. Disable via use_decay_factor=False (out_fact=1).
+        q = q * self._out_fact(si)
+        return q.contiguous() 
 
     # ---------------------------------------------------------------
     # Training forward
@@ -370,7 +371,7 @@ class MultiScaleBSQ3D(nn.Module):
             f_hat = torch.zeros_like(f)
 
             all_losses: List[torch.Tensor] = []
-            frac_unique: List[torch.Tensor] = []
+            frac_unique: List[torch.Tensor] = [torch.tensor(torch.nan, device=f_BLDHW.device)] * self.K
 
             for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
                 is_last = (si == self.K - 1)
@@ -378,18 +379,25 @@ class MultiScaleBSQ3D(nn.Module):
                 # 1) downsample running residual to this scale
                 r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
 
-                # 2) binary spherical quantize (per-scale reference aux_loss)
-                q, _idx, bit_idx, aux_loss = self.bsq(r)
+                # 2) quantize this scale's residual
+                keep_first = si == 0 and self.keep_first_quant
+                keep_last = is_last and self.keep_last_quant
+                keep_scale = torch.rand(1, generator=self._rng).item() > self.scale_drop_rate if self.use_stochastic_depth else True
+                if keep_scale or keep_first or keep_last or (not self.training):
+                    # binary spherical quantize (per-scale reference aux_loss)
+                    q, _idx, bit_idx, aux_loss = self.bsq(r)
+                    all_losses.append(aux_loss)
+                    frac_unique[si] = self.bsq.normalized_bit_usage(bit_idx)
+                else:
+                    # scale dropout: skip quantization at this scale
+                    q = torch.zeros_like(r)
 
-                # 3) upsample to full grid + per-scale refine (Phi conv, else out_fact decay)
+                # 3) upsample to full scale and optionally refine (if enabled)
                 q = self._upsample_and_refine(q, si)
 
                 # 4) accumulate (grad path) + peel residual (detached, like BitVAE)
                 f_hat = f_hat + q
                 residual = residual - q.detach()
-
-                all_losses.append(aux_loss)
-                frac_unique.append(self.bsq.normalized_bit_usage(bit_idx))
 
             # reference: stack per-scale aux_loss; d_vae reduces with mean * lfq_weight
             vq_loss = torch.stack(all_losses).mean() * self.lfq_weight
@@ -405,25 +413,15 @@ class MultiScaleBSQ3D(nn.Module):
         f_BLDHW: torch.Tensor,
         to_fhat: bool,
         v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int, int]]]] = None,
-        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
     ) -> List[torch.Tensor]:
         """
-        Encode a latent into either:
+        VAE-only multiscale token round-trip (no transformer). Encode a latent into:
           - to_fhat=True  : list[Tensor(B, L, D, H, W)]   cumulative reconstructions
-          - to_fhat=False : list[IntTensor(B, pd*ph*pw, L)] per-scale *ground-truth* bit maps
+          - to_fhat=False : list[IntTensor(B, pd*ph*pw, L)] per-scale bit maps
 
-        Bitwise Self-Correction hook (Infinity). If `bit_noise_fn` is given it is
-        called per scale as `bit_noise_fn(si, gt_bit_idx) -> used_bit_idx`, where
-        `gt_bit_idx` is the true quantization of the current residual, shape
-        (B, pd, ph, pw, L). The returned (possibly bit-flipped) `used_bit_idx` is
-        requantized and used for the residual peel + f_hat accumulation, so the
-        downstream scales see the *corrupted* history (train/test-discrepancy
-        reduction). The emitted maps stay ground-truth: `to_fhat=False` returns the
-        true `gt_bit_idx` (transformer targets), `to_fhat=True` returns the corrupted
-        cumulative f_hat (teacher-forcing input). A BSC module can therefore make one
-        `to_fhat=True` pass and capture the gt bits inside its own `bit_noise_fn`
-        closure under the same random-flip realization. `bit_noise_fn=None` is an
-        exact no-op (identity requantization reproduces the plain code).
+        Teacher-forcing inputs and Bitwise Self-Correction for transformer training
+        now live in BitwiseSelfCorrection3D (models/bitwise_self_correction_3d.py);
+        this stays as a plain, flip-free tokenizer round-trip for eval / sanity checks.
         """
         B, L, D, H, W = f_BLDHW.shape
         with torch.amp.autocast("cuda", enabled=False):
@@ -437,73 +435,11 @@ class MultiScaleBSQ3D(nn.Module):
                 is_last = (si == len(patches) - 1)
                 r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
                 q, _idx, bit_idx, _aux = self.bsq(r)
-
-                # BSC: requantize (possibly flipped) bits for the accumulated history
-                if bit_noise_fn is not None:
-                    used_bit_idx = bit_noise_fn(si, bit_idx)
-                    code = self.bsq.indices_to_code(used_bit_idx)          # (B,pd,ph,pw,L)
-                    q = code.permute(0, 4, 1, 2, 3).contiguous()           # (B,L,pd,ph,pw)
-
-                q = self._upsample_and_refine(q, si, n_scales=len(patches))
+                q = self._upsample_and_refine(q, si)
                 f_hat = f_hat + q
                 residual = residual - q
                 out.append(f_hat.clone() if to_fhat else bit_idx.reshape(B, pd * ph * pw, L))
         return out
-
-    @torch.no_grad()
-    def f_to_var_input(
-        self,
-        f_BLDHW: torch.Tensor,
-        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
-        return_gt_bits: bool = False,
-    ):
-        """
-        Infinity-style teacher-forcing inputs, built exactly as
-        Infinity's MultiScaleBSQ.forward `var_inputs`:
-
-            for si in [0, K-2]:
-                var_inputs[si] = area_down(quantized_out_after_scale_si, scale[si+1])
-
-        i.e. the running cumulative f_hat (== Infinity `quantized_out`) after scale
-        si, area-downsampled to the *next* scale, in the L-dim code space (before
-        post_quant_conv). Length K-1; these condition the transformer's prediction
-        of scales 1..K-1 (scale 0 comes from the start/prefix token).
-
-        If `return_gt_bits`, also returns the per-scale ground-truth bit maps
-        (B, l_k, L) so a transformer step gets teacher inputs + targets from ONE
-        pass -- consistent even under a Bitwise Self-Correction `bit_noise_fn`
-        (see f_to_bits_or_fhat). This mirrors Infinity returning both
-        `all_bit_indices` and `var_inputs` from the same forward.
-        """
-        B, L, D, H, W = f_BLDHW.shape
-        with torch.amp.autocast("cuda", enabled=False):
-            residual = f_BLDHW.float()
-            f_hat = torch.zeros_like(residual)          # == Infinity quantized_out
-            var_inputs: List[torch.Tensor] = []
-            gt_bits: List[torch.Tensor] = []
-            for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
-                is_last = (si == self.K - 1)
-                r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
-                q, _idx, bit_idx, _aux = self.bsq(r)
-                gt_bits.append(bit_idx.reshape(B, pd * ph * pw, L))
-
-                # BSC: requantize (possibly flipped) bits into the accumulated history
-                if bit_noise_fn is not None:
-                    code = self.bsq.indices_to_code(bit_noise_fn(si, bit_idx))
-                    q = code.permute(0, 4, 1, 2, 3).contiguous()
-
-                q = self._upsample_and_refine(q, si)
-                residual = residual - q
-                f_hat = f_hat + q
-
-                # Infinity: append running quantized_out area-downsampled to next scale
-                if not is_last:
-                    pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
-                    var_inputs.append(
-                        F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode=self.z_down).contiguous()
-                    )
-        return (var_inputs, gt_bits) if return_gt_bits else var_inputs
-
 
     @torch.no_grad()
     def bits_to_fhat(self, ms_bits: List[torch.Tensor]) -> torch.Tensor:
@@ -527,8 +463,13 @@ class MultiScaleBSQ3D(nn.Module):
         resolution (B, L, pd, ph, pw), i.e. BEFORE upsampling/refinement. It is
         upsampled to the full grid and passed through the same per-scale refinement
         as training (Phi conv, else out_fact decay), added to the running f_hat, and
-        the area-downsampled conditioning for scale si+1 is returned. Mirrors
+        the conditioning for scale si+1 is returned. Mirrors
         MSVQVAE3D.get_next_autoregressive_input's contract (per-scale code in).
+
+        NOTE: the next-scale conditioning is resampled with `z_up` (trilinear) to
+        match Infinity's teacher-forcing input (BitwiseSelfCorrection3D builds
+        `this_scale_input` with `z_interplote_up`). Training and inference MUST use
+        the same mode here or the AR sampler sees an off-distribution input.
         """
         is_last = (si == self.K - 1)
         with torch.amp.autocast("cuda", enabled=False):
@@ -537,7 +478,7 @@ class MultiScaleBSQ3D(nn.Module):
             if is_last:
                 return f_hat, f_hat
             pd, ph, pw = self.v_patch_nums[si + 1]
-            return f_hat, F.interpolate(f_hat, size=(pd, ph, pw), mode=self.z_down)
+            return f_hat, F.interpolate(f_hat, size=(pd, ph, pw), mode=self.z_up)
 
     @torch.no_grad()
     def fhat_no_vq(self, f_BLDHW: torch.Tensor) -> torch.Tensor:
@@ -585,17 +526,17 @@ class BSQVAE3D(nn.Module):
         self,
         in_channels: int = 1,
         latent_dim: int = 768,
-        codebook_bits: int = 24,          # L; implicit vocab = 2**L
+        codebook_bits: int = 24,  # L; implicit vocab = 2**L
         resolution: int = 64,
         num_res_blocks_enc: int = 2,
         num_res_blocks_dec: int = 4,
         channels_enc=[64, 64, 256, 512, 512],
         channels_dec=[512, 512, 256, 64, 64],
         # multi-scale specific
-        v_patch_nums=(1, 2, 3, 4, 6, 8),
+        v_patch_nums=(1, 2, 3, 4, 5, 6, 8),
         use_decay_factor: bool = True,
         quant_resi: float = 0.5,
-        share_quant_resi: Optional[int] = None,
+        use_prog_quant_resi: bool = False,
         # BSQ losses
         entropy_loss_weight: float = 0.1,
         commitment_loss_weight: float = 0.25,
@@ -604,6 +545,10 @@ class BSQVAE3D(nn.Module):
         gamma0: float = 1.0,
         zeta: float = 1.0,
         lfq_weight: float = 1.0,
+        use_stochastic_depth: bool = True,
+        scale_drop_rate: float = 0.25,
+        keep_last_quant: bool = True,
+        keep_first_quant: bool = False,
         # encoder/decoder
         skip_attn: bool = True,
         attn_resolutions=[16],
@@ -651,7 +596,7 @@ class BSQVAE3D(nn.Module):
             v_patch_nums=v_patch_nums,
             use_decay_factor=use_decay_factor,
             quant_resi=quant_resi,
-            share_quant_resi=share_quant_resi,
+            use_prog_quant_resi=use_prog_quant_resi,
             entropy_loss_weight=entropy_loss_weight,
             commitment_loss_weight=commitment_loss_weight,
             inv_temperature=inv_temperature,
@@ -659,6 +604,10 @@ class BSQVAE3D(nn.Module):
             gamma0=gamma0,
             zeta=zeta,
             lfq_weight=lfq_weight,
+            use_stochastic_depth=use_stochastic_depth,
+            scale_drop_rate=scale_drop_rate,
+            keep_last_quant=keep_last_quant,
+            keep_first_quant=keep_first_quant,
         )
 
     def encode(self, x):
@@ -673,30 +622,15 @@ class BSQVAE3D(nn.Module):
         x_hat = self.decode(f_hat)
         return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique
 
-    # -------- helpers for transformer training later --------
+    # -------- VAE-only multiscale token round-trip (transformer teacher-forcing
+    # inputs + Bitwise Self-Correction live in BitwiseSelfCorrection3D) --------
     @torch.no_grad()
-    def encode_multiscale(
-        self, x,
-        to_fhat: bool = False,
-        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
-    ) -> List[torch.Tensor]:
-        """Per-scale ground-truth bit maps (transformer targets), or cumulative f_hats
-        if to_fhat=True. Pass `bit_noise_fn` to drive Bitwise Self-Correction (see
-        MultiScaleBSQ3D.f_to_bits_or_fhat)."""
+    def encode_multiscale(self, x, to_fhat: bool = False) -> List[torch.Tensor]:
+        """Per-scale ground-truth bit maps, or cumulative f_hats if to_fhat=True.
+        Flip-free tokenizer round-trip for eval / sanity checks; see
+        MultiScaleBSQ3D.f_to_bits_or_fhat."""
         z_e = self.encode(x)
-        return self.quantizer.f_to_bits_or_fhat(z_e, to_fhat=to_fhat, bit_noise_fn=bit_noise_fn)
-
-    @torch.no_grad()
-    def encode_var_input(
-        self, x,
-        bit_noise_fn: Optional[Callable[[int, torch.Tensor], torch.Tensor]] = None,
-        return_gt_bits: bool = False,
-    ):
-        """Infinity-style teacher-forcing `var_inputs` (list len K-1), and optionally
-        the per-scale gt bit targets from the same pass. See
-        MultiScaleBSQ3D.f_to_var_input."""
-        z_e = self.encode(x)
-        return self.quantizer.f_to_var_input(z_e, bit_noise_fn=bit_noise_fn, return_gt_bits=return_gt_bits)
+        return self.quantizer.f_to_bits_or_fhat(z_e, to_fhat=to_fhat)
 
     @torch.no_grad()
     def decode_multiscale(self, ms_bits: List[torch.Tensor]):
@@ -718,17 +652,21 @@ if __name__ == "__main__":
     model = BSQVAE3D(
         in_channels=1,
         latent_dim=768,
-        codebook_bits=48,                 # implicit vocab 2**48
+        codebook_bits=30,                 # implicit vocab 2**48
         channels_enc=[64, 64, 256, 512, 512],   # down_factor = 8 -> latent 8^3
         channels_dec=[512, 512, 256, 64, 64],
         resolution=patch_size,
         num_res_blocks_enc=2,
         num_res_blocks_dec=4,
-        v_patch_nums=(1, 2, 3, 4, 6, 8),        # -> 828 tokens per volume
-        use_decay_factor=True,                  # fallback path (share_quant_resi=None)
-        quant_resi=0.5,                         # learned Phi refine (used only if
-        share_quant_resi=4,                     # share_quant_resi is not None)
-        skip_attn=True,
+        v_patch_nums=(1, 2, 3, 4, 5, 6, 7, 8),        # -> 828 tokens per volume
+        use_decay_factor=True,                  # fallback if use_prog_quant_resi is False
+        quant_resi=0.5,                         # learned Phi refine (only used if use_prog_quant_resi is True)
+        use_prog_quant_resi=True,              # Enables progressive upsampling phi refinement
+        use_stochastic_depth=True,
+        scale_drop_rate=0.50,
+        keep_last_quant=True,
+        keep_first_quant=False,
+        skip_attn=False,
         use_checkpoint=True,
     ).to(device)
 
