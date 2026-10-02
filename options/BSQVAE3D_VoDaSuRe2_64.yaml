@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: BSQVAE3D                  # Default model config
+  - model_opt: BSQVAE3D_V2_30bits                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
