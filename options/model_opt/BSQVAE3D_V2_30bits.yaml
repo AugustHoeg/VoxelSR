@@ -19,7 +19,7 @@ netG:
   use_prog_quant_resi: false  # enable progressive upsampling of quantization residuals
 
   use_stochastic_depth: true
-  scale_drop_rate: 0.5
+  scale_drop_rate: 0.25
   keep_last_quant: true
   keep_first_quant: false
 
