@@ -42,7 +42,7 @@ train_opt:
   iterations: 75000
   validation_iterations: 50
   checkpoint_test: 2500
-  checkpoint_save: 15000
+  checkpoint_save: 25000
   checkpoint_print: 2500
   checkpoint_save_visuals: 2500
   num_accum_steps_G: 1
