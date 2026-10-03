@@ -16,7 +16,7 @@ netG:
   use_decay_factor: true
 
   quant_resi: 0.5
-  use_prog_quant_resi: true  # enable progressive upsampling of quantization residuals
+  use_prog_quant_resi: false  # enable progressive upsampling of quantization residuals
 
   use_stochastic_depth: true
   scale_drop_rate: 0.5
