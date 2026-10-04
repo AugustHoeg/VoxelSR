@@ -11,7 +11,7 @@ netG:
   num_res_blocks_dec: 4
   latent_dim: 768
 
-  v_patch_nums : [1, 2, 3, 4, 5, 6, 7, 8]   # -> 1296 tokens per volume
+  v_patch_nums : [1, 2, 3, 4, 5, 6, 8]   # -> 1296 tokens per volume
   codebook_bits: 30 # 18, 24, 30, 48, ...
   use_decay_factor: true
 
@@ -19,8 +19,8 @@ netG:
   use_prog_quant_resi: false  # enable progressive upsampling of quantization residuals
 
   use_stochastic_depth: true
-  scale_drop_rate: 0.25
-  keep_last_quant: true
+  scale_drop_rate: 0.1  # 10% dropout of scales during training
+  keep_last_quant: true  # always keep final scale residual
   keep_first_quant: false
 
   entropy_loss_weight: 0.1
@@ -29,7 +29,7 @@ netG:
   diversity_gamma: 1.0
   gamma0: 1.0
   zeta: 1.0
-  lfq_weight: 4.0  # previously 1.0 but is 4.0 in reference BitVAE implementation
+  lfq_weight: 1.0  # previously 1.0 but is 4.0 in reference BitVAE implementation
 
   attn_resolutions: [8]
   skip_attn: false
