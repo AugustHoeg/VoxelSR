@@ -96,7 +96,7 @@ class PhiProgressive3D(nn.Module):
 
         for abs_si in range(scale_start, len(self.patches)):
             pd, ph, pw = self.patches[abs_si]
-            x = F.interpolate(x, size=(pd, ph, pw), mode=self.z_up)  # interpolate to next scale
+            x = F.interpolate(x, size=(pd, ph, pw), mode=self.z_up).contiguous()  # interpolate to next scale
             x = self.phi_convs[abs_si - 1](x)  # refine scale: x = (1 - quant_resi) * x + quant_resi * conv(x)
 
         # for si, (pd, ph, pw) in enumerate(self.patches[scale_start:]):
@@ -337,6 +337,9 @@ class MultiScaleBSQ3D(nn.Module):
 
         D, H, W = self.v_patch_nums[-1]
         is_last = (si == self.K - 1)
+
+        q = q * self._out_fact(si)  # Scale using decay schedule. Disable via use_decay_factor=False (out_fact=1).
+        
         if self.quant_resi is not None:
             # learned progressive Phi refine (upsamples to full grid internally)
             if not is_last:
@@ -346,8 +349,6 @@ class MultiScaleBSQ3D(nn.Module):
             if not is_last:
                 q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
 
-        # BitVAE multiplies the code by out_fact at every scale. Disable via use_decay_factor=False (out_fact=1).
-        q = q * self._out_fact(si)
         return q.contiguous() 
 
     # ---------------------------------------------------------------

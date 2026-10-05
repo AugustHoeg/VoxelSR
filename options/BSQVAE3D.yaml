@@ -12,15 +12,15 @@ vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile & Compile
 run_profile: false
-compile: true # Enable PyTorch 2.0 compilation
+compile: false # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
 
 # WandB parameters
-wandb_mode: online
+wandb_mode: offline
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_V2_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_48_bits
+run_name: ${model_opt.model_architecture}_000
 note: Note
 
 # GPU configuration
@@ -39,12 +39,12 @@ path:
 
 # Overwrite default training parameters
 train_opt:
-  iterations: 50000
-  validation_iterations: 50
-  checkpoint_test: 2500
-  checkpoint_save: 25000
-  checkpoint_print: 2500
-  checkpoint_save_visuals: 2500
+  iterations: 1000
+  validation_iterations: 10
+  checkpoint_test: 100
+  checkpoint_save: 10000
+  checkpoint_print: 100
+  checkpoint_save_visuals: 100
   num_accum_steps_G: 1
 
   # Now matches VQGAN papers hyperparameters
@@ -65,17 +65,17 @@ dataset_opt:
   synthetic: true
   patch_size: 16
 
-  datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
+  datasets: [VoDaSuRe] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
   train_dataloader_params:
-    dataloader_batch_size: 32
-    num_load_workers: 32
+    dataloader_batch_size: 2
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 2
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
