@@ -371,7 +371,7 @@ class MultiScaleBSQ3DFullBitDecode(nn.Module):
             residual = f
             f_hat = torch.zeros_like(f)
 
-            running_fhat = [] # Assemble full stack of running fhat for decoding
+            decode_stack = []  # per-scale increments q_k (full grid) for the decoder
 
             all_losses: List[torch.Tensor] = []
             frac_unique: List[torch.Tensor] = [torch.tensor(torch.nan, device=f_BLDHW.device)] * self.K
@@ -402,15 +402,18 @@ class MultiScaleBSQ3DFullBitDecode(nn.Module):
                 f_hat = f_hat + q
                 residual = residual - q.detach()
 
-                # Append to running fhat for decoder
-                running_fhat.append(f_hat.clone())
+                # Keep this scale's INCREMENT (not the cumulative f_hat) for the
+                # decoder stack: increments keep all blocks at similar magnitude,
+                # balance the per-scale gradient, and make a dropped scale a clean
+                # zero. By construction sum(decode_stack) == f_hat.
+                decode_stack.append(q)
 
             # reference: stack per-scale aux_loss; d_vae reduces with mean * lfq_weight
             vq_loss = torch.stack(all_losses).mean() * self.lfq_weight
 
-        running_fhat = torch.concatenate(running_fhat, dim=1)  # (B, V*num_scales, D, H, W)
+        decode_stack = torch.concatenate(decode_stack, dim=1)  # (B, L*K, D, H, W)
 
-        return f_hat, running_fhat, vq_loss, frac_unique
+        return f_hat, decode_stack, vq_loss, frac_unique
 
     # ---------------------------------------------------------------
     # Analysis / transformer data-prep
@@ -451,21 +454,21 @@ class MultiScaleBSQ3DFullBitDecode(nn.Module):
 
     @torch.no_grad()
     def bits_to_fhat(self, ms_bits: List[torch.Tensor]) -> torch.Tensor:
-        """Per-scale bit maps (B, l_k, L) -> full-resolution quantized latent (B, L, D, H, W)."""
+        """Per-scale bit maps (B, l_k, L) -> decoder stack (B, L*K, D, H, W) of
+        per-scale increments q_k (sum == f_hat). Mirrors the training forward so
+        the decoder sees the same representation at inference as during training."""
         B = ms_bits[0].shape[0]
         D, H, W = self.v_patch_nums[-1]
         with torch.amp.autocast("cuda", enabled=False):
-            f_hat = ms_bits[0].new_zeros(B, self.L, D, H, W, dtype=torch.float32)
-            running_fhat = []
+            decode_stack = []
             for si, bits in enumerate(ms_bits):
                 pd, ph, pw = self.v_patch_nums[si]
                 code = self.bsq.indices_to_code(bits.view(B, pd, ph, pw, self.L))
                 q = code.permute(0, 4, 1, 2, 3).contiguous()
                 q = self._upsample_and_refine(q, si)
-                f_hat = f_hat + q
-                running_fhat.append(f_hat.clone())
-            running_fhat = torch.concatenate(running_fhat, dim=1)  # (B, V*num_scales, D, H, W)
-        return f_hat, running_fhat
+                decode_stack.append(q)
+            decode_stack = torch.concatenate(decode_stack, dim=1)  # (B, L*K, D, H, W)
+        return decode_stack
 
     @torch.no_grad()
     def get_next_autoregressive_input(self, si: int, f_hat, q_BLDHW):
@@ -494,11 +497,12 @@ class MultiScaleBSQ3DFullBitDecode(nn.Module):
     @torch.no_grad()
     def fhat_no_vq(self, f_BLDHW: torch.Tensor) -> torch.Tensor:
         """Same multiscale loop but skip binarization: code = q_scale * normalize(r).
-        Lives in the SAME space as f_hat, so decode() of it is a valid no-VQ upper bound."""
+        Returns the per-scale increment stack (B, L*K, D, H, W), matching the
+        training forward, so decode() of it is a valid no-VQ upper bound."""
         B, L, D, H, W = f_BLDHW.shape
         with torch.amp.autocast("cuda", enabled=False):
             residual = f_BLDHW.float()
-            f_hat = torch.zeros_like(residual)
+            decode_stack = []
             for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
                 is_last = si == self.K - 1
                 r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
@@ -506,9 +510,9 @@ class MultiScaleBSQ3DFullBitDecode(nn.Module):
                 code = self.bsq.q_scale * F.normalize(r, dim=-1)  # soft, no quantize()
                 q = code.permute(0, 4, 1, 2, 3).contiguous()
                 q = self._upsample_and_refine(q, si)
-                f_hat = f_hat + q
                 residual = residual - q
-            return f_hat
+                decode_stack.append(q)
+            return torch.concatenate(decode_stack, dim=1)  # (B, L*K, D, H, W)
 
     def extra_repr(self) -> str:
         refine = (f"Phi(quant_resi={self.quant_resi_ratio})"
@@ -601,8 +605,17 @@ class BSQVAE3DFullBitDecode(nn.Module):
         # project to the L-dim spherical code and back
         self.pre_quant_conv = nn.Conv3d(latent_dim, codebook_bits, 1)
 
-        # Increased in-channels for post_quant_conv as we parse running_fhat to decoder instead
-        self.post_quant_conv = nn.Conv3d(codebook_bits * len(v_patch_nums), latent_dim, 1)
+        # The decoder fuses the per-scale increment stack (L*K channels) instead of
+        # a single f_hat. Warm-start the fusion so it STARTS == baseline: tie all K
+        # scale-blocks to one shared L->latent_dim init, so at init
+        #   post_quant_conv(stack) = W0 @ sum_k q_k + b0 = W0 @ f_hat + b0.
+        # The blocks are separate parameters and specialize during training.
+        K = len(v_patch_nums)
+        self.post_quant_conv = nn.Conv3d(codebook_bits * K, latent_dim, 1)
+        with torch.no_grad():
+            base = nn.Conv3d(codebook_bits, latent_dim, 1)  # fan_in = L (baseline-equivalent)
+            self.post_quant_conv.weight.copy_(base.weight.repeat(1, K, 1, 1, 1))
+            self.post_quant_conv.bias.copy_(base.bias)
 
         self.quantizer = MultiScaleBSQ3DFullBitDecode(
             codebook_bits=codebook_bits,
@@ -631,8 +644,8 @@ class BSQVAE3DFullBitDecode(nn.Module):
 
     def forward(self, x):
         z_e = self.encode(x)
-        f_hat, running_fhat, vq_loss, frac_unique = self.quantizer(z_e)
-        x_hat = self.decode(running_fhat)  # parse running_fhat instead of fhat
+        f_hat, decode_stack, vq_loss, frac_unique = self.quantizer(z_e)
+        x_hat = self.decode(decode_stack)  # fuse the full per-scale increment stack, not just f_hat
         return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique
 
     # -------- VAE-only multiscale token round-trip (transformer teacher-forcing
@@ -649,8 +662,8 @@ class BSQVAE3DFullBitDecode(nn.Module):
     def decode_multiscale(self, ms_bits: List[torch.Tensor]):
         """Decode per-scale bit maps back to a volume."""
         with torch.amp.autocast("cuda", enabled=False):
-            _, running_fhat = self.quantizer.bits_to_fhat(ms_bits)
-        return self.decode(running_fhat).clamp_(-1, 1)
+            decode_stack = self.quantizer.bits_to_fhat(ms_bits)
+        return self.decode(decode_stack).clamp_(-1, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -693,6 +706,22 @@ if __name__ == "__main__":
     print(f"Output:           {tuple(x_hat.shape)}")
     print(f"VQ loss:          {loss.item():.4f}")
     print(f"Bit usage / scale: {[f'{u.item():.2f}' for u in frac_unique]}")
+
+    # --- sanity checks for fixes 1-3 ---
+    with torch.no_grad():
+        K, Lb = model.quantizer.K, model.quantizer.L
+        # fix 2: warm start -> all K scale-blocks of post_quant_conv tied at init
+        w = model.post_quant_conv.weight.view(-1, K, Lb, 1, 1, 1)
+        warm = all(torch.allclose(w[:, 0], w[:, k]) for k in range(K))
+        print(f"Warm-start (post_quant blocks tied at init): {warm}")
+        # fix 3: decoder stack holds increments -> sum over scales == f_hat
+        fh, stack, _, _ = model.quantizer(model.encode(x))
+        summed = stack.view(stack.shape[0], K, Lb, *stack.shape[2:]).sum(1)
+        print(f"Increment stack sums to f_hat: {torch.allclose(summed, fh, atol=1e-4)}")
+        # fix 1: no-VQ bound now has L*K channels and is decodable
+        nv = model.quantizer.fhat_no_vq(model.encode(x))
+        print(f"fhat_no_vq channels={nv.shape[1]} (=L*K={Lb * K}); decode ok: "
+              f"{tuple(model.decode(nv).shape)}")
 
     ms_bits = model.encode_multiscale(x)
     print(f"Per-scale bit maps: {[tuple(t.shape) for t in ms_bits]} "
