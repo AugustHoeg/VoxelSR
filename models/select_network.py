@@ -338,20 +338,22 @@ def define_G(opt, mode='train'):
             use_checkpoint=opt_net["use_checkpoint"],
         )
 
-    elif model_arch == "RBSQVAE3D":
-        from models.RBSQVAE3D import RBSQVAE3D as net
+    elif model_arch == "BSQVAE3DPerScaleProj":
+        from models.BSQVAE3DPerScaleProj import BSQVAE3DPerScaleProj as net
         netG = net(
             in_channels=opt_net["in_channels"],
             latent_dim=opt_net["latent_dim"],
             channels_enc=opt_net["channels_enc"],
             channels_dec=opt_net["channels_dec"],
             v_patch_nums=opt_net["v_patch_nums"],
-            depth=opt_net["depth"],
-            depth_decay=opt_net["depth_decay"],
             codebook_bits=opt_net["codebook_bits"],
             use_decay_factor=opt_net["use_decay_factor"],
-            quant_resi=opt_net.get("quant_resi", 0.5),
-            share_quant_resi=opt_net.get("share_quant_resi", None),
+            quant_resi=opt_net["quant_resi"],
+            use_prog_quant_resi=opt_net["use_prog_quant_resi"],
+            use_stochastic_depth=opt_net["use_stochastic_depth"],
+            scale_drop_rate=opt_net["scale_drop_rate"],
+            keep_last_quant=opt_net["keep_last_quant"],
+            keep_first_quant=opt_net["keep_first_quant"],
             entropy_loss_weight=opt_net["entropy_loss_weight"],
             commitment_loss_weight=opt_net["commitment_loss_weight"],
             inv_temperature=opt_net["inv_temperature"],

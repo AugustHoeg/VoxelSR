@@ -64,6 +64,91 @@ def apply_rotary_emb(x, freqs_cis):
     return out.type_as(x)
 
 
+def _norm_to_ref(shape, ref):
+    """Map a (dz,dy,dx) grid's integer voxel coords onto the ref grid (rz,ry,rx),
+    centring each voxel in the cell it covers (RQTransformer3DPrefix convention):
+        coord = idx * (ref/shape) + (ref/shape - 1) / 2
+    For shape == ref this is the identity (integer coords); for a coarse scale the
+    single/few voxels sit at the centres of the HR voxels they stand in for.
+    """
+    coords = _grid_coords(shape)                                  # (N, 3) cols z,y,x
+    scale = torch.tensor([ref[a] / shape[a] for a in range(3)])   # (3,)
+    return coords * scale + (scale - 1) / 2
+
+
+def _as_3tuple(pn):
+    return (pn, pn, pn) if isinstance(pn, int) else tuple(pn)
+
+
+def compute_axial_cis_multiscale(dim, patch_nums, lr_shape=None, ref_grid=None,
+                                 theta=10000, norm_coeff_x=1.0, norm_coeff_y=1.0,
+                                 norm_coeff_z=1.0):
+    """3D axial RoPE phasors for a VAR/Infinity multi-scale sequence.
+
+    Builds one phasor table over  [ LR_prefix | scale_0 | scale_1 | ... | scale_{K-1} ].
+    Every scale (and the LR prefix) is mapped into a single shared coordinate frame
+    `ref_grid` so coarse and fine scales that describe the same physical location
+    share RoPE coordinates (VARSR `precompute_freqs_cis`: `index/patch_num * grid`,
+    here generalised to 3D with centring). `ref_grid` defaults to the finest scale.
+
+    Returns:
+        freqs_cis: (n_lr + sum_k prod(pn_k), 3 * (dim // 6)) complex.
+    """
+    n = dim // 6
+    base = torch.arange(0, dim, 6)[:n].float() / dim
+    freqs_x = norm_coeff_x / (theta ** base)
+    freqs_y = norm_coeff_y / (theta ** base)
+    freqs_z = norm_coeff_z / (theta ** base)
+
+    pns = [_as_3tuple(pn) for pn in patch_nums]
+    ref = _as_3tuple(ref_grid) if ref_grid is not None else pns[-1]
+
+    coords_list = []
+    if lr_shape is not None:
+        coords_list.append(_norm_to_ref(_as_3tuple(lr_shape), ref))
+    coords_list += [_norm_to_ref(pn, ref) for pn in pns]
+    coords = torch.cat(coords_list, dim=0)                        # (T, 3)
+
+    t_z, t_y, t_x = coords[:, 0], coords[:, 1], coords[:, 2]
+    freqs_x = torch.outer(t_x, freqs_x)
+    freqs_y = torch.outer(t_y, freqs_y)
+    freqs_z = torch.outer(t_z, freqs_z)
+
+    freqs_cis_x = torch.polar(torch.ones_like(freqs_x), freqs_x)
+    freqs_cis_y = torch.polar(torch.ones_like(freqs_y), freqs_y)
+    freqs_cis_z = torch.polar(torch.ones_like(freqs_z), freqs_z)
+    return torch.cat([freqs_cis_x, freqs_cis_y, freqs_cis_z], dim=-1)  # (T, 3n) complex
+
+
+class Rope3DMultiScale(nn.Module):
+    """3D axial RoPE for a multi-scale [ LR_prefix | scale_0 .. scale_{K-1} ] sequence.
+
+    Same rotate-first-`rot_dim`-channels / pass-through-remainder behaviour and
+    `forward(x, offset)` interface as `Rope3D`; only the coordinate table differs
+    (built by `compute_axial_cis_multiscale`). `offset` is the absolute start
+    position of `x` in the full sequence (used for KV-cached incremental steps).
+    """
+
+    def __init__(self, head_dim, patch_nums, lr_shape=None, ref_grid=None,
+                 theta=10000, norm_coeffs=(1.0, 1.0, 1.0)):
+        super().__init__()
+        assert head_dim // 6 > 0, f"head_dim={head_dim} too small for 3D RoPE (need >= 6)"
+        self.rot_dim = 6 * (head_dim // 6)
+        freqs_cis = compute_axial_cis_multiscale(
+            head_dim, patch_nums, lr_shape, ref_grid, theta, *norm_coeffs
+        )
+        self.register_buffer("freqs_cis", freqs_cis, persistent=False)
+
+    def forward(self, x, offset=0):
+        """x: (B, H, T, head_dim) → same, first rot_dim channels rotated."""
+        T = x.shape[2]
+        freqs = self.freqs_cis[offset:offset + T]
+        rot = apply_rotary_emb(x[..., :self.rot_dim], freqs)
+        if self.rot_dim < x.shape[-1]:
+            rot = torch.cat([rot, x[..., self.rot_dim:]], dim=-1)
+        return rot
+
+
 class Rope3D(nn.Module):
     """3D axial RoPE using precomputed complex freqs_cis (DVAR-style).
 
