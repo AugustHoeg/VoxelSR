@@ -400,6 +400,37 @@ def define_G(opt, mode='train'):
             use_checkpoint=opt_net["use_checkpoint"],
         )
 
+    elif model_arch == "BSQVAE3DFullBitDecode":
+        from models.BSQVAE3DFullBitDecode import BSQVAE3DFullBitDecode as net
+        netG = net(
+            in_channels=opt_net["in_channels"],
+            latent_dim=opt_net["latent_dim"],
+            channels_enc=opt_net["channels_enc"],
+            channels_dec=opt_net["channels_dec"],
+            v_patch_nums=opt_net["v_patch_nums"],
+            codebook_bits=opt_net["codebook_bits"],
+            use_decay_factor=opt_net["use_decay_factor"],
+            quant_resi=opt_net["quant_resi"],
+            use_prog_quant_resi=opt_net["use_prog_quant_resi"],
+            use_stochastic_depth=opt_net["use_stochastic_depth"],
+            scale_drop_rate=opt_net["scale_drop_rate"],
+            keep_last_quant=opt_net["keep_last_quant"],
+            keep_first_quant=opt_net["keep_first_quant"],
+            entropy_loss_weight=opt_net["entropy_loss_weight"],
+            commitment_loss_weight=opt_net["commitment_loss_weight"],
+            inv_temperature=opt_net["inv_temperature"],
+            diversity_gamma=opt_net["diversity_gamma"],
+            gamma0=opt_net["gamma0"],
+            zeta=opt_net["zeta"],
+            lfq_weight=opt_net["lfq_weight"],
+            resolution=opt["dataset_opt"]["patch_size_hr"],
+            num_res_blocks_enc=opt_net["num_res_blocks_enc"],
+            num_res_blocks_dec=opt_net["num_res_blocks_dec"],
+            attn_resolutions=opt_net["attn_resolutions"],
+            skip_attn=opt_net["skip_attn"],
+            use_checkpoint=opt_net["use_checkpoint"],
+        )
+
     elif model_arch == "ResShiftUNet":  # ResShift Swin-UNet denoiser (2D pixel-space)
         from models.resshift import UNetModelSwin as net
         hr = opt['dataset_opt']['patch_size_hr']
