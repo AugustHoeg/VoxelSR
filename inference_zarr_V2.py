@@ -215,11 +215,14 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    # experiment_id = "HAT_VoDaSuRe2_REG_4x_VoDaSuRe_OME_ID010500"
+    experiment_id = "ResShift2D_VoDaSuRe2_REG_2x_VoDaSuRe_OME_ID011100"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
     wandb_path = opt_path.rsplit("files", 1)[0]
+
+    # REMOVE THIS LINE
+    opt['dataset_opt']['datasets'] = ["VoDaSuRe"]
 
     # Override datasets if specified
     if datasets_flag:
