@@ -307,6 +307,8 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
     #coords_lr = coords_lr + size_lr // 2
     #coords_hr = coords_hr + size_hr // 2
     N = coords_lr.shape[0]
+
+    patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=torch.float32)
     
     if overlap_mode == "hann":
         hann_window = get_hann_window((size_hr, size_hr, size_hr))
@@ -319,8 +321,6 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
                 print("Processing batch %d-%d/%d" % (i, i+batch_size, N))
             batch_coords_lr = coords_lr[i:i+batch_size]
             batch_coords_hr = coords_hr[i:i+batch_size]
-
-            patch_batch = torch.empty((batch_size, C, size_lr, size_lr, size_lr), dtype=torch.float32)
 
             for j, (z, y, x) in enumerate(batch_coords_lr):
                 patch = torch.zeros((C, size_lr, size_lr, size_lr))  # reinitialize patch
@@ -348,7 +348,6 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
             upsampled_batch = rgb2gray(upsampled_batch, channel_dim=1) if input_rgb else upsampled_batch
             # Unnormalize from [-1; 1] to [0; 1]
             upsampled_batch = (upsampled_batch / 2) + 0.5 if unnorm else upsampled_batch
-
 
         for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D_hr) - z_hr
