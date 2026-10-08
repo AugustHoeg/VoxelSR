@@ -199,6 +199,8 @@ def get_full_sample_metrics_V2(img_H, img_E, slice_dim=0, slice_step=1, eps=1e-1
 @hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
 
+    return
+
     datasets_flag = False
     synthetic_flag = False
 
