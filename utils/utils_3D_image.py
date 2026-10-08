@@ -19,6 +19,7 @@ from pyiqa.archs.fid_arch import frechet_distance as frechet_distance
 from utils.fourier_ring_correlation import fourier_ring_correlation as frc
 from utils.fourier_ring_correlation import get_radial_bins_2d
 from utils.utils_zarr import write_ome_pyramid
+from utils.utils_image import rgb2gray
 
 # from numcodecs import Blosc
 
@@ -280,7 +281,7 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     return img_E
 
 
-def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False):
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False):
 
     global_min = 0
     global_max = 65535
@@ -327,6 +328,9 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
             patch_batch = patch_batch.float()  # Ensure data is float32
             patch_batch = (patch_batch - global_min) / (global_max - global_min)
 
+            if input_rgb:  # Expand to 3 channels if input_rgb = True
+                patch_batch = patch_batch.expand(3, *patch_batch.shape[2:])
+
             if model_input_type == '2D':
                 upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
             else:
@@ -336,6 +340,9 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
 
             if unnorm:
                 upsampled_batch = (upsampled_batch / 2) + 0.5  # unnormalize from [-1; 1] to [0; 1]
+
+            if input_rgb:
+                upsampled_batch = rgb2gray(upsampled_batch, channel_dim=1)
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D_hr) - z_hr

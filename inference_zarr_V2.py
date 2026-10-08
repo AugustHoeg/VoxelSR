@@ -378,6 +378,7 @@ def main(opt: DictConfig):
                         overlap_mode="hann",
                         model_input_type=opt["input_type"],
                         unnorm=opt["dataset_opt"]["norm_type"] == "znormalization",
+                        input_rgb=opt["dataset_opt"]["expand_channels_rgb"]
                     )
                     img_L = img_L[0]  # assumes single channel dimension
                     img_E = img_E[0]  # assumes single channel dimension
