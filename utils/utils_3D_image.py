@@ -349,7 +349,7 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
             # Unnormalize from [-1; 1] to [0; 1]
             upsampled_batch = (upsampled_batch / 2) + 0.5 if unnorm else upsampled_batch
 
-        for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
+            for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D_hr) - z_hr
                 dy = min(y_hr+size_hr, H_hr) - y_hr
                 dx = min(x_hr+size_hr, W_hr) - x_hr
