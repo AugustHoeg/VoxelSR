@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME       # Default dataset config
-  - model_opt: ResShift2D              # Default model config
+  - model_opt: ResShift2D_128              # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -67,7 +67,9 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 32  # --> patch_size_hr = 64
+  patch_size: 64  # --> patch_size_hr = 128
+
+  load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
 
   datasets: [VoDaSuRe2] # [HCP_1200, IXI, LITS, LIDC-IDRI, CTSpine1K, VoDaSuRe]
 
