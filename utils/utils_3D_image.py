@@ -129,19 +129,23 @@ class SliceMetrics3D():
                 continue
                 
             for metric_name in self.metric_names:
-                if metric_name == "musiq":  # MUSIQ expects images to be RGB
-                    metric = self.metric_funcs[metric_name](slice_src.tile(1, 3, 1, 1), slice_ref.tile(1, 3, 1, 1)).cpu().numpy()
-                    metric_vals[metric_name].append(metric)
-                elif metric_name == "fid":
-                    # If FID, compute features and stash internally to compute later.
-                    self.src_feats.append(self.get_fid_feats(slice_src))
-                    self.ref_feats.append(self.get_fid_feats(slice_ref))
-                elif metric_name == "frc":  # Parse rings and freq to fourier ring correlation
-                    frc_curve, frc_freq, frc_integral = frc(slice_src, slice_ref, self.ring_idx, self.freq, self.n_rings, drop_DC=False)
-                    metric_vals[metric_name].append(frc_integral.cpu().numpy())
-                else:  # Other metrics work fine on grayscale
-                    metric = self.metric_funcs[metric_name](slice_src, slice_ref).cpu().numpy()
-                    metric_vals[metric_name].append(metric)
+                try:
+                    if metric_name == "musiq":  # MUSIQ expects images to be RGB
+                        metric = self.metric_funcs[metric_name](slice_src.tile(1, 3, 1, 1), slice_ref.tile(1, 3, 1, 1)).cpu().numpy()
+                        metric_vals[metric_name].append(metric)
+                    elif metric_name == "fid":
+                        # If FID, compute features and stash internally to compute later.
+                        self.src_feats.append(self.get_fid_feats(slice_src))
+                        self.ref_feats.append(self.get_fid_feats(slice_ref))
+                    elif metric_name == "frc":  # Parse rings and freq to fourier ring correlation
+                        frc_curve, frc_freq, frc_integral = frc(slice_src, slice_ref, self.ring_idx, self.freq, self.n_rings, drop_DC=False)
+                        metric_vals[metric_name].append(frc_integral.cpu().numpy())
+                    else:  # Other metrics work fine on grayscale
+                        metric = self.metric_funcs[metric_name](slice_src, slice_ref).cpu().numpy()
+                        metric_vals[metric_name].append(metric)
+                except:
+                    print(f"Warning: metric '{metric_name}' failed on slice {slice_idx}, skipping slice...")
+                    continue
 
         return metric_vals
 
