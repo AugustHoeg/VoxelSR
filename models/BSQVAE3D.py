@@ -621,7 +621,8 @@ class BSQVAE3D(nn.Module):
         z_e = self.encode(x)
         f_hat, vq_loss, frac_unique = self.quantizer(z_e)
         x_hat = self.decode(f_hat)
-        return x_hat, vq_loss, None, self.quantizer.fhat_no_vq(z_e), frac_unique
+        x_c = self.decode(z_e)  # Decode also z_e
+        return x_hat, vq_loss, x_c, self.quantizer.fhat_no_vq(z_e), frac_unique
 
     # -------- VAE-only multiscale token round-trip (transformer teacher-forcing
     # inputs + Bitwise Self-Correction live in BitwiseSelfCorrection3D) --------

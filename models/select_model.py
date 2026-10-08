@@ -25,6 +25,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'vqvae':     # one input: L
         from models.model_vqvae import ModelVQVAE as M
 
+    elif model == 'anneal_vqvae':     # one input: L
+        from models.model_anneal_vqvae import ModelAnnealedVQVAE as M
+
     elif model == 'vqgan':     # one input: L
         from models.model_vqgan import ModelVQGAN as M
 
