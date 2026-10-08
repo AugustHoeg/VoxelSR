@@ -467,10 +467,10 @@ if __name__ == '__main__':
         resolution=patch_size,
         num_res_blocks_enc=2,
         num_res_blocks_dec=4,
-        v_patch_nums=(1, 2, 3, 4, 6, 8),           # -> 828 spatial tokens per volume
-        n_rq_depth=8,                              # D shared codebooks per scale
+        v_patch_nums=(1, 2, 3, 4, 5, 6, 8),           # -> 828 spatial tokens per volume
+        n_rq_depth=3,                              # D shared codebooks per scale
         quant_resi=0.5,
-        share_quant_resi=4,
+        share_quant_resi=7,
         using_znorm=True,
         skip_attn=True,
         use_checkpoint=True,
