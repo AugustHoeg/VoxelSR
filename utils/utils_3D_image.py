@@ -328,10 +328,10 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
             patch_batch = patch_batch.float()  # Ensure data is float32
             patch_batch = (patch_batch - global_min) / (global_max - global_min)
 
-            if input_rgb:  # Expand to 3 channels if input_rgb = True
-                patch_batch = patch_batch.repeat((1, 3, 1, 1, 1))
-
-            print("patch batch:", patch_batch.shape)
+            # Convert to 3 channels if input_rgb = True
+            patch_batch = patch_batch.repeat((1, 3, 1, 1, 1)) if input_rgb else patch_batch
+            # Normalize from [0; 1] to [-1; 1] if unnorm = True
+            patch_batch = (patch_batch * 2) - 1 if unnorm else patch_batch
 
             if model_input_type == '2D':
                 upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
@@ -340,11 +340,10 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
                 model.netG_forward()
                 upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
-            if unnorm:
-                upsampled_batch = (upsampled_batch / 2) + 0.5  # unnormalize from [-1; 1] to [0; 1]
-
-            if input_rgb:
-                upsampled_batch = rgb2gray(upsampled_batch, channel_dim=1)
+            # Unnormalize from [-1; 1] to [0; 1]
+            upsampled_batch = (upsampled_batch / 2) + 0.5 if unnorm else upsampled_batch 
+            # Convert back to grayscale if input_rgb = True
+            upsampled_batch = rgb2gray(upsampled_batch, channel_dim=1) if input_rgb else upsampled_batch
 
             for j, (z_hr, y_hr, x_hr) in enumerate(batch_coords_hr):
                 dz = min(z_hr+size_hr, D_hr) - z_hr
