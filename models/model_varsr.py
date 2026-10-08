@@ -126,7 +126,10 @@ class ModelVARSR(ModelBase):
         self.define_visual_eval()
 
     def init_train(self):
-        self.load(from_pretrained_orig=self.opt['path']['from_pretrained_orig'])
+        self.load(
+            from_pretrained_orig=self.opt['path']['from_pretrained_orig'],
+            from_pretrained_varsr=self.opt['path']['from_pretrained_varsr']
+        )
         self.load_hr_vq_model()
         self.netG.train()
 
@@ -196,13 +199,43 @@ class ModelVARSR(ModelBase):
         self._from_pretrained_orig(self.get_bare_model(self.netG), state_dict)
         self.last_iteration = 0
 
-    def load(self, experiment_id=None, mode='train', from_pretrained_orig=False):
+    def _from_pretrained_varsr(self, var, state_dict):
+        for key, value in var.state_dict().items():
+            if key in state_dict and state_dict[key].shape != value.shape:
+                print(key)
+                state_dict.pop(key)
+        ret = var.load_state_dict(state_dict, strict=False)
+        missing, unexpected = ret
+        print(f"[VARTrainer.load_state_dict] missing:  {missing}")
+        print(f"[VARTrainer.load_state_dict] unexpected:  {unexpected}")
+        del state_dict
+
+        return var
+
+    def _import_pretrained_varsr(self, eid):
+        """imports official VARSR pretrained weights"""
+        filename = self.opt['path'].get('pretrained_varsr_filename', None)
+        path = self._find_latest_checkpoint(eid, "saved_models", f"{filename}*")
+
+        if self.opt['rank'] == 0:
+            print(f"Importing VAR official weights [{self._short_path(path)}] ...")
+        state_dict = torch.load(path, map_location='cpu', weights_only=False)
+        # Official checkpoints are sometimes nested; unwrap the raw model state dict.
+        if isinstance(state_dict, dict) and 'trainer' in state_dict:
+            state_dict = state_dict['trainer'].get('var_wo_ddp', state_dict)
+        self._from_pretrained_varsr(self.get_bare_model(self.netG), state_dict)
+        self.last_iteration = 0
+
+    def load(self, experiment_id=None, mode='train', from_pretrained_orig=False, from_pretrained_varsr=False):
         eid = self._resolve_eid(experiment_id)
         if mode == 'train':
             if self.opt['train_mode'] == 'scratch':
                 return
             if from_pretrained_orig:                # finetune from official weights
                 self._import_pretrained_orig(eid)
+                return
+            elif from_pretrained_varsr:
+                self._import_pretrained_varsr(eid)
                 return
             assert eid is not None, f"Pretrained experiment ID required for train_mode='{self.opt['train_mode']}'."
         else:
