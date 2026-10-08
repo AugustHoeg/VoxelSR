@@ -330,17 +330,17 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
                 patch_batch[j] = patch  # Fill batch with patch
 
             patch_batch = patch_batch.float()  # Ensure data is float32
-            patch_batch = (patch_batch - global_min) / (global_max - global_min)
+            input_patch_batch = (patch_batch - global_min) / (global_max - global_min)
 
             # Normalize from [0; 1] to [-1; 1] if unnorm = True
-            patch_batch = (patch_batch * 2) - 1 if unnorm else patch_batch
+            input_patch_batch = (input_patch_batch * 2) - 1 if unnorm else input_patch_batch
             # Convert to 3 channels if input_rgb = True
-            patch_batch = patch_batch.repeat((1, 3, 1, 1, 1)) if input_rgb else patch_batch
+            input_patch_batch = torch.expand_copy(input_patch_batch, (-1, 3, -1, -1, -1)) if input_rgb else input_patch_batch
 
             if model_input_type == '2D':
-                upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
+                upsampled_batch = upscale_slices(model, input_patch_batch.to(model.device), up_factor=f).float().cpu()
             else:
-                model.L = patch_batch.to(model.device)
+                model.L = input_patch_batch.to(model.device)
                 model.netG_forward()
                 upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
