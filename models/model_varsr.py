@@ -223,7 +223,7 @@ class ModelVARSR(ModelBase):
 
     def netG_forward(self):
         self.L_up = F.interpolate(self.L, size=(self.size_hr, self.size_hr), mode='bicubic', align_corners=False)
-        self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0])
+        self.E = self.sample_E(self.L_up, batch_size=self.L.shape[0])
 
     def optimize_parameters_amp(self, current_step, update=False):
 
