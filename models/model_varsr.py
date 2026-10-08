@@ -26,6 +26,8 @@ class ModelVARSR(ModelBase):
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
 
+        self.size_hr = self.opt['dataset_opt']['patch_size_hr']
+
         self.update = False
 
         self.early_stop = False
@@ -220,7 +222,7 @@ class ModelVARSR(ModelBase):
         self.L_up = F.interpolate(self.L, size=self.H.shape[2:], mode='bicubic', align_corners=False)
 
     def netG_forward(self):
-        self.L_up = F.interpolate(self.L, size=self.H.shape[2:], mode='bicubic', align_corners=False)
+        self.L_up = F.interpolate(self.L, size=(self.size_hr, self.size_hr, self.size_hr), mode='bicubic', align_corners=False)
         self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0])
 
     def optimize_parameters_amp(self, current_step, update=False):
