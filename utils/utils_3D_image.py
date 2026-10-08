@@ -329,7 +329,7 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
             patch_batch = (patch_batch - global_min) / (global_max - global_min)
 
             if input_rgb:  # Expand to 3 channels if input_rgb = True
-                patch_batch = patch_batch.expand(3, *patch_batch.shape[2:])
+                patch_batch = patch_batch.expand(3, *patch_batch.shape[1:])
 
             if model_input_type == '2D':
                 upsampled_batch = upscale_slices(model, patch_batch.to(model.device), up_factor=f).float().cpu()
