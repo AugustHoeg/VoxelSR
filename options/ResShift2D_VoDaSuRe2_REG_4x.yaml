@@ -34,7 +34,7 @@ save_time: 36  # Backup save of model after 35 hours
 
 path:
   root: superresolution
-  pretrained_experiment_id: ResShift2D_VoDaSuRe2_REG_2x_VoDaSuRe_OME_ID011100
+  pretrained_experiment_id: ResShift2D_VoDaSuRe2_REG_2x_VoDaSuRe_OME_ID011150
   pretrained_netE: null
 
 # Overwrite default training parameters
