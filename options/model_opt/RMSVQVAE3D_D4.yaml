@@ -15,7 +15,7 @@ netG:
 
   v_patch_nums : [1, 2, 3, 4, 5, 6, 8]   # -> 953 tokens per volume
   quant_resi: 0.5
-  use_prog_quant_resi: true
+  use_prog_quant_resi: true  # use progressive Phi upsampling
   using_znorm: false
   n_rq_depth: 4
 
