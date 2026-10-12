@@ -285,7 +285,10 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     return img_E
 
 
-def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False):
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=True):
+
+    if compile_forward:
+        model.netG_forward = torch.compile(model.netG_forward, mode="max-autotune-no-cudagraphs")
 
     global_min = 0
     global_max = 65535
