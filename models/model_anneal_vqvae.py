@@ -35,15 +35,33 @@ class ModelAnnealedVQVAE(ModelBase):
         self.vae_target = opt.get("vae_target", "HR")
         self.update = False
 
-        # create schedule for lambda_q and lambda_e
-        # lambda_e should start high and decrease,
-        # while lambda_q should start low and increase
+        # ------------------------------------------------------------------
+        # Annealed grounding schedule. lambda_e weights the continuous grounding
+        # branch decode(z_e); lambda_q the quantized branch decode(f_hat).
+        # Flag-gated so it can be reverted: anneal_grounding=False -> lambda_q=1,
+        # lambda_e=0 (plain quantized VQVAE).
+        # lambda_e decays high->low (cosine). For lambda_q, floor_lambda_q selects:
+        #   True  (recommended / "adjusted"): lambda_q = const floor (1.0) so the
+        #          quantized branch + decoder are never starved; lambda_e is a
+        #          decaying bonus on top.
+        #   False (original convex blend): lambda_q = 1 - lambda_e (starts ~0).
+        # ------------------------------------------------------------------
+        self.anneal_grounding = self.opt_train.get("anneal_grounding", True)
+        self.floor_lambda_q = self.opt_train.get("floor_lambda_q", True)
         self.lambda_e_sche = self.cosine_schedule(
-            num_steps=self.opt_train['iterations'] + 1000,
-            max_value=1.0,
-            min_value=0.01
+            num_steps=self.opt_train["iterations"] + 1000,
+            max_value=self.opt_train.get("lambda_e_max", 1.0),
+            min_value=self.opt_train.get("lambda_e_min", 0.0),
         )
-        self.lambda_q_sche = 1 - self.lambda_e_sche
+        if self.floor_lambda_q:
+            self.lambda_q_sche = torch.full_like(
+                self.lambda_e_sche, float(self.opt_train.get("lambda_q_floor", 1.0))
+            )
+        else:
+            self.lambda_q_sche = 1.0 - self.lambda_e_sche
+        # current scalar weights (python floats -> device-agnostic in the loss)
+        self.lambda_e = float(self.lambda_e_sche[0]) if self.anneal_grounding else 0.0
+        self.lambda_q = float(self.lambda_q_sche[0]) if self.anneal_grounding else 1.0
 
         # Running EMA of per-scale/depth frac_unique (smooths the per-batch value,
         # which is noisy and token-count-capped at coarse scales)
@@ -136,12 +154,28 @@ class ModelAnnealedVQVAE(ModelBase):
         new[blend] = d * ema[blend] + (1 - d) * cur[blend]
         self.frac_unique_ema = new
 
+    def _update_lambda_schedule(self, current_step):
+        """Set self.lambda_q / self.lambda_e (python floats) for `current_step`.
+
+        Gated by `anneal_grounding`: when False, reverts to plain quantized
+        training (lambda_q=1, lambda_e=0). Otherwise reads the precomputed cosine
+        schedules (lambda_e decays; lambda_q floored or convex per floor_lambda_q).
+        Floats keep the weights device-agnostic when they scale the GPU losses.
+        """
+        if not self.anneal_grounding:
+            self.lambda_q, self.lambda_e = 1.0, 0.0
+            return
+        idx = min(int(current_step), self.lambda_e_sche.shape[0] - 1)
+        self.lambda_e = float(self.lambda_e_sche[idx])
+        self.lambda_q = float(self.lambda_q_sche[idx])
+
     def optimize_parameters_amp(self, current_step, update=False):
+        self._update_lambda_schedule(current_step)
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
             self.vq_forward()
             self.recon_loss_q = compute_generator_loss(self.vae_in, self.E, self.loss_fn_dict, self.loss_val_dict)
             self.recon_loss_e = compute_generator_loss(self.vae_in, self.E_c, self.loss_fn_dict, self.loss_val_dict)
-            self.recon_loss = self.lambda_q_sche[current_step] * self.recon_loss_q + self.lambda_e_sche[current_step] * self.recon_loss_e
+            self.recon_loss = self.lambda_q * self.recon_loss_q + self.lambda_e * self.recon_loss_e
             self.gen_loss = self.vq_loss + self.recon_loss
             self.gen_loss = self.gen_loss / self.num_accum_steps_G
 
@@ -186,6 +220,7 @@ class ModelAnnealedVQVAE(ModelBase):
         self.run.log({"step": current_step, "G_recon_loss_q": self.recon_loss_q.item()})
 
         self.run.log({"step": current_step, "G_vq_loss": self.vq_loss.item()})
+        self.run.log({"step": current_step, "lambda_q": self.lambda_q, "lambda_e": self.lambda_e})
 
         grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})

@@ -12,8 +12,7 @@ Per scale (in downsampled scale space):
     1. area-downsample the running residual to the scale grid once
     2. run D residual codebook lookups at that low resolution, peeling the
        residual and summing the D chosen embeddings
-    3. trilinear-upsample the summed embedding back to full latent grid once
-    4. apply the per-scale Phi refine conv (shared exactly as in MSVQVAE3D)
+    3. Progressive trilinear-upsample to full latent grid and apply Phi refine convs (if enabled)
     5. accumulate into f_hat and peel from the full-res residual
 
 Commitment loss is VAR-style: a both-direction MSE on the cumulative f_hat
@@ -27,6 +26,12 @@ NOTE: Only the VQVAE reconstruction path (forward / encode / decode) is
 implemented. The VAR-training helpers (multi-scale token export, teacher
 forcing, autoregressive stepping) are stubbed with NotImplementedError until
 the depth axis is wired into the transformer data path.
+
+NOTE 2: Renamed old RMSVQVAE3D to RMSVQVAE3D_old and did following changes:
+- Added scale dropout (stochastic depth), so a given sample may skip an entire scale during training.
+This is independent of the depth dropout (DAC-style) which is still supported.
+- Copied progressive upsampling/refinement module (PhiProgressive3D) from BSQVAE3D
+- Renaming of variables to be more consistent with BSQVAE3D
 
 Defaults picked for a 64^3 input -> 8^3 latent (down_factor=8).
 """
@@ -50,42 +55,51 @@ def _as_dhw(pn) -> Tuple[int, int, int]:
 
 
 # ---------------------------------------------------------------------------
-# Phi refinement convs (per-scale 3x3x3 residual convs)
+# Phi refinement convs (per-scale 3x3x3 residual convs with optional activation)
 # ---------------------------------------------------------------------------
-class Phi3D(nn.Conv3d):
-    """(1 - r) * x + r * conv(x). Small refine applied AFTER upsampling each scale."""
-    def __init__(self, embed_dim, quant_resi):
-        super().__init__(embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
+
+
+class Swish(nn.Module):
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+
+class Phi3D(nn.Module):
+    """(1 - r) * x + r * conv(x). Small learned refine applied after upsampling."""
+
+    def __init__(self, embed_dim, quant_resi, act: nn.Module = nn.Identity()):
+        super().__init__()
+        self.conv = nn.Conv3d(embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
         self.resi_ratio = abs(quant_resi)
+        self.act = act
 
     def forward(self, x):
-        return x.mul(1 - self.resi_ratio) + super().forward(x).mul_(self.resi_ratio)
+        return x.mul(1 - self.resi_ratio) + self.act(self.conv(x)).mul_(self.resi_ratio)
 
 
-class PhiShared3D(nn.Module):
-    """One Phi for every scale."""
-    def __init__(self, qresi: Phi3D):
+class PhiProgressive3D(nn.Module):
+    """Progressive version of Phi refinement mechanism from the VAR paper.
+    Instead of upsampling the quantized code to the full latent grid and then applying Phi,
+    We upsample progressively K times using trilinear, and apply Phi conv after each upsampling.
+    """
+
+    def __init__(self, embed_dim, quant_resi, v_patch_nums, z_up="trilinear", act: nn.Module = nn.Identity()):
         super().__init__()
-        self.qresi = qresi
+        self.patches = [_as_dhw(pn) for pn in v_patch_nums]
+        self.phi_convs = nn.ModuleList([Phi3D(embed_dim, quant_resi, act) for _ in range(len(self.patches) - 1)])
+        self.z_up = z_up
 
-    def __getitem__(self, _):
-        return self.qresi
+    def forward(self, x: torch.Tensor, scale_start=1) -> torch.Tensor:
+        for abs_si in range(scale_start, len(self.patches)):
+            pd, ph, pw = self.patches[abs_si]
+            x = F.interpolate(x, size=(pd, ph, pw), mode=self.z_up).contiguous()  # interpolate to next scale
+            x = self.phi_convs[abs_si - 1](x)  # refine scale: x = (1 - quant_resi) * x + quant_resi * conv(x)
 
+        # for si, (pd, ph, pw) in enumerate(self.patches[scale_start:]):
+        #     x = F.interpolate(x, size=(pd, ph, pw), mode=self.z_up)  # interpolate to next scale
+        #     x = self.phi_convs[si](x)  # refine scale: x = (1 - quant_resi) * x + quant_resi * conv(x)
 
-class PhiPartiallyShared3D(nn.Module):
-    """K Phi's, resolved to the nearest scale by tick on [0, 1]."""
-    def __init__(self, qresi_ls: nn.ModuleList):
-        super().__init__()
-        self.qresi_ls = qresi_ls
-        K = len(qresi_ls)
-        self.ticks = (np.linspace(1/3/K, 1 - 1/3/K, K) if K == 4
-                      else np.linspace(1/2/K, 1 - 1/2/K, K))
-
-    def __getitem__(self, at_from_0_to_1: float) -> Phi3D:
-        return self.qresi_ls[int(np.argmin(np.abs(self.ticks - at_from_0_to_1)))]
-
-    def extra_repr(self) -> str:
-        return f'ticks={self.ticks}'
+        return x
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +116,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         n_rq_depth:          number of residual codebooks D applied *within* each
                              scale. D distinct codebook instances, each shared
                              across all scales (depth d always uses codebook_d).
-        quantizer_dropout:   DAC-style depth dropout in [0, 1]. Probability that a
+        depth_drop_rate:     DAC-style depth dropout in [0, 1]. Probability that a
                              given sample is trained with a randomly reduced number
                              of active depth codebooks (uniform in [1, D]). 0.0
                              disables the feature entirely (byte-identical to the
@@ -121,16 +135,22 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         Cvae: int,
         v_patch_nums: Sequence[Union[int, Tuple[int, int, int]]],
         n_rq_depth: int = 4,
-        quantizer_dropout: float = 0.0,
         beta: float = 0.25,
         using_znorm: bool = False,
         quant_resi: float = 0.5,
-        share_quant_resi: int = 4,
+        use_prog_quant_resi: bool = False,
+        z_down: str = "area",
+        z_up: str = "trilinear",
         ema: bool = True,
         decay: float = 0.99,
         restart_unused_codes: bool = True,
         restart_clamp_factor: float = 1.0,
         skip_update_over: Optional[float] = None,
+        use_stochastic_depth: bool = True,
+        scale_drop_rate: float = 0.25,
+        depth_drop_rate: float = 0.0,
+        keep_last_quant: bool = True,
+        keep_first_quant: bool = False,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -140,21 +160,25 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         self.v_patch_nums: List[Tuple[int, int, int]] = [_as_dhw(pn) for pn in v_patch_nums]
         self.K = len(self.v_patch_nums)
         self.n_rq_depth = n_rq_depth
-        self.quantizer_dropout = quantizer_dropout
+        self.depth_drop_rate = depth_drop_rate
         self.quant_resi_ratio = quant_resi
+        self.z_down = z_down
+        self.z_up = z_up
 
-        # ---- Phi refinement convs (applied once per scale on the summed depth output) ----
-        def _mk_phi():
-            return Phi3D(Cvae, quant_resi) if abs(quant_resi) > 1e-6 else nn.Identity()
+        self.use_stochastic_depth = use_stochastic_depth
+        self.scale_drop_rate = scale_drop_rate
+        self.keep_first_quant = keep_first_quant
+        self.keep_last_quant = keep_last_quant
 
-        if share_quant_resi == 0:      # non-shared: one per scale
-            self.quant_resi = PhiPartiallyShared3D(nn.ModuleList([_mk_phi() for _ in range(self.K)]))
-        elif share_quant_resi == 1:    # fully shared
-            self.quant_resi = PhiShared3D(_mk_phi())
-        else:                          # partially shared
-            self.quant_resi = PhiPartiallyShared3D(
-                nn.ModuleList([_mk_phi() for _ in range(share_quant_resi)])
+        # ---- Phi refinement convs (learned progressive upsampler) ----
+        # use_prog_quant_resi = False -> disabled: fall back to no Phi refine.
+        self.quant_resi_ratio = quant_resi
+        if use_prog_quant_resi:
+            self.quant_resi = PhiProgressive3D(
+                embed_dim=Cvae, quant_resi=quant_resi, v_patch_nums=v_patch_nums, z_up=z_up, act=Swish()
             )
+        else:
+            self.quant_resi = None  # Fall back to no Phi refine (plain trilinear upsample)
 
         # ---- D depth codebooks (each shared across all scales) ----
         self.codebooks = nn.ModuleList([
@@ -171,14 +195,18 @@ class MultiScaleResidualBottleneck3D(nn.Module):
             for _ in range(n_rq_depth)
         ])
 
+        # RNG for scale dropout (for training only)
+        self.scale_rng = torch.Generator().manual_seed(999)
+        self.depth_rng = torch.Generator().manual_seed(888)
+
     # ---------------------------------------------------------------
     # Inner depth RQ at a single scale (channel-last, low resolution)
     # ---------------------------------------------------------------
-    def _quantize_depth(self, rest_dhwc: torch.Tensor, n_active: Optional[torch.Tensor] = None):
+    def _quantize_depth(self, r: torch.Tensor, n_active: Optional[torch.Tensor] = None):
         """
         Run the D-step residual loop at one scale.
 
-        rest_dhwc: (B, pd, ph, pw, C) residual, channel-last.
+        r: (B, C, pd, ph, pw) residual
         n_active:  optional (B,) LongTensor giving how many depth codebooks are
                    active per sample (quantizer/depth dropout). None -> all D
                    depths active for every sample. The residual is ALWAYS peeled
@@ -187,44 +215,59 @@ class MultiScaleResidualBottleneck3D(nn.Module):
                    which depths are *added* into the summed output (DAC-style).
 
         Returns:
-            agg:         (B, pd, ph, pw, C) sum of the active depth embeddings
+            r:         (B, pd, ph, pw, C) sum of the active depth embeddings
             depth_fracs: list[Tensor] len D, per-depth codebook usage this scale
         """
-        B = rest_dhwc.shape[0]
-        depth_rest = rest_dhwc
-        agg = torch.zeros_like(rest_dhwc)
+        B = r.shape[0]
+        r_dhwc = r.permute(0, 2, 3, 4, 1).contiguous()  # (B, pd, ph, pw, C)
+        depth_rest = r_dhwc
+        r_out = torch.zeros_like(r_dhwc)
         depth_fracs: List[torch.Tensor] = []
 
         for d, codebook in enumerate(self.codebooks):
-            embeds, idx, _ = codebook(depth_rest)
-            depth_rest = depth_rest - embeds     # peel residual for next depth (unmasked)
-            if n_active is None:
-                agg = agg + embeds
-            else:
-                mask = (d < n_active).view(B, 1, 1, 1, 1).to(embeds.dtype)
-                agg = agg + embeds * mask
-            depth_fracs.append(
-                torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero()
-                / self.vocab_size
-            )
+            embeds, idx, _ = codebook(depth_rest)  # quantize
+            depth_rest = depth_rest - embeds  # peel residual for next depth
 
-        return agg, depth_fracs
+            mask = (d < n_active).view(B, 1, 1, 1, 1).to(embeds.dtype) if n_active is not None else 1.0 # depth dropout
+            r_out = r_out + embeds * mask # accumulate the embeddings
+
+            # record codebook usage across depths
+            depth_fracs.append(torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero() / self.vocab_size)
+
+        r_out = r_out.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, pd, ph, pw)
+
+        return r_out, depth_fracs
 
     def _sample_active_depths(self, B: int, device) -> torch.Tensor:
         """Per-sample active depth count for quantizer dropout (DAC-style).
 
         Samples n ~ U{1, ..., D} for every sample, then reverts a fraction
-        (1 - quantizer_dropout) back to full depth D. So quantizer_dropout is the
+        (1 - depth_drop_rate) back to full depth D. So depth_drop_rate is the
         probability that a given sample is trained at a reduced depth. The same
         count is used across all scales for a sample, so it stays a coherent
         reduced-depth reconstruction rather than a per-scale mix.
         """
         D = self.n_rq_depth
-        n = torch.randint(1, D + 1, (B,), device=device)
-        keep_full = torch.rand(B, device=device) >= self.quantizer_dropout
+        n = torch.randint(1, D + 1, (B,), generator=self.depth_rng).to(device)
+        keep_full = torch.rand(B, generator=self.depth_rng).to(device) >= self.depth_drop_rate
         return torch.where(keep_full, torch.full_like(n, D), n)
 
-    # ---------------------------------------------------------------
+    def _upsample_and_refine(self, q: torch.Tensor, si: int) -> torch.Tensor:
+        D, H, W = self.v_patch_nums[-1]
+        is_last = si == self.K - 1
+
+        if self.quant_resi is not None:
+            # Phi refine (upsamples to full grid internally)
+            if not is_last:
+                q = self.quant_resi(q, si + 1)
+        else:
+            # plain trilinear upsample to the full grid
+            if not is_last:
+                q = F.interpolate(q, size=(D, H, W), mode=self.z_up)
+
+        return q.contiguous()
+
+        # ---------------------------------------------------------------
     # Training forward: encode -> per-scale depth-residual quantize -> STE
     # ---------------------------------------------------------------
     def forward(self, f_BCDHW: torch.Tensor):
@@ -239,49 +282,47 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         """
         B, C, D, H, W = f_BCDHW.shape
 
-        f_BCDHW = f_BCDHW.float()
-        f_no_grad = f_BCDHW.detach()
-        f_rest = f_no_grad.clone()
-        f_hat = torch.zeros_like(f_rest)
-
         # per-sample active depth count for quantizer (depth) dropout; None disables
         n_active = None
-        if self.training and self.quantizer_dropout > 0:
+        if self.training and self.depth_drop_rate > 0:
             n_active = self._sample_active_depths(B, f_BCDHW.device)
 
         with torch.amp.autocast("cuda", enabled=False):
+            f_BCDHW = f_BCDHW.float()
+            f_no_grad = f_BCDHW.detach()
+            residual = f_no_grad.clone()
+            f_hat = torch.zeros_like(residual)
+
             mean_vq_loss = f_BCDHW.new_zeros(())
-            frac_unique_list: List[float] = []
+            frac_unique_list: List[torch.Tensor] = [torch.tensor(torch.nan, device=f_BCDHW.device)] * self.K
 
             for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
                 is_last = (si == self.K - 1)
 
-                # 1) downsample residual to this scale
-                rest_ds = f_rest if is_last else F.interpolate(f_rest, size=(pd, ph, pw), mode='area')
+                # 1) downsample running residual to this scale
+                r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
 
-                # 2) inner D-depth residual quantization at this scale (channel-last)
-                rest_dhwc = rest_ds.permute(0, 2, 3, 4, 1).contiguous()   # (B, pd, ph, pw, C)
-                agg_dhwc, depth_fracs = self._quantize_depth(rest_dhwc, n_active)
+                # 2) quantize this scale's residual
+                keep_first = si == 0 and self.keep_first_quant
+                keep_last = is_last and self.keep_last_quant
+                keep_scale = torch.rand(1, generator=self.scale_rng).item() > self.scale_drop_rate if self.use_stochastic_depth else True
+                if keep_scale or keep_first or keep_last or (not self.training):
+                    # quantize RVQ-style
+                    q, depth_fracs = self._quantize_depth(r, n_active)
+                    frac_unique_list[si] = torch.stack(depth_fracs).mean()
+                else:
+                    # scale dropout: skip quantization at this scale
+                    q = torch.zeros_like(r)
 
-                # 3) upsample summed depth embedding back to full (D, H, W)
-                h = agg_dhwc.permute(0, 4, 1, 2, 3).contiguous()           # (B, C, pd, ph, pw)
-                if not is_last:
-                    h = F.interpolate(h, size=(D, H, W), mode='trilinear', align_corners=False)
+                # 3) upsample to full scale and optionally refine (if enabled)
+                q = self._upsample_and_refine(q, si)
 
-                # 4) scale-indexed Phi refine (once, on the summed depth output)
-                h = self.quant_resi[si / max(self.K - 1, 1)](h)
-
-                # 5) accumulate + peel residual
-                f_hat = f_hat + h
-                f_rest = f_rest - h
+                # 4) accumulate + peel residual
+                f_hat = f_hat + q
+                residual = residual - q
 
                 # per-scale commitment loss (both directions, as in VAR)
-                mean_vq_loss = (mean_vq_loss
-                                + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta)
-                                + F.mse_loss(f_hat, f_no_grad))
-
-                # diagnostic: mean codebook usage over depths this scale (0-dim tensor)
-                frac_unique_list.append(torch.stack(depth_fracs).mean())
+                mean_vq_loss = mean_vq_loss + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta) + F.mse_loss(f_hat, f_no_grad)
 
             mean_vq_loss = mean_vq_loss / self.K
 
@@ -315,7 +356,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
 
     def extra_repr(self) -> str:
         return (f'v_patch_nums={self.v_patch_nums}, K={self.K}, n_rq_depth={self.n_rq_depth}, '
-                f'qdrop={self.quantizer_dropout}, znorm={self.using_znorm}, beta={self.beta}, '
+                f'qdrop={self.depth_drop_rate}, znorm={self.using_znorm}, beta={self.beta}, '
                 f'quant_resi={self.quant_resi_ratio}')
 
 
@@ -346,11 +387,10 @@ class RMSVQVAE3D(nn.Module):
         channels_enc=[64, 64, 256, 512, 512],
         channels_dec=[512, 512, 256, 64, 64],
         # multi-scale specific
-        v_patch_nums=(1, 2, 4, 8),
+        v_patch_nums=(1, 2, 3, 4, 5, 6, 8),
         n_rq_depth: int = 4,
-        quantizer_dropout: float = 0.0,
         quant_resi: float = 0.5,
-        share_quant_resi: int = 4,
+        use_prog_quant_resi: bool = False,
         using_znorm: bool = False,
         beta: float = 0.25,
         # codebook (kept in sync with RQVAE3D defaults for fair comparison)
@@ -359,6 +399,11 @@ class RMSVQVAE3D(nn.Module):
         restart_unused_codes: bool = True,
         restart_clamp_factor: float = 1.0,
         skip_update_over: Optional[float] = None,
+        use_stochastic_depth: bool = True,
+        scale_drop_rate: float = 0.1,
+        depth_drop_rate: float = 0.1,
+        keep_last_quant: bool = True,
+        keep_first_quant: bool = False,
         # encoder/decoder
         skip_attn: bool = True,
         attn_resolutions=[16],
@@ -368,11 +413,10 @@ class RMSVQVAE3D(nn.Module):
         down_factor = 2 ** (len(channels_enc) - 2)
         latent_res = resolution // down_factor
 
-        # Sanity: the last scale of v_patch_nums must match the latent grid
         last = _as_dhw(v_patch_nums[-1])
         assert last == (latent_res, latent_res, latent_res), (
-            f'v_patch_nums[-1]={last} must equal the encoder output resolution '
-            f'({latent_res},)*3. Adjust v_patch_nums or channels_enc.'
+            f"v_patch_nums[-1]={last} must equal the encoder output resolution "
+            f"({latent_res},)*3. Adjust v_patch_nums or channels_enc."
         )
 
         self.encoder = Encoder(
@@ -404,16 +448,20 @@ class RMSVQVAE3D(nn.Module):
             Cvae=quant_embed_dim,
             v_patch_nums=v_patch_nums,
             n_rq_depth=n_rq_depth,
-            quantizer_dropout=quantizer_dropout,
             beta=beta,
             using_znorm=using_znorm,
             quant_resi=quant_resi,
-            share_quant_resi=share_quant_resi,
+            use_prog_quant_resi=use_prog_quant_resi,
             ema=ema,
             decay=decay,
             restart_unused_codes=restart_unused_codes,
             restart_clamp_factor=restart_clamp_factor,
             skip_update_over=skip_update_over,
+            use_stochastic_depth=use_stochastic_depth,
+            scale_drop_rate=scale_drop_rate,
+            depth_drop_rate=depth_drop_rate,
+            keep_last_quant=keep_last_quant,
+            keep_first_quant=keep_first_quant,
         )
 
     def encode(self, x):
@@ -452,49 +500,49 @@ if __name__ == '__main__':
                      if torch.cuda.is_available() else 0)
 
     patch_size = 64
-    latent_dim = 768
-    quant_embed_dim = 768
-    channels_enc = [64, 64, 256, 512, 512]   # down_factor = 8 -> latent 8^3
-    channels_dec = [512, 512, 256, 64, 64]
-
     model = RMSVQVAE3D(
         in_channels=1,
-        latent_dim=latent_dim,
-        quant_embed_dim=quant_embed_dim,
-        channels_enc=channels_enc,
-        channels_dec=channels_dec,
+        latent_dim=512,
+        quant_embed_dim=512,
+        channels_enc= [64, 64, 256, 512, 512],
+        channels_dec=[512, 512, 256, 64, 64],
         n_embed=4096,
         resolution=patch_size,
         num_res_blocks_enc=2,
         num_res_blocks_dec=4,
-        v_patch_nums=(1, 2, 3, 4, 5, 6, 8),           # -> 828 spatial tokens per volume
-        n_rq_depth=3,                              # D shared codebooks per scale
+        v_patch_nums=(1, 2, 3, 4, 5, 6, 8),        # -> 953 tokens per volume
+        n_rq_depth=4,                              # D shared codebooks per scale
         quant_resi=0.5,
-        share_quant_resi=7,
+        use_prog_quant_resi=True,
         using_znorm=True,
-        skip_attn=True,
+        use_stochastic_depth=True,
+        scale_drop_rate=0.10,
+        depth_drop_rate=0.0,
+        keep_last_quant=True,
+        keep_first_quant=False,
+        skip_attn=False,
         use_checkpoint=True,
     ).to(device)
 
-    print('Number of parameters, G', numel(model, only_trainable=True))
+    print("Number of parameters, G", numel(model, only_trainable=True))
     model.train()
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
     x_hat, loss, codes, z_e, frac_unique = model(x)
 
-    print(f'Input:            {tuple(x.shape)}')
-    print(f'Output:           {tuple(x_hat.shape)}')
-    print(f'Commitment loss:  {loss.item():.4f}')
+    print(f"Input:            {tuple(x.shape)}")
+    print(f"Output:           {tuple(x_hat.shape)}")
+    print(f"VQ loss:          {loss.item():.4f}")
     print(f'Frac unique / scale (depth-avg): {[f"{u:.2f}" for u in frac_unique]}')
 
     # exercise the quantizer (depth) dropout path on the same model
-    model.quantizer.quantizer_dropout = 0.5
+    model.quantizer.depth_drop_rate = 0.5
     x_hat_d, loss_d, _, _, frac_unique_d = model(torch.randn(2, 1, patch_size, patch_size, patch_size, device=device))
     print(f'[qdrop=0.5] Output: {tuple(x_hat_d.shape)}  loss: {loss_d.item():.4f}  '
           f'frac unique/scale: {[f"{u:.2f}" for u in frac_unique_d]}')
-    model.quantizer.quantizer_dropout = 0.0
+    model.quantizer.depth_drop_rate = 0.0
 
     if torch.cuda.is_available():
         max_memory_reserved = torch.cuda.max_memory_reserved()
-        print('Max memory reserved: %0.3f Gb / %0.3f Gb'
+        print("Max memory reserved: %0.3f Gb / %0.3f Gb"
               % (max_memory_reserved / 1e9, total_gpu_mem))
