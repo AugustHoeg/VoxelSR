@@ -25,6 +25,7 @@ netG:
   depth_drop_rate: 0.0
   keep_last_quant: true
   keep_first_quant: false
+  lambda_vq_depth: 0.0
 
   decay: 0.99  # EMA decay for codebook updates
   restart_unused_codes: true

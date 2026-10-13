@@ -151,6 +151,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         depth_drop_rate: float = 0.0,
         keep_last_quant: bool = True,
         keep_first_quant: bool = False,
+        lambda_vq_depth: float = 1.0,
     ):
         super().__init__()
         self.vocab_size = vocab_size
@@ -164,6 +165,8 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         self.quant_resi_ratio = quant_resi
         self.z_down = z_down
         self.z_up = z_up
+
+        self.lambda_vq_depth = lambda_vq_depth  # Controls RVQ-style commitment loss on top of VAR-style commitment loss
 
         self.use_stochastic_depth = use_stochastic_depth
         self.scale_drop_rate = scale_drop_rate
@@ -221,7 +224,8 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         B = r.shape[0]
         r_dhwc = r.permute(0, 2, 3, 4, 1).contiguous()  # (B, pd, ph, pw, C)
         depth_rest = r_dhwc
-        r_out = torch.zeros_like(r_dhwc)
+        quant_out = torch.zeros_like(r_dhwc)
+        quant_out_list: List[torch.Tensor] = []
         depth_fracs: List[torch.Tensor] = []
 
         for d, codebook in enumerate(self.codebooks):
@@ -229,14 +233,26 @@ class MultiScaleResidualBottleneck3D(nn.Module):
             depth_rest = depth_rest - embeds  # peel residual for next depth
 
             mask = (d < n_active).view(B, 1, 1, 1, 1).to(embeds.dtype) if n_active is not None else 1.0 # depth dropout
-            r_out = r_out + embeds * mask # accumulate the embeddings
+            quant_out = quant_out + embeds * mask  # accumulate the embeddings
+            quant_out_list.append(quant_out.permute(0, 4, 1, 2, 3).contiguous())  # list of aggregated quants
 
             # record codebook usage across depths
             depth_fracs.append(torch.bincount(idx.reshape(-1), minlength=self.vocab_size).count_nonzero() / self.vocab_size)
 
-        r_out = r_out.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, pd, ph, pw)
+        quant_out = quant_out.permute(0, 4, 1, 2, 3).contiguous()  # (B, C, pd, ph, pw)
 
-        return r_out, depth_fracs
+        return quant_out, quant_out_list, depth_fracs
+
+    def depth_commitment_loss(self, x, quant_list):
+
+        loss_list = []
+
+        for idx, quant in enumerate(quant_list):
+            partial_loss = F.mse_loss(x, quant.detach())
+            loss_list.append(partial_loss)
+
+        commitment_loss = torch.mean(torch.stack(loss_list))
+        return commitment_loss
 
     def _sample_active_depths(self, B: int, device) -> torch.Tensor:
         """Per-sample active depth count for quantizer dropout (DAC-style).
@@ -267,7 +283,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
 
         return q.contiguous()
 
-        # ---------------------------------------------------------------
+    # ---------------------------------------------------------------
     # Training forward: encode -> per-scale depth-residual quantize -> STE
     # ---------------------------------------------------------------
     def forward(self, f_BCDHW: torch.Tensor):
@@ -308,11 +324,12 @@ class MultiScaleResidualBottleneck3D(nn.Module):
                 keep_scale = torch.rand(1, generator=self.scale_rng).item() > self.scale_drop_rate if self.use_stochastic_depth else True
                 if keep_scale or keep_first or keep_last or (not self.training):
                     # quantize RVQ-style
-                    q, depth_fracs = self._quantize_depth(r, n_active)
+                    q, q_list, depth_fracs = self._quantize_depth(r, n_active)
                     frac_unique_list[si] = torch.stack(depth_fracs).mean()
                 else:
                     # scale dropout: skip quantization at this scale
                     q = torch.zeros_like(r)
+                    q_list = [torch.zeros_like(r) for _ in range(self.n_rq_depth)]
 
                 # 3) upsample to full scale and optionally refine (if enabled)
                 q = self._upsample_and_refine(q, si)
@@ -320,6 +337,11 @@ class MultiScaleResidualBottleneck3D(nn.Module):
                 # 4) accumulate + peel residual
                 f_hat = f_hat + q
                 residual = residual - q
+
+                # add RVQ-style commitment loss enforcing all depths to be utilized
+                if keep_scale or keep_first or keep_last or (not self.training):
+                    if self.lambda_vq_depth > 0:
+                        mean_vq_loss = mean_vq_loss + self.lambda_vq_depth * self.depth_commitment_loss(r, q_list)
 
                 # per-scale commitment loss (both directions, as in VAR)
                 mean_vq_loss = mean_vq_loss + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta) + F.mse_loss(f_hat, f_no_grad)
@@ -404,6 +426,7 @@ class RMSVQVAE3D(nn.Module):
         depth_drop_rate: float = 0.1,
         keep_last_quant: bool = True,
         keep_first_quant: bool = False,
+        lambda_vq_depth: float = 1.0,
         # encoder/decoder
         skip_attn: bool = True,
         attn_resolutions=[16],
@@ -462,6 +485,7 @@ class RMSVQVAE3D(nn.Module):
             depth_drop_rate=depth_drop_rate,
             keep_last_quant=keep_last_quant,
             keep_first_quant=keep_first_quant,
+            lambda_vq_depth=lambda_vq_depth,
         )
 
     def encode(self, x):
@@ -520,6 +544,7 @@ if __name__ == '__main__':
         depth_drop_rate=0.0,
         keep_last_quant=True,
         keep_first_quant=False,
+        lambda_vq_depth=0.0,
         skip_attn=False,
         use_checkpoint=True,
     ).to(device)

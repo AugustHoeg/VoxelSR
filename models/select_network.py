@@ -208,6 +208,7 @@ def define_G(opt, mode='train'):
                    depth_drop_rate=opt_net["depth_drop_rate"],
                    keep_last_quant=opt_net["keep_last_quant"],
                    keep_first_quant=opt_net["keep_first_quant"],
+                   lambda_vq_depth=opt_net["lambda_vq_depth"],
                    attn_resolutions=opt_net["attn_resolutions"],
                    skip_attn=opt_net["skip_attn"],
                    use_checkpoint=opt_net["use_checkpoint"],
