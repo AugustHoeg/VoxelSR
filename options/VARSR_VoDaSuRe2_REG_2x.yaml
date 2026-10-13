@@ -59,7 +59,7 @@ train_opt:
   G_optimizer_wd: 0.05
   G_optimizer_clipgrad: 2
   G_optimizer_betas: [0.9, 0.95]
-  G_warmup_steps: 1000
+  G_warmup_steps: 5000
 
   # disable recon loss weights, VARSR is trained with CE loss only
   G_loss_weights:
