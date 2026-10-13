@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: VARVQVAE2D                  # Default model config
+  - model_opt: VARVQVAE2D_512                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -53,7 +53,7 @@ train_opt:
   G_optimizer_wd: 0
   G_optimizer_clipgrad: 4
   G_optimizer_betas: [ 0.5, 0.9 ]
-  G_warmup_steps: 1000 #
+  G_warmup_steps: 5000 #
 
   G_loss_weights:
     L1: 1.0

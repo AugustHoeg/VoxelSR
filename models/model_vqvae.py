@@ -164,14 +164,40 @@ class ModelVQVAE(ModelBase):
         grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
 
-        table = wandb.Table(
-            data=[[d, frac.item()] for d, frac in enumerate(self.frac_unique_ema)],
-            columns=["depth", "frac_unique"],
-        )
-        self.run.log({
-            "step": current_step,
-            "codebook_utilization": wandb.plot.bar(table, "depth", "frac_unique", title="Codebook Utilization per depth/scale"),
-        })
+        self._log_codebook_utilization(current_step)
+
+    def _log_codebook_utilization(self, current_step):
+        # frac_unique_ema is 1D for single-axis tokenizers (BSQ/MSVQ -> scale,
+        # RQ -> depth) and 2D (K, D) for RMSVQ (scale x depth). NaN = unobserved.
+        ema = self.frac_unique_ema
+        if ema is None:
+            return
+        logs = {"step": current_step}
+        if ema.dim() == 1:
+            table = wandb.Table(
+                data=[[i, f.item()] for i, f in enumerate(ema) if torch.isfinite(f)],
+                columns=["index", "frac_unique"],
+            )
+            logs["codebook_utilization"] = wandb.plot.bar(
+                table, "index", "frac_unique", title="Codebook Utilization",
+            )
+        else:
+            # per-(scale, depth) lines, plus the marginal means that reveal whether
+            # deeper depths are consistently used less than shallow ones.
+            for si in range(ema.shape[0]):
+                for d in range(ema.shape[1]):
+                    v = ema[si, d]
+                    if torch.isfinite(v):
+                        logs[f"codebook_util/scale{si}_depth{d}"] = v.item()
+            mean_per_depth = torch.nanmean(ema, dim=0)   # across scales
+            mean_per_scale = torch.nanmean(ema, dim=1)   # across depths
+            for d, v in enumerate(mean_per_depth):
+                if torch.isfinite(v):
+                    logs[f"codebook_util/mean_depth{d}"] = v.item()
+            for si, v in enumerate(mean_per_scale):
+                if torch.isfinite(v):
+                    logs[f"codebook_util/mean_scale{si}"] = v.item()
+        self.run.log(logs)
     def record_avg_train_log(self, current_step, idx_train):
         avg_loss = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": avg_loss})

@@ -20,7 +20,7 @@ netG:
   quant_resi: 0.5                # phi(x) = 0.5*conv(x) + 0.5*x
   share_quant_resi: 4            # partially-shared phi across scales
 
-  v_patch_nums: [1, 2, 3, 4, 5, 6, 8, 10, 13, 16]
+  v_patch_nums: [1, 2, 3, 4, 5, 6, 8, 10, 13, 16]  # For patch_size 256
 
   eini: -1.0                     # uniform codebook init (stabler from scratch); 0 = default nn.Embedding
 

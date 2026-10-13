@@ -293,8 +293,9 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         Returns:
             f_hat:            (B, C, D, H, W) straight-through quantized latent
             commitment_loss:  scalar
-            frac_unique:      list[float] len K, mean over the D depth codebooks of
-                              their usage at each scale (diagnostic only)
+            frac_unique:      list len K, each a length-D tensor of per-depth codebook
+                              usage at that scale (dropped scales are NaN). Stacks to
+                              (K, D); diagnostic only.
         """
         B, C, D, H, W = f_BCDHW.shape
 
@@ -310,7 +311,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
             f_hat = torch.zeros_like(residual)
 
             mean_vq_loss = f_BCDHW.new_zeros(())
-            frac_unique_list: List[torch.Tensor] = [torch.tensor(torch.nan, device=f_BCDHW.device)] * self.K
+            frac_unique_list = [torch.full((self.n_rq_depth,), torch.nan, device=f_BCDHW.device) for _ in range(self.K)]
 
             for si, (pd, ph, pw) in enumerate(self.v_patch_nums):
                 is_last = (si == self.K - 1)
@@ -325,7 +326,7 @@ class MultiScaleResidualBottleneck3D(nn.Module):
                 if keep_scale or keep_first or keep_last or (not self.training):
                     # quantize RVQ-style
                     q, q_list, depth_fracs = self._quantize_depth(r, n_active)
-                    frac_unique_list[si] = torch.stack(depth_fracs).mean()
+                    frac_unique_list[si] = torch.stack(depth_fracs)  # (D,) per-depth usage
                 else:
                     # scale dropout: skip quantization at this scale
                     q = torch.zeros_like(r)
@@ -558,13 +559,13 @@ if __name__ == '__main__':
     print(f"Input:            {tuple(x.shape)}")
     print(f"Output:           {tuple(x_hat.shape)}")
     print(f"VQ loss:          {loss.item():.4f}")
-    print(f'Frac unique / scale (depth-avg): {[f"{u:.2f}" for u in frac_unique]}')
+    print(f'Frac unique / scale (depth-avg): {[f"{u.mean():.2f}" for u in frac_unique]}')
 
     # exercise the quantizer (depth) dropout path on the same model
     model.quantizer.depth_drop_rate = 0.5
     x_hat_d, loss_d, _, _, frac_unique_d = model(torch.randn(2, 1, patch_size, patch_size, patch_size, device=device))
     print(f'[qdrop=0.5] Output: {tuple(x_hat_d.shape)}  loss: {loss_d.item():.4f}  '
-          f'frac unique/scale: {[f"{u:.2f}" for u in frac_unique_d]}')
+          f'frac unique/scale: {[f"{u.mean():.2f}" for u in frac_unique_d]}')
     model.quantizer.depth_drop_rate = 0.0
 
     if torch.cuda.is_available():
