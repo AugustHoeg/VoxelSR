@@ -118,10 +118,7 @@ class BlockRQ(nn.Module):
 
     def forward(self, x, cond, attn_mask=None, rope=None, rope_offset=0):
         gamma1, beta1, alpha1, gamma2, beta2, alpha2 = self.adaln_mlp(cond).chunk(6, dim=1)
-        x = x + alpha1.unsqueeze(1) * self.attn(
-            modulate(self.ln1(x), gamma1, beta1),
-            attn_mask=attn_mask, rope=rope, rope_offset=rope_offset,
-        )
+        x = x + alpha1.unsqueeze(1) * self.attn(modulate(self.ln1(x), gamma1, beta1), attn_mask=attn_mask, rope=rope, rope_offset=rope_offset)
         x = x + alpha2.unsqueeze(1) * self.ff(modulate(self.ln2(x), gamma2, beta2))
         return x
 
@@ -589,7 +586,7 @@ if __name__ == "__main__":
         seq_len=L_hr,
         n_rq_depth=D,
         n_embed=n_embed,
-        embed_dim=768, body_depth=6, head_depth=4, num_heads=num_heads,
+        embed_dim=768, body_depth=4, head_depth=4, num_heads=num_heads,
         lr_input_len=L_lr,
         lr_input_dim=lr_input_dim,
         lr_down_factor=lr_down_factor,

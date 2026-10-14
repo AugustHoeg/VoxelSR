@@ -91,6 +91,30 @@ def define_G(opt, mode='train'):
             input_embed_dim=opt_net.get('input_embed_dim', None),
         )
 
+    elif model_arch == "RQVARTransformer3D":
+        from models.RQVARTransformer3D import RQVARTransformer3D as net
+        netG = net(
+            patch_nums=tuple(opt_net['patch_nums']),
+            embed_dim=opt_net['embed_dim'],
+            c_vae=opt_net.get('c_vae'),
+            n_embed=opt_net['num_embeddings'],
+            n_rq_depth=opt_net['n_rq_depth'],
+            body_depth=opt_net['body_depth'],
+            head_depth=opt_net['head_depth'],
+            num_heads=opt_net['num_heads'],
+            mlp_ratio=opt_net.get('mlp_ratio', 4),
+            drop_rate=opt_net.get('drop_rate', 0.0),
+            drop_path_rate=opt_net.get('drop_path_rate', 0.0),
+            lr_input_len=opt_net.get('lr_input_len', None),
+            lr_input_dim=opt_net.get('lr_input_dim', None),
+            lr_down_factor=opt_net.get('lr_down_factor', 1),
+            rope_theta=opt_net.get('rope_theta', 10000),
+            rope_norm_coeffs=tuple(opt_net.get('rope_norm_coeffs', (1.0, 1.0, 1.0))),
+            rope_ref_grid=opt_net.get('rope_ref_grid', None),
+            word_norm=opt_net.get('word_norm', False),
+            use_checkpoint=opt_net.get('use_checkpoint', False),
+        )
+
     elif model_arch == "MaskTransformer3D":
         from models.MaskTransformer3D import MaskTransformer3D as net
         netG = net(

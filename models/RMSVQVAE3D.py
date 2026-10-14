@@ -355,27 +355,146 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         return f_hat, mean_vq_loss, frac_unique_list
 
     # ---------------------------------------------------------------
-    # Analysis / VAR data-prep utilities (not yet implemented for depth)
+    # Analysis / VAR data-prep utilities (hybrid RQ + next-scale transformer)
+    #
+    # Token contract for RQVARTransformer3D: every spatial position at every
+    # scale carries D depth codes. A per-scale "token block" is therefore
+    # (B, l_k, D) long indices, and the summed-over-depth codebook vector plays
+    # the role that a single VQ/BSQ code plays in MSVQVAE3D / BSQVAE3D. The
+    # cross-scale machinery (downsample residual -> quantize -> Phi refine ->
+    # accumulate f_hat) is unchanged; only the inner codebook lookup gains the
+    # D-step residual loop. Next-scale resampling uses `z_up` (trilinear) so the
+    # teacher-forcing input matches the AR sampler (see BSQVAE3D / BSC notes).
     # ---------------------------------------------------------------
     @torch.no_grad()
-    def f_to_idxBl_or_fhat(self, *args, **kwargs):
-        raise NotImplementedError(
-            'RMSVQVAE3D: VAR-training helpers are not implemented yet. The depth '
-            'axis (D codes per scale position) must be wired into the transformer '
-            'data path first. Only the VQVAE reconstruction path is available.'
-        )
+    def _quantize_depth_indices(self, r_dhwc: torch.Tensor):
+        """D-step residual codebook lookup at one scale (channel-last, no EMA write).
+
+        r_dhwc: (B, pd, ph, pw, C) residual for this scale.
+        Returns:
+            idxs:   (B, pd, ph, pw, D) long per-depth code indices
+            embs:   (B, pd, ph, pw, D, C) per-depth (non-cumulative) code vectors
+            summed: (B, pd, ph, pw, C) sum over depth of the code vectors
+        """
+        depth_rest = r_dhwc
+        idx_list, emb_list = [], []
+        summed = torch.zeros_like(r_dhwc)
+        for cb in self.codebooks:
+            idx, _ = cb.find_nearest_embedding(depth_rest)   # (B, pd, ph, pw)
+            emb = cb.embed(idx)                              # (B, pd, ph, pw, C)
+            depth_rest = depth_rest - emb                    # peel residual (full embed, as in forward)
+            summed = summed + emb
+            idx_list.append(idx)
+            emb_list.append(emb)
+        idxs = torch.stack(idx_list, dim=-1)                 # (B, pd, ph, pw, D)
+        embs = torch.stack(emb_list, dim=-2)                 # (B, pd, ph, pw, D, C)
+        return idxs, embs, summed
 
     @torch.no_grad()
-    def idxBl_to_var_input(self, *args, **kwargs):
-        raise NotImplementedError(
-            'RMSVQVAE3D: idxBl_to_var_input is not implemented for the depth axis yet.'
-        )
+    def f_to_idxBl_or_fhat(
+        self,
+        f_BCDHW: torch.Tensor,
+        to_fhat: bool,
+        v_patch_nums: Optional[Sequence[Union[int, Tuple[int, int, int]]]] = None,
+    ) -> List[torch.Tensor]:
+        """Flip-free multiscale tokenizer round-trip (depth-aware).
+
+        to_fhat=True  -> list[Tensor(B, C, D, H, W)]  cumulative reconstructions
+        to_fhat=False -> list[LongTensor(B, l_k, D)]  per-scale depth token blocks
+        """
+        B, C, D, H, W = f_BCDHW.shape
+        with torch.amp.autocast("cuda", enabled=False):
+            patches = [_as_dhw(pn) for pn in (v_patch_nums or self.v_patch_nums)]
+            assert patches[-1] == (D, H, W)
+
+            residual = f_BCDHW.float()
+            f_hat = torch.zeros_like(residual)
+            out: List[torch.Tensor] = []
+            for si, (pd, ph, pw) in enumerate(patches):
+                is_last = (si == len(patches) - 1)
+                r = residual if is_last else F.interpolate(residual, size=(pd, ph, pw), mode=self.z_down)
+                idxs, _embs, summed = self._quantize_depth_indices(r.permute(0, 2, 3, 4, 1).contiguous())
+                q = self._upsample_and_refine(summed.permute(0, 4, 1, 2, 3).contiguous(), si)
+                f_hat = f_hat + q
+                residual = residual - q
+                out.append(f_hat.clone() if to_fhat else idxs.reshape(B, pd * ph * pw, self.n_rq_depth))
+        return out
 
     @torch.no_grad()
-    def get_next_autoregressive_input(self, *args, **kwargs):
-        raise NotImplementedError(
-            'RMSVQVAE3D: get_next_autoregressive_input is not implemented for the depth axis yet.'
-        )
+    def idx_to_depth_code_vectors(self, ms_idx_Bl: List[torch.Tensor]) -> torch.Tensor:
+        """Per-depth (non-cumulative) code vectors for the depth transformer stream.
+
+        ms_idx_Bl: list length K of (B, l_k, D) long.
+        Returns:   (B, L_total, D, C) — depth `d` slice is codebook_d(idx_d), NOT
+                   cumulative; the transformer cumsums over depth internally.
+        """
+        B = ms_idx_Bl[0].shape[0]
+        with torch.amp.autocast("cuda", enabled=False):
+            per_scale = []
+            for si, codes in enumerate(ms_idx_Bl):
+                l = codes.shape[1]
+                codes = codes.view(B, l, self.n_rq_depth)
+                embs = torch.stack([self.codebooks[d].embed(codes[:, :, d]) for d in range(self.n_rq_depth)], dim=2)
+                per_scale.append(embs)                       # (B, l_k, D, C)
+            return torch.cat(per_scale, dim=1)               # (B, L_total, D, C)
+
+    @torch.no_grad()
+    def idxBl_to_var_input(self, ms_idx_Bl: List[torch.Tensor]) -> torch.Tensor:
+        """Flip-free spatial teacher-forcing input (summed-over-depth f_hat).
+
+        Returns (B, L_total - l_0, C): the cumulative f_hat downsampled (z_up) to
+        each scale 1..K-1, matching `get_next_autoregressive_input`. This is the
+        clean counterpart to ResidualSelfCorrection3D.flip_requant's x_BLC.
+        """
+        B = ms_idx_Bl[0].shape[0]
+        C = self.Cvae
+        D, H, W = self.v_patch_nums[-1]
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = ms_idx_Bl[0].new_zeros(B, C, D, H, W, dtype=torch.float32)
+            next_scales = []
+            for si in range(self.K - 1):
+                pd, ph, pw = self.v_patch_nums[si]
+                codes = ms_idx_Bl[si].view(B, pd, ph, pw, self.n_rq_depth)
+                summed = sum(self.codebooks[d].embed(codes[..., d]) for d in range(self.n_rq_depth))
+                q = self._upsample_and_refine(summed.permute(0, 4, 1, 2, 3).contiguous(), si)
+                f_hat = f_hat + q
+                pd_n, ph_n, pw_n = self.v_patch_nums[si + 1]
+                next_scales.append(
+                    F.interpolate(f_hat, size=(pd_n, ph_n, pw_n), mode=self.z_up).reshape(B, C, -1).transpose(1, 2)
+                )
+        return torch.cat(next_scales, dim=1) if next_scales else None
+
+    @torch.no_grad()
+    def idxBl_to_fhat(self, ms_idx_Bl: List[torch.Tensor]) -> torch.Tensor:
+        """Per-scale depth token blocks (B, l_k, D) -> full-res quantized latent (B, C, D, H, W)."""
+        B = ms_idx_Bl[0].shape[0]
+        D, H, W = self.v_patch_nums[-1]
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = ms_idx_Bl[0].new_zeros(B, self.Cvae, D, H, W, dtype=torch.float32)
+            for si, codes in enumerate(ms_idx_Bl):
+                pd, ph, pw = self.v_patch_nums[si]
+                codes = codes.view(B, pd, ph, pw, self.n_rq_depth)
+                summed = sum(self.codebooks[d].embed(codes[..., d]) for d in range(self.n_rq_depth))
+                q = self._upsample_and_refine(summed.permute(0, 4, 1, 2, 3).contiguous(), si)
+                f_hat = f_hat + q
+        return f_hat
+
+    @torch.no_grad()
+    def get_next_autoregressive_input(self, si: int, f_hat, q_BCDHW):
+        """Inference-time step: q_BCDHW is this scale's summed-over-depth sampled code
+        at scale-si resolution (B, C, pd, ph, pw), BEFORE upsampling/refinement. It is
+        upsampled+refined like training, added to the running f_hat, and the scale si+1
+        conditioning (z_up resample) is returned. Mirrors BSQVAE3D's contract (per-scale
+        code in), so training (BSC/idxBl_to_var_input) and inference stay aligned.
+        """
+        is_last = (si == self.K - 1)
+        with torch.amp.autocast("cuda", enabled=False):
+            q = self._upsample_and_refine(q_BCDHW.float(), si)
+            f_hat = f_hat.float() + q
+            if is_last:
+                return f_hat, f_hat
+            pd, ph, pw = self.v_patch_nums[si + 1]
+            return f_hat, F.interpolate(f_hat, size=(pd, ph, pw), mode=self.z_up)
 
     def extra_repr(self) -> str:
         return (f'v_patch_nums={self.v_patch_nums}, K={self.K}, n_rq_depth={self.n_rq_depth}, '
@@ -501,19 +620,22 @@ class RMSVQVAE3D(nn.Module):
         x_hat = self.decode(f_hat)
         return x_hat, vq_loss, None, z_e, frac_unique
 
-    # -------- helpers for VAR training later (not yet implemented) --------
+    # -------- helpers for the hybrid RQ + next-scale transformer --------
     @torch.no_grad()
-    def encode_multiscale(self, x):
-        raise NotImplementedError(
-            'RMSVQVAE3D: encode_multiscale is not implemented yet. The per-scale '
-            'depth axis must be wired into the VAR transformer data path first.'
-        )
+    def encode_multiscale(self, x, to_fhat: bool = False) -> List[torch.Tensor]:
+        """Per-scale ground-truth depth token blocks (B, l_k, D), or cumulative
+        f_hats if to_fhat=True. Flip-free round-trip for eval / sanity checks;
+        transformer teacher forcing + self-correction live in
+        ResidualSelfCorrection3D (models/residual_self_correction_3d.py)."""
+        z_e = self.encode(x)
+        return self.quantizer.f_to_idxBl_or_fhat(z_e, to_fhat=to_fhat)
 
     @torch.no_grad()
-    def decode_multiscale(self, ms_idx_Bl):
-        raise NotImplementedError(
-            'RMSVQVAE3D: decode_multiscale is not implemented yet.'
-        )
+    def decode_multiscale(self, ms_idx_Bl: List[torch.Tensor]):
+        """Decode per-scale depth token blocks (list of (B, l_k, D)) back to a volume."""
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = self.quantizer.idxBl_to_fhat(ms_idx_Bl)
+        return self.decode(f_hat).clamp_(-1, 1)
 
 
 # ---------------------------------------------------------------------------
