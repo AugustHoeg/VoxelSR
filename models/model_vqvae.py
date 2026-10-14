@@ -198,11 +198,13 @@ class ModelVQVAE(ModelBase):
                 if torch.isfinite(v):
                     logs[f"codebook_util/mean_scale{si}"] = v.item()
         self.run.log(logs)
+
     def record_avg_train_log(self, current_step, idx_train):
         avg_loss = (self.G_train_loss.item() / idx_train) * self.num_accum_steps_G
         self.run.log({"step": current_step, "G_train_loss": avg_loss})
 
         self.G_train_loss = 0.0
+
     def validation(self):
         self.vq_forward()
 
