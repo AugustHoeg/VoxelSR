@@ -55,7 +55,7 @@ train_opt:
 
   # Now matches VARSR papers hyperparameters
   G_optimizer_type: adamw
-  G_optimizer_lr: 5e-5  # VARSR base lr: 5e-5
+  G_optimizer_lr: 2e-5  # VARSR base lr: 5e-5, lowered to 2e-5 for finetuning
   G_optimizer_wd: 0.05
   G_optimizer_clipgrad: 2
   G_optimizer_betas: [0.9, 0.95]

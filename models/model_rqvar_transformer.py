@@ -12,6 +12,7 @@ from torchvision.utils import make_grid
 from models.model_base import ModelBase
 from models.select_model import define_Model
 from models.select_network import define_G
+from models.residual_self_correction_3d import ResidualSelfCorrection3D
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 from utils.load_options import load_options_from_experiment_id
@@ -30,7 +31,7 @@ class ModelTransformerRQVAR(ModelBase):
         self.last_iteration = 0
 
         self.netG_wo_ddp = define_G(opt, mode=mode)
-        self.netG = self.model_to_device(self.netG_wo_ddp, data_parallel=data_parallel, allow_compile=False)
+        self.netG = self.model_to_device(self.netG_wo_ddp, data_parallel=data_parallel, allow_compile=True)
 
         if self.opt_train['E_decay'] > 0:
             self.netE = self.init_netE(opt)
@@ -39,7 +40,6 @@ class ModelTransformerRQVAR(ModelBase):
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
 
         self.size_hr = self.opt['dataset_opt']['patch_size_hr']
-
 
         self.update = False
         self.early_stop = False
@@ -78,6 +78,13 @@ class ModelTransformerRQVAR(ModelBase):
             self.vq_model_hr.img_to_idxBl = torch.compile(self.vq_model_hr.img_to_idxBl, mode="max-autotune-no-cudagraphs")
             self.vq_model_hr.quantize.idxBl_to_var_input = torch.compile(self.vq_model_hr.quantize.idxBl_to_var_input, mode="max-autotune-no-cudagraphs")
 
+        self.rsc = ResidualSelfCorrection3D(
+            vae=self.vq_model_hr,
+            noise_apply_layers=self.opt['model_opt']['netG']['rsc_noise_apply_requant'],
+            noise_apply_strength=self.opt['model_opt']['netG']['rsc_noise_apply_requant'],
+            noise_apply_requant=self.opt['model_opt']['netG']['rsc_noise_apply_requant'],
+        )
+
     # ----------------------------------------
     # Encoding / decoding / sampling (VQ model always frozen)
     # ----------------------------------------
@@ -94,6 +101,10 @@ class ModelTransformerRQVAR(ModelBase):
             z_e:          (B, C, Dz, Dy, Dx) continuous encoder features
             latent_shape: (Dz, Dy, Dx)
         """
+
+        raw = vq_model.encode(x)
+        x_BLC_wo_prefix, code_vectors, gt_ms_idx_Bl = self.rsc.flip_requant(raw, self.device)
+        
         z_e = vq_model.encode(x)
         latent_shape = tuple(z_e.shape[2:])
         _, _, codes, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
@@ -166,7 +177,7 @@ class ModelTransformerRQVAR(ModelBase):
     def init_train(self):
         self.load()        # load transformer checkpoint if resuming
         self.load_hr_vq_model()
-        self.load_lr_vq_model()
+
         self.netG.train()
 
         self.define_loss()
