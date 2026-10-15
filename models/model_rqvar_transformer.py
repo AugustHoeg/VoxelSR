@@ -167,9 +167,6 @@ class ModelTransformerRQVAR(ModelBase):
             metadata=OmegaConf.to_container(self.opt['model_opt']['netG'], resolve=True)
         )
 
-    def define_visual_eval(self):
-        pass  # no SR comparison tool needed
-
     # ----------------------------------------
     # Training
     # ----------------------------------------
