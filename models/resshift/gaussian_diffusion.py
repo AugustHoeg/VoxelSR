@@ -92,6 +92,15 @@ class ModelVarTypeDDPM(enum.Enum):
     FIXED_LARGE = enum.auto()
     FIXED_SMALL = enum.auto()
 
+# Cache of schedule arrays already uploaded to a device, keyed by (id(arr),
+# device). The numpy schedule arrays are long-lived attributes of the diffusion
+# object, so re-uploading them from host on every call (there are ~5-6 calls per
+# diffusion step) wastes a host->device copy and forces a torch.compile graph
+# break. We keep a reference to the original array in the cache value so its
+# id() cannot be reused by a different array while the entry is live.
+_EXTRACT_TENSOR_CACHE = {}
+
+
 def _extract_into_tensor(arr, timesteps, broadcast_shape):
     """
     Extract values from a 1-D numpy array for a batch of indices.
@@ -102,7 +111,15 @@ def _extract_into_tensor(arr, timesteps, broadcast_shape):
                             dimension equal to the length of timesteps.
     :return: a tensor of shape [batch_size, 1, ...] where the shape has K dims.
     """
-    res = th.from_numpy(arr).to(device=timesteps.device)[timesteps].float()
+    device = timesteps.device
+    key = (id(arr), device)
+    cached = _EXTRACT_TENSOR_CACHE.get(key)
+    if cached is None or cached[0] is not arr:
+        tensor = th.from_numpy(arr).to(device=device).float()
+        _EXTRACT_TENSOR_CACHE[key] = (arr, tensor)
+    else:
+        tensor = cached[1]
+    res = tensor[timesteps]
     while len(res.shape) < len(broadcast_shape):
         res = res[..., None]
     return res.expand(broadcast_shape)
