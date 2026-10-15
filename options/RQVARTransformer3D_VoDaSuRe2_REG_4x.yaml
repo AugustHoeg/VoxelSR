@@ -10,12 +10,10 @@ input_type: 3D # Input type, 2D or 3D
 up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
-
 # Profile & Compile
 run_profile: false
 compile: true # Enable PyTorch 2.0 compilation
 compile_mode: max-autotune-no-cudagraphs  # default, reduce-overhead, max-autotune, max-autotune-no-cudagraphs
-
 
 # WandB parameters
 wandb_mode: online  # remember to set to "online" for actual training runs
@@ -75,7 +73,7 @@ dataset_opt:
   datasets: [VoDaSuRe2]
 
   train_dataloader_params:
-    dataloader_batch_size: 16
+    dataloader_batch_size: 32
     num_load_workers: 32
     persist_workers: true
     pin_memory: false
