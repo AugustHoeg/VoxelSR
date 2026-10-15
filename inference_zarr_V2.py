@@ -252,6 +252,10 @@ def main(opt: DictConfig):
     # Disable torch.compile
     opt['compile'] = False
 
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.set_float32_matmul_precision("high")
+
     from models.select_model import define_Model
     model = define_Model(opt, mode='test', data_parallel=False)  # currently supports only 1 GPU
     model.init_test(experiment_id)
