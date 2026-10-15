@@ -73,8 +73,8 @@ dataset_opt:
   datasets: [VoDaSuRe2]
 
   train_dataloader_params:
-    dataloader_batch_size: 24
-    num_load_workers: 24
+    dataloader_batch_size: 16
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 

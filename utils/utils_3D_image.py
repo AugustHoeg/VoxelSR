@@ -285,7 +285,7 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     return img_E
 
 
-def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=True, use_amp=True):
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=False, use_amp=True):
 
     model.netG.eval()
     if compile_forward:
