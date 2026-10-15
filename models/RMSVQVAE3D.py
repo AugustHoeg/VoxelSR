@@ -635,7 +635,7 @@ class RMSVQVAE3D(nn.Module):
         """Decode per-scale depth token blocks (list of (B, l_k, D)) back to a volume."""
         with torch.amp.autocast("cuda", enabled=False):
             f_hat = self.quantizer.idxBl_to_fhat(ms_idx_Bl)
-        return self.decode(f_hat).clamp_(-1, 1)
+        return self.decode(f_hat)
 
 
 # ---------------------------------------------------------------------------

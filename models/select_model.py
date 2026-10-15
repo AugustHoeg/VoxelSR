@@ -43,6 +43,9 @@ def define_Model(opt, mode, data_parallel=True):
     elif model == 'transformer_rq':
         from models.model_rq_transformer import ModelTransformerRQ as M
 
+    elif model == 'transformer_rqvar':
+        from models.model_rqvar_transformer import ModelTransformerRQVAR as M
+
     elif model == 'mask_transformer':
         from models.model_mask_transformer import ModelMaskTransformer as M
 

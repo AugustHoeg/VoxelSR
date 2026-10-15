@@ -1,13 +1,8 @@
-﻿from collections import OrderedDict
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
+﻿import torch
 import torch.nn.functional as F
 import wandb
 from omegaconf import OmegaConf
 from torch.nn.parallel import DistributedDataParallel
-from torchvision.utils import make_grid
 
 from models.model_base import ModelBase
 from models.select_model import define_Model
@@ -16,7 +11,6 @@ from models.residual_self_correction_3d import ResidualSelfCorrection3D
 from performance_metrics.performance_metrics import compute_performance_metrics
 from utils import utils_3D_image
 from utils.load_options import load_options_from_experiment_id
-from utils.utils_image import rgb2gray
 
 
 class ModelTransformerRQVAR(ModelBase):
@@ -39,7 +33,10 @@ class ModelTransformerRQVAR(ModelBase):
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
 
+        # Parameters
         self.size_hr = self.opt['dataset_opt']['patch_size_hr']
+        self.V = self.n_embed = self.opt['model_opt']['netG']['num_embeddings']
+        self.D = self.n_rq_depth = self.opt['model_opt']['netG']['n_rq_depth']
 
         self.update = False
         self.early_stop = False
@@ -74,14 +71,15 @@ class ModelTransformerRQVAR(ModelBase):
         self.vq_model_hr = self._load_vq_model(eid)
 
         if self.opt["compile"]:
-            self.vq_model_hr.fhat_to_img = torch.compile(self.vq_model_hr.fhat_to_img, mode="max-autotune-no-cudagraphs")
-            self.vq_model_hr.img_to_idxBl = torch.compile(self.vq_model_hr.img_to_idxBl, mode="max-autotune-no-cudagraphs")
-            self.vq_model_hr.quantize.idxBl_to_var_input = torch.compile(self.vq_model_hr.quantize.idxBl_to_var_input, mode="max-autotune-no-cudagraphs")
+            # TODO: check if the compiled versions of these functions are a actually being used in this file
+            self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
+            self.vq_model_hr.decode_multiscale = torch.compile(self.vq_model_hr.decode_multiscale, mode="max-autotune-no-cudagraphs")
+            self.vq_model_hr.quantizer.idxBl_to_var_input = torch.compile(self.vq_model_hr.quantizer.idxBl_to_var_input, mode="max-autotune-no-cudagraphs")
 
         self.rsc = ResidualSelfCorrection3D(
             vae=self.vq_model_hr,
-            noise_apply_layers=self.opt['model_opt']['netG']['rsc_noise_apply_requant'],
-            noise_apply_strength=self.opt['model_opt']['netG']['rsc_noise_apply_requant'],
+            noise_apply_layers=self.opt['model_opt']['netG']['rsc_noise_apply_layers'],
+            noise_apply_strength=self.opt['model_opt']['netG']['rsc_noise_apply_strength'],
             noise_apply_requant=self.opt['model_opt']['netG']['rsc_noise_apply_requant'],
         )
 
@@ -97,78 +95,26 @@ class ModelTransformerRQVAR(ModelBase):
             x:        (B, C, D, H, W)
             vq_model: frozen RMSVQVAE3D model
         Returns:
-            codes:        (B, Dz, Dy, Dx, n_rq_depth) int64
-            z_e:          (B, C, Dz, Dy, Dx) continuous encoder features
-            latent_shape: (Dz, Dy, Dx)
+            x_BLC_wo_prefix:         var input
+            code_vectors:            multi-scale code vectors with added noise from RSC
+            gt_ms_idx_Bl:            GT code vectors K list of (B, l_k, D) needed for RQVAR depth transformer
         """
 
         raw = vq_model.encode(x)
         x_BLC_wo_prefix, code_vectors, gt_ms_idx_Bl = self.rsc.flip_requant(raw, self.device)
-        
-        z_e = vq_model.encode(x)
-        latent_shape = tuple(z_e.shape[2:])
-        _, _, codes, _ = vq_model.quantizer(z_e)   # codes: (B, Dz, Dy, Dx, D)
-        return codes, z_e, latent_shape
-
-
-    @torch.no_grad()
-    def decode_to_image(self, codes: torch.Tensor, vq_model: torch.nn.Module):
-        """Decode RQ codes to a volume via the frozen VQ decoder.
-        """
-        z_q = vq_model.embed_code(codes)
-        return vq_model.decode(z_q)
-    
-    
-    def _flatten_lr_embeddings(self, z_lr: torch.Tensor) -> torch.Tensor:
-        """Reshape LR encoder output (B, C, Dz, Dy, Dx) → (B, N_lr, C)."""
-        B, C = z_lr.shape[:2]
-        return z_lr.view(B, C, -1).permute(0, 2, 1)
-
-    def _needs_code_vectors(self) -> bool:
-        return getattr(self.get_bare_model(self.netG), 'head_emb_vqvae', False)
-
-    def _get_code_vectors(self, codes: torch.Tensor) -> torch.Tensor:
-        """Look up frozen RQVAE per-depth codebook vectors for `codes`.
-
-        Args:
-            codes: (..., D) int64 — any shape ending in the RQ depth axis.
-        Returns:
-            (..., D, input_embed_dim) codebook vectors (stacked, no cumsum).
-        """
-        embs = self.vq_model_hr.quantizer.embed_code_with_depth(codes)  # list[D × (..., input_embed_dim)]
-        return torch.stack(embs, dim=-2)
+        return x_BLC_wo_prefix, code_vectors, gt_ms_idx_Bl 
 
 
     @torch.inference_mode()
-    def sample_E(self, z_lr: torch.Tensor = None, batch_size: int = None,
-                 temperature: float = 1.0, top_k: int = None) -> torch.Tensor:
-        """Raster-scan spatial + causal depth AR sampling, then RQVAE decode.
-
-        Args:
-            z_lr:        (B, C_lr, Dz, Dy, Dx) pre-encoded LR embeddings, or None
-                         for unconditional generation.
-            batch_size:  required when z_lr is None; ignored otherwise.
-            temperature: softmax temperature (higher = more random).
-            top_k:       if set, restrict to top-k logits before sampling.
-        Returns:
-            x_sampled: (B, C, D, H, W) reconstructed HR volume.
-        """
-        assert self.latent_shape_hr is not None, "latent_shape_hr not set; call encode_to_indices first."
-        dz, dy, dx = self.latent_shape_hr
-        D = self.n_rq_depth
-        if z_lr is not None:
-            B = z_lr.shape[0]
+    def sample_E(self, vae, lr_tokens, cfg=0.0, temp=1.0, top_k=None, top_p=None):
+        if cfg > 0.0:
+            ms_idx = self.netG_wo_ddp.autoregressive_infer_cfg(
+                vae, lr_tokens, cfg=cfg, temperature=temp, top_k=top_k, top_p=top_p)
         else:
-            assert batch_size is not None, "batch_size must be provided when z_lr is None."
-            B = batch_size
+            ms_idx = self.netG_wo_ddp.autoregressive_infer(
+                vae, lr_tokens, temperature=temp, top_k=top_k, top_p=top_p)
 
-        transformer = self.get_bare_model(self.netG)
-        code_emb_fn = self._get_code_vectors if self._needs_code_vectors() else None
-        codes_flat = transformer.sample(lr_tokens=z_lr, batch_size=B,
-                                temperature=temperature, top_k=top_k,
-                                code_emb_fn=code_emb_fn)                # (B, L, D)
-        codes = codes_flat.reshape(B, dz, dy, dx, D).clamp(0, self.num_embeddings - 1)
-        return self.vq_model_hr.decode_code(codes)
+        return vae.decode_multiscale(ms_idx)
 
     # ----------------------------------------
     # Lifecycle
@@ -197,7 +143,6 @@ class ModelTransformerRQVAR(ModelBase):
     def init_test(self, experiment_id):
         self.load(experiment_id, mode='test')
         self.load_hr_vq_model()
-        self.load_lr_vq_model()
         self.netG.eval()
         self.define_metrics()
         self.define_mixed_precision()
@@ -236,24 +181,16 @@ class ModelTransformerRQVAR(ModelBase):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
 
     def netG_forward(self):  # This is the function run during inference
-        self.E = self.sample_E(self.L, batch_size=self.L.shape[0])
-
+        self.E = self.sample_E(self.vq_model_hr, lr_tokens=self.L, cfg=0.0, temp=1.0, top_k=None, top_p=None)
 
     def optimize_parameters_amp(self, current_step, update=False):
+        # TODO: figure out if encode_to_indices should be outside AMP
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+            x_BLC_wo_prefix, code_vectors, gt_ms_idx_Bl = self.encode_to_indices(self.H, self.vq_model_hr)
+            logits = self.netG(x_BLC_wo_prefix, code_vectors, lr_tokens=self.L)  # list D of (B, L_total, V)
 
-        if self.unconditional:
-            z_lr = None
-        else:
-            z_lr = self.L
-
-        codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
-        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
-
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            logits = self.netG(codes, z_lr, code_vectors=code_vectors)   # list[D × (B, L, V)]
-            self.gen_loss = self._rq_loss(logits, codes_flat) / self.num_accum_steps_G
+            target_codes = torch.cat(gt_ms_idx_Bl, dim=1)  # (B, L_total, D)
+            self.gen_loss = self._rq_loss(logits, target_codes) / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
         if self.opt['rank'] == 0:
@@ -285,18 +222,11 @@ class ModelTransformerRQVAR(ModelBase):
             self.G_accum_count += 1
 
     def optimize_parameters(self, current_step, update=False):
-        codes, z_hr, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
+        x_BLC_wo_prefix, code_vectors, gt_ms_idx_Bl = self.encode_to_indices(self.H, self.vq_model_hr)
+        logits = self.netG(x_BLC_wo_prefix, code_vectors, lr_tokens=self.L)  # list D of (B, L_total, V)
 
-        if self.unconditional:
-            z_lr = None
-        else:
-            z_lr = self.L
-
-        codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)  # (B, L, D)
-        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
-
-        logits = self.netG(codes, z_lr, code_vectors=code_vectors)       # list[D × (B, L, V)]
-        self.gen_loss = self._rq_loss(logits, codes_flat) / self.num_accum_steps_G
+        target_codes = torch.cat(gt_ms_idx_Bl, dim=1)  # (B, L_total, D)
+        self.gen_loss = self._rq_loss(logits, target_codes) / self.num_accum_steps_G
 
         self.G_train_loss = self.gen_loss
         self.update = ((self.G_accum_count + 1) % self.num_accum_steps_G) == 0 or update
@@ -326,43 +256,41 @@ class ModelTransformerRQVAR(ModelBase):
     # Validation
     # ----------------------------------------
 
-    def _rq_loss(self, logits, codes_flat: torch.Tensor) -> torch.Tensor:
+    def _rq_loss(self, logits, target_codes: torch.Tensor) -> torch.Tensor:
         """Fully-observed teacher-forced cross-entropy over all L*D targets."""
-        logits_stack = torch.stack(logits, dim=2)                # (B, L, D, V)
-        V = logits_stack.shape[-1]
-        return F.cross_entropy(logits_stack.reshape(-1, V), codes_flat.reshape(-1))
+        logits_stack = torch.stack(logits, dim=2)  # list of D (B, L, V) -> (B, L, D, V)
+        return F.cross_entropy(logits_stack.reshape(-1, self.V), target_codes.reshape(-1))
 
     def validation(self):
-        codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        z_lr = None if self.unconditional else self.L
-        codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
-        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
+        gt_ms_idx_Bl = self.vq_model_hr.encode_multiscale(self.H)                          # list K of (B, l_k, D)
+        x_BLC_wo_prefix = self.vq_model_hr.quantizer.idxBl_to_var_input(gt_ms_idx_Bl)       # (B, L_total - l0, Cvae)
+        code_vectors = self.vq_model_hr.quantizer.idx_to_depth_code_vectors(gt_ms_idx_Bl)   # (B, L_total, D, Cvae)
+        logits = self.netG(x_BLC_wo_prefix, code_vectors, lr_tokens=self.L)  # list D of (B, L_total, V)
 
-        logits = self.netG(codes, z_lr, code_vectors=code_vectors)
-        self.gen_loss = self._rq_loss(logits, codes_flat)
+        target_codes = torch.cat(gt_ms_idx_Bl, dim=1)  # (B, L_total, D)
+        self.gen_loss = self._rq_loss(logits, target_codes)
         self.G_valid_loss += self.gen_loss
 
         # Sample image
-        self.E = self.sample_E(z_lr, batch_size=self.H.shape[0])
+        self.E = self.sample_E(self.vq_model_hr, lr_tokens=self.L, cfg=0.0, temp=1.0, top_k=None, top_p=None)
 
         rescale_images = self.opt["dataset_opt"]["norm_type"] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
 
     def validation_amp(self):
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        z_lr = None if self.unconditional else self.L
-        codes_flat = codes.reshape(codes.shape[0], -1, self.n_rq_depth)
-        code_vectors = self._get_code_vectors(codes_flat) if self._needs_code_vectors() else None
+        with torch.amp.autocast("cuda", dtype=self.mixed_precision):   # TODO: figure out if encode_multiscale should be outside AMP
+            gt_ms_idx_Bl = self.vq_model_hr.encode_multiscale(self.H)                          # list K of (B, l_k, D)
+            x_BLC_wo_prefix = self.vq_model_hr.quantizer.idxBl_to_var_input(gt_ms_idx_Bl)       # (B, L_total - l0, Cvae)
+            code_vectors = self.vq_model_hr.quantizer.idx_to_depth_code_vectors(gt_ms_idx_Bl)   # (B, L_total, D, Cvae)
+            logits = self.netG(x_BLC_wo_prefix, code_vectors, lr_tokens=self.L)  # list D of (B, L_total, V)
 
-        with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            logits = self.netG(codes, z_lr, code_vectors=code_vectors)
-            self.gen_loss = self._rq_loss(logits, codes_flat)
+            target_codes = torch.cat(gt_ms_idx_Bl, dim=1)  # (B, L_total, D)
+            self.gen_loss = self._rq_loss(logits, target_codes)
         self.G_valid_loss += self.gen_loss
 
         # Sample image
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.E = self.sample_E(z_lr, batch_size=self.H.shape[0])
+            self.E = self.sample_E(self.vq_model_hr, lr_tokens=self.L, cfg=0.0, temp=1.0, top_k=None, top_p=None)
 
         rescale_images = self.opt["dataset_opt"]["norm_type"] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
@@ -376,53 +304,3 @@ class ModelTransformerRQVAR(ModelBase):
         self.run.log({"step": current_step, "G_train_loss": loss})
         grad_norm = self.G_train_grad_norm.item()
         self.run.log({"step": current_step, "G_train_grad_norm": grad_norm})
-
-    def current_visuals(self):
-        out_dict = OrderedDict()
-
-        if self.mixed_precision is not None:
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-        else:
-            codes, _, self.latent_shape_hr = self.encode_to_indices(self.H, self.vq_model_hr)
-
-        z_lr = None if self.unconditional else self.L
-
-        if self.mixed_precision is not None:
-            with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-                E_vq = self.vq_model_hr.decode_code(codes)
-                E = self.sample_E(z_lr, batch_size=self.H.shape[0])
-        else:
-            E_vq = self.vq_model_hr.decode_code(codes)
-            E = self.sample_E(z_lr, batch_size=self.H.shape[0])
-
-        out_dict['H'] = rgb2gray(self.H.detach()[0].float().cpu(), channel_dim=0)
-        out_dict['E_vq'] = rgb2gray(E_vq.detach()[0].float().cpu(), channel_dim=0)
-        out_dict['E'] = rgb2gray(E.detach()[0].float().cpu(), channel_dim=0)
-
-        return out_dict
-
-    def log_comparison_image(self, img_dict, current_step, out_dtype=np.uint8):
-        slice_idx = img_dict['H'].shape[-1] // 2
-        H_slice = img_dict['H'][:, :, :, slice_idx]
-        E_vq_slice = img_dict['E_vq'][:, :, :, slice_idx]
-        E_slice = img_dict['E'][:, :, :, slice_idx]
-
-        row = torch.stack([E_slice, E_vq_slice, H_slice])
-        grid = make_grid(row, nrow=len(row), padding=0).permute(1, 2, 0)
-        grid_image = utils_3D_image.unnorm_and_rescale(grid, out_dtype)
-
-        figure_string = "RQTransformer: %s, step %d: AR Sample, VQ Recon, HR" % (
-            self.opt["model_opt"]["model_architecture"], current_step,
-        )
-
-        if self.opt['run_type'] == "HOME PC":
-            height, width = grid_image.shape[:2]
-            plt.figure(figsize=(4 * width / 100, 4 * height / 100), dpi=100)
-            plt.imshow(grid_image, vmin=0, vmax=255)
-            plt.title(figure_string)
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-
-        wandb.log({"Comparisons training": wandb.Image(grid_image, caption=figure_string, mode="RGB")})
