@@ -71,10 +71,8 @@ class ModelTransformerRQVAR(ModelBase):
         self.vq_model_hr = self._load_vq_model(eid)
 
         if self.opt["compile"]:
-            # TODO: check if the compiled versions of these functions are a actually being used in this file
             self.vq_model_hr.encode = torch.compile(self.vq_model_hr.encode, mode="max-autotune-no-cudagraphs")
             self.vq_model_hr.decode_multiscale = torch.compile(self.vq_model_hr.decode_multiscale, mode="max-autotune-no-cudagraphs")
-            self.vq_model_hr.quantizer.idxBl_to_var_input = torch.compile(self.vq_model_hr.quantizer.idxBl_to_var_input, mode="max-autotune-no-cudagraphs")
 
         self.rsc = ResidualSelfCorrection3D(
             vae=self.vq_model_hr,

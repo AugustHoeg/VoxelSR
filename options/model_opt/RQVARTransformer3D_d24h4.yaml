@@ -28,6 +28,10 @@ netG:
   rope_norm_coeffs: [1.0, 1.0, 1.0]  # (Dz, Dy, Dx) normalization coefficients for RoPE
   use_checkpoint: true
 
+  rsc_noise_apply_layers: 6      # Resolution scales at which to apply requantization noise to (0 - K-1)
+  rsc_noise_apply_strength: 0.05  # Probability of replacing each code in the D level codes with a random index
+  rsc_noise_apply_requant: true  # Toggles whether to apply requantization with noise to the D level codes
+
   init_type: default             # model uses its own _init_weights(); external init is skipped
   init_bn_type: uniform
   init_gain: 0.015
