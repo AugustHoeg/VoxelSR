@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RMSVQVAE3D_D4                  # Default model config
+  - model_opt: RMSVQVAE3D_D4_vq_depth                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -20,7 +20,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_V2_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_D4_prog_quant
+run_name: ${model_opt.model_architecture}_000_D4_prog_quant_vq_depth
 note: Note
 
 # GPU configuration

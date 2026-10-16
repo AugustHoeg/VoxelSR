@@ -327,6 +327,10 @@ class MultiScaleResidualBottleneck3D(nn.Module):
                     # quantize RVQ-style
                     q, q_list, depth_fracs = self._quantize_depth(r, n_active)
                     frac_unique_list[si] = torch.stack(depth_fracs)  # (D,) per-depth usage
+
+                    if self.lambda_vq_depth > 0:
+                        resid_grad = f_BCDHW - f_hat.detach()
+                        r_grad = resid_grad if is_last else F.interpolate(resid_grad, size=(pd, ph, pw), mode=self.z_down)
                 else:
                     # scale dropout: skip quantization at this scale
                     q = torch.zeros_like(r)
@@ -339,10 +343,10 @@ class MultiScaleResidualBottleneck3D(nn.Module):
                 f_hat = f_hat + q
                 residual = residual - q
 
-                # add RVQ-style commitment loss enforcing all depths to be utilized
+                # RQVAE-style per-depth commitment
                 if keep_scale or keep_first or keep_last or (not self.training):
                     if self.lambda_vq_depth > 0:
-                        mean_vq_loss = mean_vq_loss + self.lambda_vq_depth * self.depth_commitment_loss(r, q_list)
+                        mean_vq_loss = mean_vq_loss + self.lambda_vq_depth * self.depth_commitment_loss(r_grad, q_list)
 
                 # per-scale commitment loss (both directions, as in VAR)
                 mean_vq_loss = mean_vq_loss + F.mse_loss(f_hat.data, f_BCDHW).mul_(self.beta) + F.mse_loss(f_hat, f_no_grad)
