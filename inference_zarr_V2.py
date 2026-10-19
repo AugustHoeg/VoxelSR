@@ -269,7 +269,7 @@ def main(opt: DictConfig):
     print(f"Mask zero slices: {mask_zero_slices}")
 
     # For 2D models, upscales batch_size_2D slices at a time, or None = predict to predict all slices at once.
-    batch_size_2D = 32 if opt['input_type'] == '2D' else None
+    batch_size_2D = 16 if opt['input_type'] == '2D' else None
     print(f"2D slice batch size: {batch_size_2D}")
 
     slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
