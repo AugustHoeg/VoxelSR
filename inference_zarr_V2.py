@@ -268,6 +268,10 @@ def main(opt: DictConfig):
     mask_zero_slices = False
     print(f"Mask zero slices: {mask_zero_slices}")
 
+    # For 2D models, upscales batch_size_2D slices at a time, or None = predict to predict all slices at once.
+    batch_size_2D = 32 if opt['input_type'] == '2D' else None
+    print(f"2D slice batch size: {batch_size_2D}")
+
     slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
     from utils.utils_3D_image import SliceMetrics3D
     slice_metrics = SliceMetrics3D(slice_dim=0, slice_step=slice_step, slice_max_val=65535.0, metric_names=metric_names, device=model.device)
@@ -385,7 +389,8 @@ def main(opt: DictConfig):
                         overlap_mode="hann",
                         model_input_type=opt["input_type"],
                         unnorm=opt["dataset_opt"]["norm_type"] == "znormalization",
-                        input_rgb=opt["dataset_opt"]["expand_channels_rgb"]
+                        input_rgb=opt["dataset_opt"]["expand_channels_rgb"],
+                        batch_size_2D=batch_size_2D,
                     )
                     img_L = img_L[0]  # assumes single channel dimension
                     img_E = img_E[0]  # assumes single channel dimension

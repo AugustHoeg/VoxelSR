@@ -160,15 +160,26 @@ class SliceMetrics3D():
         return metric_vals, avg_metric_vals
 
 
-def upscale_slices(model, img_L, up_factor=2):
+def upscale_slices(model, img_L, up_factor=2, batch_size_2D=None):
 
     b, c, d, h, w = img_L.shape
     D, H, W = np.array(img_L.shape[2:]) * up_factor
 
     output_tensor = torch.zeros((b, c, D, H, W))
-    model.L = img_L.permute(0, 2, 1, 3, 4).reshape(b * d, c, h, w)
-    model.netG_forward()
-    output_tensor[:, :, ::up_factor, :, :] = model.E.reshape(b, d, c, H, W).permute(0, 2, 1, 3, 4).contiguous()
+
+    slices_L = img_L.permute(0, 2, 1, 3, 4).reshape(b * d, c, h, w)
+    n_slices = slices_L.shape[0]
+
+    if batch_size_2D is None or batch_size_2D >= n_slices:
+        batch_size_2D = n_slices
+
+    output_slices = torch.zeros((n_slices, c, H, W))
+    for s in range(0, n_slices, batch_size_2D):
+        model.L = slices_L[s:s + batch_size_2D]
+        model.netG_forward()
+        output_slices[s:s + batch_size_2D] = model.E
+
+    output_tensor[:, :, ::up_factor, :, :] = output_slices.reshape(b, d, c, H, W).permute(0, 2, 1, 3, 4).contiguous()
 
     return output_tensor
 
@@ -285,7 +296,7 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     return img_E
 
 
-def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=False, use_amp=False):
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=False, use_amp=False, batch_size_2D=None):
 
     model.netG.eval()
     if compile_forward:
@@ -341,7 +352,7 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
             input_patch_batch = torch.expand_copy(input_patch_batch, (-1, 3, -1, -1, -1)) if input_rgb else input_patch_batch
 
             if model_input_type == '2D':
-                upsampled_batch = upscale_slices(model, input_patch_batch.to(model.device), up_factor=f).float().cpu()
+                upsampled_batch = upscale_slices(model, input_patch_batch.to(model.device), up_factor=f, batch_size_2D=batch_size_2D).float().cpu()
             else:
                 model.L = input_patch_batch.to(model.device)
                 if use_amp:
