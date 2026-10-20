@@ -1,0 +1,37 @@
+## @package _global_
+model: transformer_rqvar
+model_architecture: RQVARTransformer3D
+
+netG:
+  net_type: RQVARTransformer3D
+  description: "RQVARTransformer3D"
+
+  patch_nums: [1, 2, 3, 4, 5, 6, 8]  # For patch_size 64
+
+  num_embeddings: 4096           # codebook size; must match the HR VQ model
+  n_rq_depth: 4                  # RQ depth; must match the HR VQ model
+  c_vae: 64                     # latent channel dim of the frozen RMSVQVAE3D encoder
+
+  lr_input_len: 4096             # LR latent spatial token count: 16^3 = 4096
+  lr_input_dim: 1                # channel dim of LR VQ encoder output (quant_embed_dim)
+  lr_down_factor: 2              # downsampling factor for LR input before projection to embed_dim
+
+  embed_dim: 1536                # embedding dimension of the transformer
+  body_depth: 12                 # number of spatial transformer blocks (VAR)
+  head_depth: 4                  # number of depth transformer blocks (RQ)
+  num_heads: 24                   # must evenly divide embed_dim
+  mlp_ratio: 4
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.1
+
+  rope_theta: 10000
+  rope_norm_coeffs: [1.0, 1.0, 1.0]  # (Dz, Dy, Dx) normalization coefficients for RoPE
+  use_checkpoint: true
+
+  rsc_noise_apply_layers: 6      # Resolution scales at which to apply requantization noise to (0 - K-1)
+  rsc_noise_apply_strength: 0.05  # Probability of replacing each code in the D level codes with a random index
+  rsc_noise_apply_requant: true  # Toggles whether to apply requantization with noise to the D level codes
+
+  init_type: default             # model uses its own _init_weights(); external init is skipped
+  init_bn_type: uniform
+  init_gain: 0.015
