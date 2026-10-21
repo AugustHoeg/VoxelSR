@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 2D # Input type, 2D or 3D
-up_factor: 4  # upscaling factor
+up_factor: 2  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile & Compile
@@ -20,7 +20,7 @@ wandb_mode: online
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_V2_VQ_${vae_target}_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_ID000000
-run_name: ${model_opt.model_architecture}_000_512
+run_name: ${model_opt.model_architecture}_000_512_HR1
 note: Note
 
 # GPU configuration
@@ -63,8 +63,8 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: true
-  patch_size: 128
+  synthetic: false
+  patch_size: 256 # 128
 
   load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
 
