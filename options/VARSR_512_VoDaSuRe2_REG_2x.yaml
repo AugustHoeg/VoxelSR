@@ -41,7 +41,7 @@ path:
   pretrained_orig_filename: var_d24
   pretrained_netE: null
 
-  pretrained_hr_vqmodel_id: VARVQVAE2D_VoDaSuRe2_512_VoDaSuRe_OME_ID000160  # experiment ID of pretrained VQ model
+  pretrained_hr_vqmodel_id: VARVQVAE2D_VoDaSuRe2_512_VoDaSuRe_OME_ID000170  # experiment ID of pretrained VQ model
 
 # Overwrite default training parameters
 train_opt:
