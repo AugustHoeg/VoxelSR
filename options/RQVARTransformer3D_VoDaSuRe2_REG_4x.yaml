@@ -38,8 +38,8 @@ path:
   pretrained_netE: null
 
   # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000010  # VQ model with Cvae=512, ~50% usage
-  pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035  # VQ model with Cvae=64, znorm=True and ~95% usage
-
+  # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035  # VQ model with Cvae=64, znorm=True and ~95% usage
+  pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000045  # VQ model with Cvae=64, znorm=False and ~80% usage
 
 # Overwrite default training parameters
 train_opt:
