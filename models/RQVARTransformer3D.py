@@ -48,6 +48,8 @@ from models.models_3D import PixelUnshuffle3D
 from models.rope import Rope3DMultiScale
 from models.InfinityTransformer3D import RoPETransformer3D
 
+from models.RRDBNet3D_official import RRDB, make_layer
+
 
 class RQVARTransformer3D(nn.Module):
     """Prefix-conditioned hybrid RQ + next-scale transformer for 3D volumetric SR.
@@ -87,6 +89,7 @@ class RQVARTransformer3D(nn.Module):
         head_depth=4,
         num_heads=16,
         mlp_ratio=4.,
+        lr_block_depth=0,
         drop_rate=0.,
         drop_path_rate=0.,
         lr_input_len=None,
@@ -117,6 +120,7 @@ class RQVARTransformer3D(nn.Module):
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
         self.mlp_dim = int(embed_dim * mlp_ratio)
+        self.lr_block_depth = lr_block_depth
         self.drop_rate = drop_rate
         self.drop_path_rate = drop_path_rate
         self.use_checkpoint = use_checkpoint
@@ -140,9 +144,21 @@ class RQVARTransformer3D(nn.Module):
             self.n_lr = lr_input_len // lr_down_factor ** 3
             self.lr_shape = tuple(int(round(lr_input_len ** (1. / 3))) for _ in range(3))
             self.prefix_shape = tuple(s // lr_down_factor for s in self.lr_shape)
-            self.lr_down = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
-            lr_in_dim = lr_input_dim * lr_down_factor ** 3 if lr_input_dim is not None else embed_dim
-            self.lr_proj = nn.Conv3d(lr_in_dim, embed_dim, kernel_size=1, bias=False)
+            self.lr_in_dim = lr_input_dim * lr_down_factor ** 3 if lr_input_dim is not None else embed_dim
+            
+            # LR encoder blocks
+            self.lr_block = []
+            if self.lr_block_depth > 0 and lr_input_dim is not None:
+                nf = 64
+                self.lr_block.append(nn.Conv3d(lr_input_dim, nf, kernel_size=3, stride=1, padding=1))
+                self.lr_block.append(make_layer(RRDB, n_layers=self.lr_block_depth, nf=nf, gc=32))
+                self.lr_block.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
+                self.lr_block.append(nn.Conv3d(nf * lr_down_factor**3, embed_dim, kernel_size=1, bias=False))
+            else:
+                self.lr_block.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
+                self.lr_block.append(nn.Conv3d(self.lr_in_dim, embed_dim, kernel_size=1, bias=False))
+            self.lr_block = nn.Sequential(*self.lr_block)
+
             # learned null prefix for classifier-free guidance
             self.null_lr_prefix = nn.Parameter(torch.empty(1, self.n_lr, self.C))
         else:
@@ -240,9 +256,8 @@ class RQVARTransformer3D(nn.Module):
 
     def _lr_prefix(self, lr_tokens: torch.Tensor) -> torch.Tensor:
         """(B, C_lr, Dz, Dy, Dx) → (B, n_lr, C). RoPE handles position."""
-        lr_tokens = self.lr_down(lr_tokens)
-        b = lr_tokens.shape[0]
-        return self.lr_proj(lr_tokens).view(b, self.C, self.n_lr).transpose(1, 2)
+        lr_tokens = self.lr_block(lr_tokens)
+        return lr_tokens.view(lr_tokens.shape[0], self.C, self.n_lr).transpose(1, 2)
 
     def _build_prefix(self, lr_tokens, B):
         """Prefix tokens (B, n_lr, C). lr_tokens=None → learned null prefix (CFG uncond)."""
@@ -516,6 +531,7 @@ if __name__ == "__main__":
         head_depth=2,
         num_heads=8,
         mlp_ratio=4.0,
+        lr_block_depth=0,  # number of block for feature extraction before tokenization
         drop_rate=0.0,
         drop_path_rate=0.1,
         lr_input_len=lr_spatial ** 3,

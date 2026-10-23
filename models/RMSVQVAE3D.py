@@ -484,6 +484,35 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         return f_hat
 
     @torch.no_grad()
+    def embed_partial_code(self, ms_idx_Bl: List[torch.Tensor], code_idx: int) -> torch.Tensor:
+        """Depth-limited multiscale decode: reconstruct f_hat using only depth
+        codebooks 0..code_idx (inclusive), with *all* scales active.
+
+        This is the RMSVQVAE analogue of RQVAE3D.embed_partial_code: it peels off
+        the deeper residual codebooks while keeping the full next-scale pyramid, so
+        it isolates the contribution of the RQ (depth) axis rather than the scale
+        axis. code_idx is a 0-based inclusive depth index (code_idx=0 uses only the
+        first codebook; code_idx=n_rq_depth-1 reproduces idxBl_to_fhat).
+
+        ms_idx_Bl: list length K of (B, l_k, D) long per-scale depth token blocks.
+        Returns:   (B, C, D, H, W) full-res quantized latent.
+        """
+        assert 0 <= code_idx < self.n_rq_depth, (
+            f"code_idx={code_idx} out of range [0, {self.n_rq_depth - 1}]"
+        )
+        B = ms_idx_Bl[0].shape[0]
+        D, H, W = self.v_patch_nums[-1]
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = ms_idx_Bl[0].new_zeros(B, self.Cvae, D, H, W, dtype=torch.float32)
+            for si, codes in enumerate(ms_idx_Bl):
+                pd, ph, pw = self.v_patch_nums[si]
+                codes = codes.view(B, pd, ph, pw, self.n_rq_depth)
+                summed = sum(self.codebooks[d].embed(codes[..., d]) for d in range(code_idx + 1))
+                q = self._upsample_and_refine(summed.permute(0, 4, 1, 2, 3).contiguous(), si)
+                f_hat = f_hat + q
+        return f_hat
+
+    @torch.no_grad()
     def get_next_autoregressive_input(self, si: int, f_hat, q_BCDHW):
         """Inference-time step: q_BCDHW is this scale's summed-over-depth sampled code
         at scale-si resolution (B, C, pd, ph, pw), BEFORE upsampling/refinement. It is
@@ -639,6 +668,17 @@ class RMSVQVAE3D(nn.Module):
         """Decode per-scale depth token blocks (list of (B, l_k, D)) back to a volume."""
         with torch.amp.autocast("cuda", enabled=False):
             f_hat = self.quantizer.idxBl_to_fhat(ms_idx_Bl)
+        return self.decode(f_hat)
+
+    @torch.no_grad()
+    def decode_multiscale_partial(self, ms_idx_Bl: List[torch.Tensor], code_idx: int):
+        """Progressive depth reconstruction: decode per-scale depth token blocks
+        (list of (B, l_k, D)) back to a volume using only depth codebooks
+        0..code_idx (inclusive), with all scales active. Useful for visualising
+        the contribution of each RQ depth, analogous to
+        RQVAE3D.decode_code_partial."""
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = self.quantizer.embed_partial_code(ms_idx_Bl, code_idx)
         return self.decode(f_hat)
 
 

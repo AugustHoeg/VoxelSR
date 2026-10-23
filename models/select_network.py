@@ -103,6 +103,7 @@ def define_G(opt, mode='train'):
             head_depth=opt_net['head_depth'],
             num_heads=opt_net['num_heads'],
             mlp_ratio=opt_net.get('mlp_ratio', 4),
+            lr_block_depth=opt_net['lr_block_depth'],
             drop_rate=opt_net.get('drop_rate', 0.0),
             drop_path_rate=opt_net.get('drop_path_rate', 0.0),
             lr_input_len=opt_net.get('lr_input_len', None),
