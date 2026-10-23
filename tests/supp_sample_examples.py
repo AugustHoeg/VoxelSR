@@ -71,7 +71,7 @@ if __name__ == '__main__':
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["text.usetex"] = True
 
-    img_idx = 15  # 0 to 4
+    img_idx = 0  # 0 to 4
     base_dir = "../../downloaded_data/VoDaSuRe/supplementary/examples/"
 
     #sample_dirs = [os.path.join(base_dir, name) for name in sample_names]
@@ -98,26 +98,26 @@ if __name__ == '__main__':
     show_HR_as_large_img = False
 
     red_box_size = 256
-    #red_box_coords = (1920//2 - red_box_size//2, 1920//2 - red_box_size//2)
+    red_box_coords = (1920//2 - red_box_size//2, 1920//2 - red_box_size//2)
     #red_box_coords = (1920 // 2 - red_box_size // 2 +300, 1920 // 2 - red_box_size // 2 -350)
     #red_box_coords = (1600 // 2 - red_box_size // 2 + 250, 1440 // 2 - red_box_size // 2 + 290)
 
     red_box_coords = (1000, 950)  # bamboo
-    red_box_coords = (1000, 950)  # cardboard
-    red_box_coords = (1000, 500)  # Cypress
-    red_box_coords = (1000, 500)  # Elm
-    red_box_coords = (200, 300)  # Femur 01, no norm
-    red_box_coords = (600, 400)  # Femur 15, no norm
-    red_box_coords = (600, 400)  # Femur 21, no norm
-    red_box_coords = (300, 400)  # Femur 74, no norm
-    red_box_coords = (1000, 500)  # Larch
-    red_box_coords = (1000, 500)  # MDF, only LR norm
-    red_box_coords = (1000, 500)  # Oak, only LR norm
-    red_box_coords = (600, 650)  # Ox bone, only LR norm
-    red_box_coords = (450, 500)  # Vertebrae A, no norm
-    red_box_coords = (450, 500)  # Vertebrae B, no norm
-    red_box_coords = (450, 500)  # Vertebrae C, no norm
-    red_box_coords = (450, 500)  # Vertebrae D, no norm
+    # red_box_coords = (1000, 950)  # cardboard
+    # red_box_coords = (1000, 500)  # Cypress
+    # red_box_coords = (1000, 500)  # Elm
+    # red_box_coords = (200, 300)  # Femur 01, no norm
+    # red_box_coords = (600, 400)  # Femur 15, no norm
+    # red_box_coords = (600, 400)  # Femur 21, no norm
+    # red_box_coords = (300, 400)  # Femur 74, no norm
+    # red_box_coords = (1000, 500)  # Larch
+    # red_box_coords = (1000, 500)  # MDF, only LR norm
+    # red_box_coords = (1000, 500)  # Oak, only LR norm
+    # red_box_coords = (600, 650)  # Ox bone, only LR norm
+    # red_box_coords = (450, 500)  # Vertebrae A, no norm
+    # red_box_coords = (450, 500)  # Vertebrae B, no norm
+    # red_box_coords = (450, 500)  # Vertebrae C, no norm
+    # red_box_coords = (450, 500)  # Vertebrae D, no norm
 
     large_image_string = r"VoDaSuRe ($\times 4$)"
     use_other_string = True

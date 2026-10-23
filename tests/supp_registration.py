@@ -70,8 +70,8 @@ if __name__ == '__main__':
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["text.usetex"] = True
 
-    img_idx = 10 # 0 to 4
-    base_dir = "../../downloaded_data/VoDaSuRe/supplementary/slices/"
+    img_idx = 0 # 0 to 4
+    base_dir = "../../downloaded_data/VoDaSuRe2/supplementary/slices/"
 
     #sample_dirs = [os.path.join(base_dir, name) for name in sample_names]
 
@@ -82,8 +82,9 @@ if __name__ == '__main__':
     row, col = 1, 5
     show_HR_as_large_img = False
 
-    red_box_size = 512
-    red_box_coords = (1920//2 - red_box_size//2 - 150, 1920//2 - red_box_size//2 - 125)
+    red_box_size = 768
+    red_box_coords = (4000 // 2 - red_box_size // 2, 4000 // 2 - red_box_size // 2)
+    # red_box_coords = (1920//2 - red_box_size//2 - 150, 1920//2 - red_box_size//2 - 125)
     #red_box_coords = (1920 // 2 - red_box_size // 2 -550, 1920 // 2 - red_box_size // 2 -350)
     #red_box_coords = (1600 // 2 - red_box_size // 2 + 250, 1440 // 2 - red_box_size // 2 +290)
     #red_box_coords = (1600 // 2 - red_box_size // 2 -500, 1440 // 2 - red_box_size // 2 - 250)
@@ -165,6 +166,6 @@ if __name__ == '__main__':
 
     datetime = np.datetime64('now')
     time = str(datetime).replace(":", "-").replace(" ", "_")
-    save_path = f"../figures/supplementary_registration_{img_idx}.jpg"
+    save_path = f"../figures/VoDaSuRe2_supplementary_registration_{img_idx}.jpg"
     fig.savefig(save_path, format="jpg", dpi=300)
     plt.show()
