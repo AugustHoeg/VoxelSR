@@ -82,7 +82,7 @@ if __name__ == '__main__':
     row, col = 1, 5
     show_HR_as_large_img = False
 
-    red_box_size = 768
+    red_box_size = 512
     red_box_coords = (4000 // 2 - red_box_size // 2, 4000 // 2 - red_box_size // 2)
     # red_box_coords = (1920//2 - red_box_size//2 - 150, 1920//2 - red_box_size//2 - 125)
     #red_box_coords = (1920 // 2 - red_box_size // 2 -550, 1920 // 2 - red_box_size // 2 -350)

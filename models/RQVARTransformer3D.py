@@ -48,8 +48,6 @@ from models.models_3D import PixelUnshuffle3D
 from models.rope import Rope3DMultiScale
 from models.InfinityTransformer3D import RoPETransformer3D
 
-from models.RRDBNet3D_official import RRDB, make_layer
-
 
 class RQVARTransformer3D(nn.Module):
     """Prefix-conditioned hybrid RQ + next-scale transformer for 3D volumetric SR.
@@ -145,25 +143,35 @@ class RQVARTransformer3D(nn.Module):
             self.lr_shape = tuple(int(round(lr_input_len ** (1. / 3))) for _ in range(3))
             self.prefix_shape = tuple(s // lr_down_factor for s in self.lr_shape)
             self.lr_in_dim = lr_input_dim * lr_down_factor ** 3 if lr_input_dim is not None else embed_dim
-            
-            # LR encoder blocks
-            self.lr_block = []
+
+            # base prefix projection: lossless PixelUnshuffle + 1x1 conv.
+            # Every LR voxel reaches the transformer exactly and perfectly localised
+            # to its prefix token (RoPE handles position); this is the lr_block_depth=0 path.
+            self.lr_unshuffle = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
+            self.lr_proj = nn.Conv3d(self.lr_in_dim, embed_dim, kernel_size=1, bias=False)
+
+            # optional shallow conv enrichment, added as a ZERO-INITIALISED residual
+            # (final conv zero-init, see _init_weights) so at step 0 the prefix is
+            # identical to lr_block_depth=0 and can only improve from there.
             if self.lr_block_depth > 0 and lr_input_dim is not None:
                 nf = 64
-                self.lr_block.append(nn.Conv3d(lr_input_dim, nf, kernel_size=3, stride=1, padding=1))
-                self.lr_block.append(make_layer(RRDB, n_layers=self.lr_block_depth, nf=nf, gc=32))
-                self.lr_block.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
-                self.lr_block.append(nn.Conv3d(nf * lr_down_factor**3, embed_dim, kernel_size=1, bias=False))
+                enrich = [nn.Conv3d(lr_input_dim, nf, kernel_size=3, stride=1, padding=1),
+                          nn.LeakyReLU(negative_slope=0.2, inplace=True)]
+                for _ in range(self.lr_block_depth - 1):
+                    enrich.append(nn.Conv3d(nf, nf, kernel_size=3, stride=1, padding=1))
+                    enrich.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
+                enrich.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
+                enrich.append(nn.Conv3d(nf * lr_down_factor ** 3, embed_dim, kernel_size=1, bias=False))
+                self.lr_enrich = nn.Sequential(*enrich)
             else:
-                self.lr_block.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
-                self.lr_block.append(nn.Conv3d(self.lr_in_dim, embed_dim, kernel_size=1, bias=False))
-            self.lr_block = nn.Sequential(*self.lr_block)
+                self.lr_enrich = None
 
             # learned null prefix for classifier-free guidance
             self.null_lr_prefix = nn.Parameter(torch.empty(1, self.n_lr, self.C))
         else:
             self.n_lr = 0
             self.lr_shape = self.prefix_shape = None
+            self.lr_enrich = None
 
         self.context_token = self.n_lr + self.l0   # LR + SOS region (level 0)
 
@@ -245,6 +253,10 @@ class RQVARTransformer3D(nn.Module):
         if self.n_lr > 0:
             nn.init.trunc_normal_(self.null_lr_prefix, std=self.init_std)
 
+        # zero-init the shallow LR enrichment so the prefix starts == lr_block_depth=0
+        if self.lr_enrich is not None:
+            nn.init.zeros_(self.lr_enrich[-1].weight)
+
         # DiT-style zero-init: AdaLN starts as identity in both branches + body_norm.
         for block in list(self.spatial_blocks.layers) + list(self.depth_blocks.layers):
             nn.init.constant_(block.adaln_mlp[1].weight, 0)
@@ -255,9 +267,16 @@ class RQVARTransformer3D(nn.Module):
     #  prefix / SOS helpers (spatial branch) 
 
     def _lr_prefix(self, lr_tokens: torch.Tensor) -> torch.Tensor:
-        """(B, C_lr, Dz, Dy, Dx) → (B, n_lr, C). RoPE handles position."""
-        lr_tokens = self.lr_block(lr_tokens)
-        return lr_tokens.view(lr_tokens.shape[0], self.C, self.n_lr).transpose(1, 2)
+        """(B, C_lr, Dz, Dy, Dx) → (B, n_lr, C). RoPE handles position.
+
+        Base path is the lossless PixelUnshuffle + 1x1 conv (exact, localised LR);
+        the optional shallow conv branch is added as a zero-initialised residual, so
+        at init the prefix equals the lr_block_depth=0 projection.
+        """
+        feat = self.lr_proj(self.lr_unshuffle(lr_tokens))
+        if self.lr_enrich is not None:
+            feat = feat + self.lr_enrich(lr_tokens)
+        return feat.view(feat.shape[0], self.C, self.n_lr).transpose(1, 2)
 
     def _build_prefix(self, lr_tokens, B):
         """Prefix tokens (B, n_lr, C). lr_tokens=None → learned null prefix (CFG uncond)."""

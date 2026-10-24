@@ -21,7 +21,7 @@ netG:
   head_depth: 4                  # number of depth transformer blocks (RQ)
   num_heads: 24                   # must evenly divide embed_dim
   mlp_ratio: 4
-  lr_block_depth: 3              # number of LR blocks before tokenization; 0 means no LR blocks
+  lr_block_depth: 3              # shallow 3x3 conv layers in the zero-init LR enrichment residual; 0 means none
   attn_drop_rate: 0.0
   drop_path_rate: 0.1
 
