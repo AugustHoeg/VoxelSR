@@ -49,6 +49,18 @@ from models.rope import Rope3DMultiScale
 from models.InfinityTransformer3D import RoPETransformer3D
 
 
+class ResBlock(nn.Module):
+
+    def __init__(self, nf: int):
+        super().__init__()
+        self.conv1 = nn.Conv3d(nf, nf, kernel_size=1)
+        self.conv2 = nn.Conv3d(nf, nf, kernel_size=1)
+        self.act = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+    def forward(self, x):
+        return self.conv2(self.act(self.conv1(x))) + x
+
+
 class RQVARTransformer3D(nn.Module):
     """Prefix-conditioned hybrid RQ + next-scale transformer for 3D volumetric SR.
 
@@ -88,6 +100,8 @@ class RQVARTransformer3D(nn.Module):
         num_heads=16,
         mlp_ratio=4.,
         lr_block_depth=0,
+        lr_block_nf=64,
+        use_lr_cond=False,
         drop_rate=0.,
         drop_path_rate=0.,
         lr_input_len=None,
@@ -119,6 +133,8 @@ class RQVARTransformer3D(nn.Module):
         self.head_dim = embed_dim // num_heads
         self.mlp_dim = int(embed_dim * mlp_ratio)
         self.lr_block_depth = lr_block_depth
+        self.lr_block_nf = lr_block_nf
+        self.use_lr_cond = use_lr_cond
         self.drop_rate = drop_rate
         self.drop_path_rate = drop_path_rate
         self.use_checkpoint = use_checkpoint
@@ -149,14 +165,11 @@ class RQVARTransformer3D(nn.Module):
 
             lr_block = []
             if self.lr_block_depth > 0 and lr_input_dim is not None:
-                nf = 64
-                lr_block.append(nn.Conv3d(lr_input_dim, nf, kernel_size=3, stride=1, padding=1))
-                lr_block.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
-                for _ in range(self.lr_block_depth - 1):
-                    lr_block.append(nn.Conv3d(nf, nf, kernel_size=3, stride=1, padding=1))
-                    lr_block.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
+                lr_block.append(nn.Conv3d(lr_input_dim, lr_block_nf, kernel_size=1))
+                for i in range(self.lr_block_depth):
+                    lr_block.append(ResBlock(lr_block_nf))
                 lr_block.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
-                lr_block.append(nn.Conv3d(nf * lr_down_factor ** 3, embed_dim, kernel_size=1, bias=False))
+                lr_block.append(nn.Conv3d(lr_block_nf * lr_down_factor ** 3, embed_dim, kernel_size=1, bias=False))
                 self.lr_block = nn.Sequential(*lr_block)
             else:
                 self.lr_block = None
@@ -164,11 +177,7 @@ class RQVARTransformer3D(nn.Module):
             # learned null prefix for classifier-free guidance
             self.null_lr_prefix = nn.Parameter(torch.empty(1, self.n_lr, self.C))
 
-            # pooled-LR AdaLN conditioning: mean-pool the prefix tokens → a global LR
-            # vector added to uncond_emb, so every AdaLN layer (body + body_norm + SOS)
-            # is FiLM-modulated by the LR. Zero-init (see _init_weights) → starts == pure
-            # prefix. CFG falls out for free: the null branch pools null_lr_prefix.
-            self.lr_pool = nn.Linear(embed_dim, embed_dim)
+            self.lr_pool = nn.Linear(embed_dim, embed_dim) if use_lr_cond else None
         else:
             self.n_lr = 0
             self.lr_shape = self.prefix_shape = None
@@ -296,7 +305,7 @@ class RQVARTransformer3D(nn.Module):
         """
         B = prefix.shape[0]
         base = self.uncond_emb(prefix.new_zeros(B, dtype=torch.long))
-        if self.n_lr == 0:
+        if self.n_lr == 0 or self.lr_pool is None:
             return base
         return base + self.lr_pool(prefix.mean(dim=1))
 
@@ -565,7 +574,9 @@ if __name__ == "__main__":
         head_depth=2,
         num_heads=8,
         mlp_ratio=4.0,
-        lr_block_depth=0,  # number of block for feature extraction before tokenization
+        lr_block_depth=2,  # exercise the 1x1x1 ResBlock LR enrichment branch in the smoke test
+        lr_block_nf=32,    # ResBlock width
+        use_lr_cond=True,  # exercise the pooled-LR AdaLN cond path in the smoke test
         drop_rate=0.0,
         drop_path_rate=0.1,
         lr_input_len=lr_spatial ** 3,
