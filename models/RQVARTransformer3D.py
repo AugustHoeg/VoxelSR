@@ -144,34 +144,36 @@ class RQVARTransformer3D(nn.Module):
             self.prefix_shape = tuple(s // lr_down_factor for s in self.lr_shape)
             self.lr_in_dim = lr_input_dim * lr_down_factor ** 3 if lr_input_dim is not None else embed_dim
 
-            # base prefix projection: lossless PixelUnshuffle + 1x1 conv.
-            # Every LR voxel reaches the transformer exactly and perfectly localised
-            # to its prefix token (RoPE handles position); this is the lr_block_depth=0 path.
-            self.lr_unshuffle = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
+            self.lr_down = PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity()
             self.lr_proj = nn.Conv3d(self.lr_in_dim, embed_dim, kernel_size=1, bias=False)
 
-            # optional shallow conv enrichment, added as a ZERO-INITIALISED residual
-            # (final conv zero-init, see _init_weights) so at step 0 the prefix is
-            # identical to lr_block_depth=0 and can only improve from there.
+            lr_block = []
             if self.lr_block_depth > 0 and lr_input_dim is not None:
                 nf = 64
-                enrich = [nn.Conv3d(lr_input_dim, nf, kernel_size=3, stride=1, padding=1),
-                          nn.LeakyReLU(negative_slope=0.2, inplace=True)]
+                lr_block.append(nn.Conv3d(lr_input_dim, nf, kernel_size=3, stride=1, padding=1))
+                lr_block.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
                 for _ in range(self.lr_block_depth - 1):
-                    enrich.append(nn.Conv3d(nf, nf, kernel_size=3, stride=1, padding=1))
-                    enrich.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
-                enrich.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
-                enrich.append(nn.Conv3d(nf * lr_down_factor ** 3, embed_dim, kernel_size=1, bias=False))
-                self.lr_enrich = nn.Sequential(*enrich)
+                    lr_block.append(nn.Conv3d(nf, nf, kernel_size=3, stride=1, padding=1))
+                    lr_block.append(nn.LeakyReLU(negative_slope=0.2, inplace=True))
+                lr_block.append(PixelUnshuffle3D(lr_down_factor) if lr_down_factor > 1 else nn.Identity())
+                lr_block.append(nn.Conv3d(nf * lr_down_factor ** 3, embed_dim, kernel_size=1, bias=False))
+                self.lr_block = nn.Sequential(*lr_block)
             else:
-                self.lr_enrich = None
+                self.lr_block = None
 
             # learned null prefix for classifier-free guidance
             self.null_lr_prefix = nn.Parameter(torch.empty(1, self.n_lr, self.C))
+
+            # pooled-LR AdaLN conditioning: mean-pool the prefix tokens → a global LR
+            # vector added to uncond_emb, so every AdaLN layer (body + body_norm + SOS)
+            # is FiLM-modulated by the LR. Zero-init (see _init_weights) → starts == pure
+            # prefix. CFG falls out for free: the null branch pools null_lr_prefix.
+            self.lr_pool = nn.Linear(embed_dim, embed_dim)
         else:
             self.n_lr = 0
             self.lr_shape = self.prefix_shape = None
-            self.lr_enrich = None
+            self.lr_block = None
+            self.lr_pool = None
 
         self.context_token = self.n_lr + self.l0   # LR + SOS region (level 0)
 
@@ -254,8 +256,13 @@ class RQVARTransformer3D(nn.Module):
             nn.init.trunc_normal_(self.null_lr_prefix, std=self.init_std)
 
         # zero-init the shallow LR enrichment so the prefix starts == lr_block_depth=0
-        if self.lr_enrich is not None:
-            nn.init.zeros_(self.lr_enrich[-1].weight)
+        if self.lr_block is not None:
+            nn.init.zeros_(self.lr_block[-1].weight)
+
+        # zero-init pooled-LR conditioning so cond starts == uncond_emb (pure-prefix baseline)
+        if self.lr_pool is not None:
+            nn.init.zeros_(self.lr_pool.weight)
+            nn.init.zeros_(self.lr_pool.bias)
 
         # DiT-style zero-init: AdaLN starts as identity in both branches + body_norm.
         for block in list(self.spatial_blocks.layers) + list(self.depth_blocks.layers):
@@ -267,15 +274,10 @@ class RQVARTransformer3D(nn.Module):
     #  prefix / SOS helpers (spatial branch) 
 
     def _lr_prefix(self, lr_tokens: torch.Tensor) -> torch.Tensor:
-        """(B, C_lr, Dz, Dy, Dx) → (B, n_lr, C). RoPE handles position.
-
-        Base path is the lossless PixelUnshuffle + 1x1 conv (exact, localised LR);
-        the optional shallow conv branch is added as a zero-initialised residual, so
-        at init the prefix equals the lr_block_depth=0 projection.
-        """
-        feat = self.lr_proj(self.lr_unshuffle(lr_tokens))
-        if self.lr_enrich is not None:
-            feat = feat + self.lr_enrich(lr_tokens)
+        """(B, C_lr, Dz, Dy, Dx) → (B, n_lr, C). RoPE handles position."""
+        feat = self.lr_proj(self.lr_down(lr_tokens))
+        if self.lr_block is not None:
+            feat = feat + self.lr_block(lr_tokens)
         return feat.view(feat.shape[0], self.C, self.n_lr).transpose(1, 2)
 
     def _build_prefix(self, lr_tokens, B):
@@ -285,6 +287,18 @@ class RQVARTransformer3D(nn.Module):
         if lr_tokens is None:
             return self.null_lr_prefix.expand(B, -1, -1)
         return self._lr_prefix(lr_tokens)
+
+    def _cond(self, prefix: torch.Tensor) -> torch.Tensor:
+        """AdaLN cond (B, C) = learned uncond_emb + zero-init pooled-LR global vector.
+
+        prefix: (B, n_lr, C). With lr_pool zero-init this equals uncond_emb; under CFG
+        the null branch (null_lr_prefix) yields a consistent unconditional cond.
+        """
+        B = prefix.shape[0]
+        base = self.uncond_emb(prefix.new_zeros(B, dtype=torch.long))
+        if self.n_lr == 0:
+            return base
+        return base + self.lr_pool(prefix.mean(dim=1))
 
     def _add_lvl_pos(self, tok, si):
         """Add scale-`si` level embedding and absolute pos_1LC slice. tok: (B, l_si, C)."""
@@ -312,13 +326,13 @@ class RQVARTransformer3D(nn.Module):
         x_BLC_wo_prefix = x_BLC_wo_prefix.float()
         B = x_BLC_wo_prefix.shape[0]
 
-        cond = self.uncond_emb(torch.zeros(B, dtype=torch.long, device=x_BLC_wo_prefix.device))
+        prefix = self._build_prefix(lr_tokens, B)                                        # (B, n_lr, C)
+        cond = self._cond(prefix)                                                        # (B, C) uncond_emb + pooled LR
         sos = cond.unsqueeze(1).expand(B, self.l0, -1) + self.pos_start                  # (B, l0, C)
 
         x_BLC = torch.cat([sos, self.word_embed(self.norm0_ve(x_BLC_wo_prefix))], dim=1)  # (B, L_total, C)
         x_BLC = x_BLC + self.lvl_embed(self.lvl_1L).unsqueeze(0) + self.pos_1LC
 
-        prefix = self._build_prefix(lr_tokens, B)                                        # (B, n_lr, C)
         x_BLC = torch.cat([prefix, x_BLC], dim=1)                                        # (B, n_lr + L_total, C)
 
         x_BLC = self.spatial_blocks(x_BLC, cond, attn_mask=self.spatial_mask, rope=self.rope, rope_offset=0)
@@ -446,8 +460,6 @@ class RQVARTransformer3D(nn.Module):
         device = lr_tokens.device
         R = 2 if use_cfg else 1  # branch replication
 
-        # Cond (SOS) + level / pos embedding
-        cond = self.uncond_emb(torch.zeros(R * B, dtype=torch.long, device=device))
         lvl_pos = self.lvl_embed(self.lvl_1L).unsqueeze(0) + self.pos_1LC  # (1, L_total, C)
 
         # LR token prefix
@@ -455,6 +467,9 @@ class RQVARTransformer3D(nn.Module):
             prefix = torch.cat([self._lr_prefix(lr_tokens), self.null_lr_prefix.expand(B, -1, -1)], dim=0)
         else:
             prefix = self._lr_prefix(lr_tokens)                                 # (R*B, n_lr, C)
+
+        # Cond (SOS + AdaLN): uncond_emb + pooled LR, per branch (null branch pools null prefix)
+        cond = self._cond(prefix)                                               # (R*B, C)
 
         # SOS = cond + pos_start + lvl_pos[:, :l0].
         sos = cond.unsqueeze(1).expand(R * B, self.l0, -1) + self.pos_start + lvl_pos[:, :self.l0]
@@ -599,9 +614,9 @@ if __name__ == "__main__":
         full_ctx = model.forward_spatial(x_BLC_wo_prefix, lr_tokens=lr_emb)    # (B, L_total, C)
 
         model._set_kv_cache(True)
-        condB = model.uncond_emb(torch.zeros(B, dtype=torch.long, device=device))
         lvl_pos = model.lvl_embed(model.lvl_1L).unsqueeze(0) + model.pos_1LC
         prefix = model._lr_prefix(lr_emb)
+        condB = model._cond(prefix)
         sos = condB.unsqueeze(1).expand(B, model.l0, -1) + model.pos_start + lvl_pos[:, :model.l0]
         m = model.context_token
         out = model.spatial_blocks(torch.cat([prefix, sos], dim=1), condB,
