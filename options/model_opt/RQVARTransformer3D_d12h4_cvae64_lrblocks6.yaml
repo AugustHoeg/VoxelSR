@@ -22,7 +22,7 @@ netG:
   num_heads: 24                   # must evenly divide embed_dim
   mlp_ratio: 4
   lr_block_depth: 6              # number of 1x1x1 residual blocks in the zero-init LR enrichment branch; 0 means none
-  lr_block_nf: 128                # channel width of the LR enrichment residual blocks
+  lr_block_nf: 64                # channel width of the LR enrichment residual blocks
   use_lr_cond: false             # pooled-LR AdaLN conditioning (global FiLM); off = pure-prefix grounding
   attn_drop_rate: 0.0
   drop_path_rate: 0.1
