@@ -80,9 +80,31 @@ def _as_3tuple(pn):
     return (pn, pn, pn) if isinstance(pn, int) else tuple(pn)
 
 
+def _as_3num(v):
+    """Broadcast a scalar to (v, v, v); pass a 3-sequence through. Accepts floats."""
+    return (v, v, v) if isinstance(v, (int, float)) else tuple(v)
+
+
+def _scale_fov(coords, ref, fov_scale):
+    """Scale LR-prefix coords about the HR-grid centre by `fov_scale`.
+
+    Lets an LR input that covers a larger field-of-view than the HR target keep its
+    central sub-grid aligned to the finest HR grid while the periphery extends beyond
+    it (into negative / >ref coords). `fov_scale` = LR-FOV / HR-FOV, scalar or per-axis
+    in (z, y, x) order (matching coords columns). `fov_scale == 1` returns coords
+    unchanged *exactly* (no float drift), so it is a true no-op / baseline revert.
+    """
+    fov = _as_3num(fov_scale)
+    if all(float(f) == 1.0 for f in fov):
+        return coords
+    center = (torch.tensor([ref[0], ref[1], ref[2]], dtype=coords.dtype) - 1) / 2  # (z,y,x)
+    fov_t = torch.tensor([float(f) for f in fov], dtype=coords.dtype)
+    return center + fov_t * (coords - center)
+
+
 def compute_axial_cis_multiscale(dim, patch_nums, lr_shape=None, ref_grid=None,
                                  theta=10000, norm_coeff_x=1.0, norm_coeff_y=1.0,
-                                 norm_coeff_z=1.0):
+                                 norm_coeff_z=1.0, lr_fov_scale=1.0):
     """3D axial RoPE phasors for a VAR/Infinity multi-scale sequence.
 
     Builds one phasor table over  [ LR_prefix | scale_0 | scale_1 | ... | scale_{K-1} ].
@@ -105,7 +127,9 @@ def compute_axial_cis_multiscale(dim, patch_nums, lr_shape=None, ref_grid=None,
 
     coords_list = []
     if lr_shape is not None:
-        coords_list.append(_norm_to_ref(_as_3tuple(lr_shape), ref))
+        lr_coords = _norm_to_ref(_as_3tuple(lr_shape), ref)
+        lr_coords = _scale_fov(lr_coords, ref, lr_fov_scale)   # widen LR FOV about HR centre
+        coords_list.append(lr_coords)
     coords_list += [_norm_to_ref(pn, ref) for pn in pns]
     coords = torch.cat(coords_list, dim=0)                        # (T, 3)
 
@@ -130,12 +154,13 @@ class Rope3DMultiScale(nn.Module):
     """
 
     def __init__(self, head_dim, patch_nums, lr_shape=None, ref_grid=None,
-                 theta=10000, norm_coeffs=(1.0, 1.0, 1.0)):
+                 theta=10000, norm_coeffs=(1.0, 1.0, 1.0), lr_fov_scale=1.0):
         super().__init__()
         assert head_dim // 6 > 0, f"head_dim={head_dim} too small for 3D RoPE (need >= 6)"
         self.rot_dim = 6 * (head_dim // 6)
         freqs_cis = compute_axial_cis_multiscale(
-            head_dim, patch_nums, lr_shape, ref_grid, theta, *norm_coeffs
+            head_dim, patch_nums, lr_shape, ref_grid, theta, *norm_coeffs,
+            lr_fov_scale=lr_fov_scale,
         )
         self.register_buffer("freqs_cis", freqs_cis, persistent=False)
 

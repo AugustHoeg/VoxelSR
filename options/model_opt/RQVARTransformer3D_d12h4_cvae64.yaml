@@ -15,6 +15,7 @@ netG:
   lr_input_len: 4096             # LR latent spatial token count: 16^3 = 4096
   lr_input_dim: 1                # channel dim of LR VQ encoder output (quant_embed_dim)
   lr_down_factor: 2              # downsampling factor for LR input before projection to embed_dim
+  lr_fov_scale: 1.0              # LR-FOV / HR-FOV; >1 feeds peripheral context, aligning the central sub-grid to the finest HR grid (1.0 = baseline)
 
   embed_dim: 1536                # embedding dimension of the transformer
   body_depth: 12                 # number of spatial transformer blocks (VAR)

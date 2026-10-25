@@ -81,6 +81,9 @@ class RQVARTransformer3D(nn.Module):
         lr_input_len:     LR token count at encoder resolution (None = unconditional).
         lr_input_dim:     channel dim of incoming LR embeddings.
         lr_down_factor:   extra PixelUnshuffle3D downsample of the LR grid before prefixing.
+        lr_fov_scale:     LR-FOV / HR-FOV for the prefix RoPE coords (scalar or (z,y,x)).
+                          >1 feeds peripheral context: the central sub-grid stays aligned to
+                          the finest HR grid while the periphery extends beyond it. 1.0 = baseline.
         rope_theta:       RoPE base frequency.
         rope_norm_coeffs: per-axis (x,y,z) coordinate scale for RoPE frequencies.
         rope_ref_grid:    shared RoPE coordinate frame (default = finest patch_num).
@@ -107,6 +110,7 @@ class RQVARTransformer3D(nn.Module):
         lr_input_len=None,
         lr_input_dim=None,
         lr_down_factor=1,
+        lr_fov_scale=1.0,
         rope_theta=10000,
         rope_norm_coeffs=(1.0, 1.0, 1.0),
         rope_ref_grid=None,
@@ -134,6 +138,7 @@ class RQVARTransformer3D(nn.Module):
         self.mlp_dim = int(embed_dim * mlp_ratio)
         self.lr_block_depth = lr_block_depth
         self.lr_block_nf = lr_block_nf
+        self.lr_fov_scale = lr_fov_scale
         self.use_lr_cond = use_lr_cond
         self.drop_rate = drop_rate
         self.drop_path_rate = drop_path_rate
@@ -196,6 +201,7 @@ class RQVARTransformer3D(nn.Module):
             self.head_dim, patch_nums=self.pn_dims,
             lr_shape=(self.prefix_shape if self.n_lr > 0 else None),
             ref_grid=rope_ref_grid, theta=rope_theta, norm_coeffs=rope_norm_coeffs,
+            lr_fov_scale=lr_fov_scale,
         )
 
         #  attention masks (bool, True = attention allowed) 

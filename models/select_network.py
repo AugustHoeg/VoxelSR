@@ -111,6 +111,7 @@ def define_G(opt, mode='train'):
             lr_input_len=opt_net.get('lr_input_len', None),
             lr_input_dim=opt_net.get('lr_input_dim', None),
             lr_down_factor=opt_net.get('lr_down_factor', 1),
+            lr_fov_scale=opt_net.get('lr_fov_scale', 1.0),
             rope_theta=opt_net.get('rope_theta', 10000),
             rope_norm_coeffs=tuple(opt_net.get('rope_norm_coeffs', (1.0, 1.0, 1.0))),
             rope_ref_grid=opt_net.get('rope_ref_grid', None),
