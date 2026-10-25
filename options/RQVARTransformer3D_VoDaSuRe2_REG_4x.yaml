@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVARTransformer3D_d12h4_cvae64_lrblocks3                  # Default model config
+  - model_opt: RQVARTransformer3D_d20h4_cvae64                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
