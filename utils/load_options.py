@@ -120,6 +120,8 @@ def init_options(opt, opt_path):
         # Calculate high-resolution patch size
         if opt['model_opt']['model_architecture'] == 'MTVNet':
             opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['context_sizes'][-1] * opt['up_factor'])
+        elif opt['model_opt']['model_architecture'] == 'RQVARTransformer3D':
+            opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['patch_nums'][-1] * 8)
         else:
             opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['up_factor']
     elif opt['task'] == 'degradation':
