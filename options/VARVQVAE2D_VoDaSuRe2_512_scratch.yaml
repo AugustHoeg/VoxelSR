@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 2D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
+up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile & Compile
@@ -64,7 +64,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 256 # 128
+  patch_size: 128 # 128
 
   load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
 
