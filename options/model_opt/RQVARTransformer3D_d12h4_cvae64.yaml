@@ -37,8 +37,8 @@ netG:
   rsc_noise_apply_requant: true  # Toggles whether to apply requantization with noise to the D level codes
 
   # Sampling parameters
-  cfg: none                           # classifier-free guidance scale; None = no guidance
-  top_k: none                         # top-k sampling; none = no top-k
+  cfg: null                           # classifier-free guidance scale; None = no guidance
+  top_k: null                         # top-k sampling; none = no top-k
   top_p: 0.75                         # top-p sampling; none = no top-p
   temperature: 1.0                    # sampling temperature; 1.0 = max-diversity; <1.0 = more deterministic;
 

@@ -32,7 +32,7 @@ netG:
 
   # Sampling parameters
   cfg: 0.0                           # classifier-free guidance scale; 0.0 = no guidance
-  top_k: none                         # top-k sampling; none = no top-k
+  top_k: null                         # top-k sampling; none = no top-k
   top_p: 0.75                         # top-p sampling; none = no top-p
 
   v_patch_nums: [1, 2, 3, 4, 6, 9, 13, 18, 24, 32]  # For patch_size 512
