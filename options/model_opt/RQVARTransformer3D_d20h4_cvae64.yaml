@@ -39,7 +39,7 @@ netG:
   # Sampling parameters
   cfg: null                           # classifier-free guidance scale; None = no guidance
   top_k: null                         # top-k sampling; none = no top-k
-  top_p: 0.75                         # top-p sampling; none = no top-p
+  top_p: 0.95                         # top-p sampling; none = no top-p
   temperature: 1.0                    # sampling temperature; 1.0 = max-diversity; <1.0 = more deterministic;
 
   init_type: default             # model uses its own _init_weights(); external init is skipped
