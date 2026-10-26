@@ -38,6 +38,12 @@ class ModelTransformerRQVAR(ModelBase):
         self.V = self.n_embed = self.opt['model_opt']['netG']['num_embeddings']
         self.D = self.n_rq_depth = self.opt['model_opt']['netG']['n_rq_depth']
 
+        # Sampling parameters
+        self.cfg = self.opt['model_opt']['netG']['cfg']
+        self.top_k = self.opt['model_opt']['netG']['top_k']
+        self.top_p = self.opt['model_opt']['netG']['top_p']
+        self.temp = self.opt['model_opt']['netG']['temperature']
+
         self.update = False
         self.early_stop = False
         self.min_validation_loss = float('inf')
@@ -104,8 +110,8 @@ class ModelTransformerRQVAR(ModelBase):
 
 
     @torch.inference_mode()
-    def sample_E(self, vae, lr_tokens, cfg=0.0, temp=1.0, top_k=None, top_p=None):
-        if cfg > 0.0:
+    def sample_E(self, vae, lr_tokens, cfg=None, temp=1.0, top_k=None, top_p=None):
+        if cfg is not None:
             ms_idx = self.netG_wo_ddp.autoregressive_infer_cfg(
                 vae, lr_tokens, cfg=cfg, temperature=temp, top_k=top_k, top_p=top_p)
         else:
@@ -176,7 +182,7 @@ class ModelTransformerRQVAR(ModelBase):
         self.L = data['L'].as_tensor().to(self.device, non_blocking=True)
 
     def netG_forward(self):  # This is the function run during inference
-        self.E = self.sample_E(self.vq_model_hr, lr_tokens=self.L, cfg=0.0, temp=1.0, top_k=None, top_p=None)
+        self.E = self.sample_E(self.vq_model_hr, lr_tokens=self.L, cfg=self.cfg, temp=self.temp, top_k=self.top_k, top_p=self.top_p)
 
     def optimize_parameters_amp(self, current_step, update=False):
         # TODO: figure out if encode_to_indices should be outside AMP

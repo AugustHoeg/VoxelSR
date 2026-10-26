@@ -26,7 +26,13 @@ class ModelVARSR(ModelBase):
         if opt['rank'] == 0 and mode == 'train':
             print("Number of trainable parameters, G", utils_3D_image.numel(self.netG, only_trainable=True))
 
+        # Parameters
         self.size_hr = self.opt['dataset_opt']['patch_size_hr']
+
+        # Sampling parameters
+        self.cfg = self.opt['model_opt']['netG']['cfg']
+        self.top_k = self.opt['model_opt']['netG']['top_k']
+        self.top_p = self.opt['model_opt']['netG']['top_p']
 
         self.update = False
 
@@ -256,7 +262,7 @@ class ModelVARSR(ModelBase):
 
     def netG_forward(self):
         self.L_up = F.interpolate(self.L, size=(self.size_hr, self.size_hr), mode='bicubic', align_corners=False)
-        self.E = self.sample_E(self.L_up, batch_size=self.L.shape[0])
+        self.E = self.sample_E(self.L_up, batch_size=self.L.shape[0], top_k=self.top_k, top_p=self.top_p, cfg=self.cfg)
 
     def optimize_parameters_amp(self, current_step, update=False):
 
@@ -361,7 +367,7 @@ class ModelVARSR(ModelBase):
         self.G_valid_loss += self.gen_loss
 
         # Sample image
-        self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0])
+        self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0], top_k=self.top_k, top_p=self.top_p, cfg=self.cfg)
 
         rescale_images = self.opt["dataset_opt"]["norm_type"] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
@@ -395,7 +401,7 @@ class ModelVARSR(ModelBase):
         
         # Sample image
         with torch.amp.autocast("cuda", dtype=self.mixed_precision):
-            self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0])
+            self.E = self.sample_E(self.L_up, batch_size=self.H.shape[0], top_k=self.top_k, top_p=self.top_p, cfg=self.cfg)
 
         rescale_images = self.opt['dataset_opt']['norm_type'] == "znormalization"
         compute_performance_metrics(self.E, self.H, self.metric_fn_dict, self.metric_val_dict, rescale_images=True)
