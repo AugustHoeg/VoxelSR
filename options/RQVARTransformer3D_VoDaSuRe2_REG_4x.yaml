@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVARTransformer3D_d12h8_cvae64                  # Default model config
+  - model_opt: RQVARTransformer3D_d20h4_cvae64                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -20,7 +20,7 @@ wandb_mode: online  # remember to set to "online" for actual training runs
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_V2_REG_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_V2_ID000000
-run_name: ${model_opt.model_architecture}_000_d12h4
+run_name: ${model_opt.model_architecture}_000_d20h4_warmup
 note: Note
 
 # GPU configuration
@@ -38,8 +38,8 @@ path:
   pretrained_netE: null
 
   # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000010  # VQ model with Cvae=512, ~50% usage
-  pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035  # VQ model with Cvae=64, znorm=True and ~95% usage
-  # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000045  # VQ model with Cvae=64, znorm=False and ~80% usage
+  # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035  # VQ model with Cvae=64, znorm=True and ~95% usage
+  pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000045  # VQ model with Cvae=64, znorm=False and ~80% usage
 
 # Overwrite default training parameters
 train_opt:
@@ -58,7 +58,7 @@ train_opt:
   G_optimizer_clipgrad: 4
   G_optimizer_betas: [0.9, 0.95]
   G_scheduler_type: CosineAnnealingLR
-  G_warmup_steps: 0
+  G_warmup_steps: 2500
 
   # disable recon loss weights, transformer is trained with CE loss only
   G_loss_weights:
