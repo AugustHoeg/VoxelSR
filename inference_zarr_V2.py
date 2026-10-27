@@ -215,7 +215,7 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    # experiment_id = "ResShift2D_VoDaSuRe2_REG_2x_VoDaSuRe_OME_ID011100"
+    # experiment_id = "VARVQVAE2D_VoDaSuRe2_512_scratch_VoDaSuRe_OME_ID000195"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
@@ -271,10 +271,7 @@ def main(opt: DictConfig):
     # For 2D models, upscales batch_size_2D slices at a time, or None = predict to predict all slices at once.
     batch_size_2D = 16 if opt['input_type'] == '2D' else None
     print(f"2D slice batch size: {batch_size_2D}")
-
     slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
-    from utils.utils_3D_image import SliceMetrics3D
-    slice_metrics = SliceMetrics3D(slice_dim=0, slice_step=slice_step, slice_max_val=65535.0, metric_names=metric_names, device=model.device)
 
     # Define dataset
     from data.Dataset_VoDaSuRe_OME import Dataset_VoDaSuRe_OME as D
@@ -295,9 +292,14 @@ def main(opt: DictConfig):
         context_width = 0
         opt['dataset_opt']['patch_size'] = opt['dataset_opt']['patch_size_hr']
         patch_size_hr = opt['dataset_opt']['patch_size']
+        if opt['input_type'] == '2D':
+            slice_step = 1
     else:
         context_width = 0
         patch_size_hr = opt['dataset_opt']['patch_size_hr']
+
+    from utils.utils_3D_image import SliceMetrics3D
+    slice_metrics = SliceMetrics3D(slice_dim=0, slice_step=slice_step, slice_max_val=65535.0, metric_names=metric_names, device=model.device)
 
     if hasattr(model, "latent_shape_hr"):  #
         size_hr = opt['dataset_opt']['patch_size_hr']
