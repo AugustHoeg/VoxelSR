@@ -292,8 +292,7 @@ def main(opt: DictConfig):
         context_width = 0
         opt['dataset_opt']['patch_size'] = opt['dataset_opt']['patch_size_hr']
         patch_size_hr = opt['dataset_opt']['patch_size']
-        if opt['input_type'] == '2D':
-            slice_step = 1
+        slice_step = 1 if opt['input_type'] == '3D' else opt['up_factor']
     else:
         context_width = 0
         patch_size_hr = opt['dataset_opt']['patch_size_hr']

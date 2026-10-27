@@ -76,6 +76,10 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
 
         for batch_idx, train_batch in enumerate(train_loader):
 
+            if model.last_iteration > 0 and current_step < model.last_iteration and opt['train_mode'] == "resume":
+                current_step += 1
+                continue  # fast-forward data loader to iteration where training left off
+
             current_step += 1
             # test_plot(train_batch)
 
