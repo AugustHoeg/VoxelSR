@@ -67,7 +67,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: true
-  patch_size: 128  # --> patch_size_hr = 512
+  patch_size: 64  # --> patch_size_hr = 512
 
   load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
 
