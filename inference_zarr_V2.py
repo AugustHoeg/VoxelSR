@@ -222,7 +222,7 @@ def main(opt: DictConfig):
     wandb_path = opt_path.rsplit("files", 1)[0]
 
     # REMOVE THIS LINE
-    # opt['dataset_opt']['datasets'] = ["VoDaSuRe"]
+    # opt['dataset_opt']['datasets'] = ["CTSpine1K"]
 
     # Override datasets if specified
     if datasets_flag:
