@@ -7,7 +7,7 @@ defaults:
 # Main configuration
 task: superresolution
 input_type: 2D # Input type, 2D or 3D
-up_factor: 2  # upscaling factor
+up_factor: 4  # upscaling factor
 vae_target: HR  # Autoencoder training mode: HR (HR->HR) or LR (LR->LR)
 
 # Profile & Compile
@@ -57,7 +57,7 @@ train_opt:
   G_eta_min: 0
   G_warmup_steps: 0 # 500
 
-  # ResShift2D relies on MSE loss in noise space, so loss weights are set to 0
+  # OSEDiff uses reconstruction loss
   G_loss_weights:
     L1: 1.0
     LPIPS: 0.01
@@ -67,7 +67,7 @@ train_opt:
 # Overwrite default dataset parameters
 dataset_opt:
   synthetic: false
-  patch_size: 64  # --> patch_size_hr = 256
+  patch_size: 128  # --> patch_size_hr = 512
 
   load_single_slice: true # speeds up data loading for 2D models but limits augmentations to 2D
 
@@ -78,14 +78,14 @@ dataset_opt:
   expand_channels_rgb: true  # Expand single-channel images to 3 channels for OSEDiff
 
   train_dataloader_params:
-    dataloader_batch_size: 16
-    num_load_workers: 32
+    dataloader_batch_size: 8
+    num_load_workers: 16
     persist_workers: true
     pin_memory: false
 
   test_dataloader_params:
-    dataloader_batch_size: 4
-    num_load_workers: 4
+    dataloader_batch_size: 2
+    num_load_workers: 2
     persist_workers: true
     pin_memory: false
 
