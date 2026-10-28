@@ -70,7 +70,7 @@ train_opt:
 
 # Overwrite default dataset parameters
 dataset_opt:
-  synthetic: false
+  synthetic: true
   patch_size: 16
 
   datasets: [VoDaSuRe2]
