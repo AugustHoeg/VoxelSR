@@ -1,7 +1,7 @@
 defaults:
   - train_opt: train_VoDaSuRe          # Default training config
   - dataset_opt: VoDaSuRe_OME          # Default dataset config
-  - model_opt: RQVARTransformer3D_d12h4_cvae64                  # Default model config
+  - model_opt: RQVARTransformer3D_d20h4_cvae64                  # Default model config
   - _self_  # Ensure compliance with Hydra 1.1
 
 # Main configuration
@@ -39,7 +39,8 @@ path:
 
   # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000010  # VQ model with Cvae=512, ~50% usage
   # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035  # VQ model with Cvae=64, znorm=True and ~95% usage
-  pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000045  # VQ model with Cvae=64, znorm=False and ~80% usage
+  # pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000045  # VQ model with Cvae=64, znorm=False and ~80% usage
+  pretrained_hr_vqmodel_id: RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000055  # VQ model with Cvae=64, znorm=True and ~95% usage (better recon performance than ID000035)
 
 # Overwrite default training parameters
 train_opt:
