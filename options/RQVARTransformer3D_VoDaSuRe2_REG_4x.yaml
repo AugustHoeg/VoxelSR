@@ -20,7 +20,7 @@ wandb_mode: online  # remember to set to "online" for actual training runs
 wandb_entity: null
 wandb_project: ${dataset_opt.name}_V2_REG_${up_factor}x # <--- change project
 experiment_id: ${model_opt.model_architecture}_${dataset_opt.name}_V2_ID000000
-run_name: ${model_opt.model_architecture}_000_d12h4_warmup
+run_name: ${model_opt.model_architecture}_000_d20h4_warmup
 note: Note
 
 # GPU configuration
