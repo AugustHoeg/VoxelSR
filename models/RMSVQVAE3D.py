@@ -513,6 +513,44 @@ class MultiScaleResidualBottleneck3D(nn.Module):
         return f_hat
 
     @torch.no_grad()
+    def embed_partial_code_scale_depth(
+        self, ms_idx_Bl: List[torch.Tensor], scale_idx: int, code_idx: int
+    ) -> torch.Tensor:
+        """Scale- and depth-limited multiscale decode: reconstruct f_hat using only
+        next-scale levels 0..scale_idx (inclusive) and, within each level, depth
+        codebooks 0..code_idx (inclusive).
+
+        Generalises `embed_partial_code` (which fixes scale_idx = K-1) and
+        `idxBl_to_fhat` (scale_idx = K-1, code_idx = n_rq_depth-1) to let you walk
+        both axes of the hybrid RQ + next-scale pyramid independently. Truncating the
+        scale loop early is exactly "stop adding coarser-to-finer levels"; f_hat always
+        lives on the full grid because `_upsample_and_refine` upsamples every non-last
+        level (keyed off the true K-1, so an early stop still upsamples correctly).
+
+        ms_idx_Bl: list length K of (B, l_k, D) long per-scale depth token blocks.
+        scale_idx: 0-based inclusive scale index in [0, K-1].
+        code_idx:  0-based inclusive depth index in [0, n_rq_depth-1].
+        Returns:   (B, C, D, H, W) full-res quantized latent.
+        """
+        assert 0 <= scale_idx < self.K, (
+            f"scale_idx={scale_idx} out of range [0, {self.K - 1}]"
+        )
+        assert 0 <= code_idx < self.n_rq_depth, (
+            f"code_idx={code_idx} out of range [0, {self.n_rq_depth - 1}]"
+        )
+        B = ms_idx_Bl[0].shape[0]
+        D, H, W = self.v_patch_nums[-1]
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = ms_idx_Bl[0].new_zeros(B, self.Cvae, D, H, W, dtype=torch.float32)
+            for si in range(scale_idx + 1):
+                pd, ph, pw = self.v_patch_nums[si]
+                codes = ms_idx_Bl[si].view(B, pd, ph, pw, self.n_rq_depth)
+                summed = sum(self.codebooks[d].embed(codes[..., d]) for d in range(code_idx + 1))
+                q = self._upsample_and_refine(summed.permute(0, 4, 1, 2, 3).contiguous(), si)
+                f_hat = f_hat + q
+        return f_hat
+
+    @torch.no_grad()
     def get_next_autoregressive_input(self, si: int, f_hat, q_BCDHW):
         """Inference-time step: q_BCDHW is this scale's summed-over-depth sampled code
         at scale-si resolution (B, C, pd, ph, pw), BEFORE upsampling/refinement. It is
@@ -679,6 +717,19 @@ class RMSVQVAE3D(nn.Module):
         RQVAE3D.decode_code_partial."""
         with torch.amp.autocast("cuda", enabled=False):
             f_hat = self.quantizer.embed_partial_code(ms_idx_Bl, code_idx)
+        return self.decode(f_hat)
+
+    @torch.no_grad()
+    def decode_multiscale_partial_scale_depth(
+        self, ms_idx_Bl: List[torch.Tensor], scale_idx: int, code_idx: int
+    ):
+        """Progressive scale- and depth-limited reconstruction: decode per-scale depth
+        token blocks (list of (B, l_k, D)) back to a volume using only next-scale levels
+        0..scale_idx (inclusive) and depth codebooks 0..code_idx (inclusive). Lets you
+        sweep both the scale and the RQ-depth axes independently for ablations /
+        visualisation. scale_idx=K-1 reduces to decode_multiscale_partial."""
+        with torch.amp.autocast("cuda", enabled=False):
+            f_hat = self.quantizer.embed_partial_code_scale_depth(ms_idx_Bl, scale_idx, code_idx)
         return self.decode(f_hat)
 
 

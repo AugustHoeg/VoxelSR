@@ -296,7 +296,7 @@ def run_strided_inference(model, img_L, f, size_lr, size_hr, border, batch_size,
     return img_E
 
 
-def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=False, use_amp=False, batch_size_2D=None):
+def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context_width, batch_size, overlap_mode="hann", model_input_type='3D', unnorm=False, input_rgb=False, compile_forward=False, use_amp=False, batch_size_2D=None, scale_idx=None, code_idx=None):
 
     model.netG.eval()
     if compile_forward:
@@ -359,7 +359,11 @@ def run_strided_inference_pad(model, img_L, f, size_lr, size_hr, border, context
                     with torch.amp.autocast("cuda", dtype=model.mixed_precision):
                         model.netG_forward()
                 else:
-                    model.netG_forward()
+                    if scale_idx is None and code_idx is None:
+                        model.netG_forward()
+                    else:
+                        ml_idx_BL = model.netG.encode_multiscale(model.L, to_fhat=False)
+                        model.E = model.netG.decode_multiscale_partial_scale_depth(ml_idx_BL, scale_idx, code_idx)
                 upsampled_batch = model.E.float().cpu()  # Transfer back to CPU
 
             # Convert back to grayscale if input_rgb = True
