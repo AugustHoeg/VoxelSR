@@ -77,7 +77,6 @@ def train_model(model, opt, iterations, validation_iterations, train_loader, tes
         for batch_idx, train_batch in enumerate(train_loader):
 
             if model.last_iteration > 0 and current_step < model.last_iteration and opt['train_mode'] == "resume":
-                model.update_learning_rate()  # make sure scheduler is at the correct state for resume training
                 current_step += 1
                 continue  # fast-forward data loader to iteration where training left off
 
