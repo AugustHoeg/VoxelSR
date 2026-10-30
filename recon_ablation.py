@@ -24,6 +24,26 @@ from utils.load_options import load_options_from_experiment_id
 
 from inference_zarr_V2 import create_metric_file, write_metric_statistics
 
+
+def save_image_retry(img, path, retries=5, delay=0.3):
+    """Save a PIL image, retrying on transient OSError.
+
+    The output tree lives inside a OneDrive-synced folder, whose Files-On-Demand
+    filter driver intermittently fails the open() with
+    `OSError: [Errno 22] Invalid argument` while it is syncing/hydrating. The write
+    succeeds on retry, so back off briefly and try again instead of crashing the job.
+    """
+    for attempt in range(retries):
+        try:
+            img.save(path)
+            return
+        except OSError as e:
+            if attempt == retries - 1:
+                raise
+            print(f"  save failed ({e}); retrying {attempt + 1}/{retries - 1} -> {path}")
+            time.sleep(delay * (attempt + 1))
+
+
 @hydra.main(version_base=None, config_path="options", config_name=config.MODEL_ARCHITECTURE)
 def main(opt: DictConfig):
 
@@ -43,7 +63,7 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    experiment_id = "RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000055"
+    experiment_id = "RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
@@ -197,14 +217,14 @@ def main(opt: DictConfig):
                     (W - size_crop) // 2 : (W + size_crop) // 2,
                 ]
 
-                comp_path = os.path.join(image_path, "full_slice_comparisons")
+                comp_path = os.path.join(image_path, "scale_depth_comparisons")
                 axis = 0
 
-                scales = opt['model_opt']['netG']['v_patch_nums']
+                scales = [3] # opt['model_opt']['netG']['v_patch_nums'] = [1, 2, 3, 4, 5, 6, 8]
                 depths = opt["model_opt"]["netG"]['n_rq_depth']
-                for scale_idx in range(len(scales)):
+                for scale_idx in scales:
                     for code_idx in range(depths):
-                        print(f"scale_idx: {scale_idx}, code_idx: {code_idx}", scale_idx, code_idx)
+                        print(f"scale_idx: {scale_idx}, code_idx: {code_idx}")
                         img_E = run_strided_inference_pad(
                             model=model,
                             img_L=img_L,
@@ -224,19 +244,18 @@ def main(opt: DictConfig):
                         )
                         slice_idx_list = np.linspace(img_H.shape[axis] // 4, img_H.shape[axis] - img_H.shape[axis] // 4, 3)
                         for slice_idx in slice_idx_list:
-                            img_H = Image.fromarray(img_H[slice_idx, :, :])
-                            img_E = Image.fromarray(img_E[0, slice_idx, :, :])
+                            slice_idx = int(slice_idx)
+                            img_H_slice = Image.fromarray(img_H[slice_idx, :, :])
+                            img_E_slice = Image.fromarray(img_E[0, slice_idx, :, :])
 
                             os.makedirs(os.path.join(comp_path, name, group_text), exist_ok=True)
-                            file_name_E = f"{name}/{group_text}/image_{image_idx}_{slice_idx}_{opt['model_opt']['model_architecture']}_{scale_idx}_{code_idx}.png"
-                            img_E.save(os.path.join(comp_path, file_name_E))
+                            file_name_E = f"{name}/{group_text}/image_{image_idx}_{slice_idx}_{opt['model_opt']['model_architecture']}_scale_{scale_idx}_code_{code_idx}.png"
+                            save_image_retry(img_E_slice, os.path.join(comp_path, file_name_E))
 
                             file_name_H = f"{name}/{group_text}/image_{image_idx}_{slice_idx}.png"
-                            if not os.path.exists(file_name_H):
-                                img_H.save(os.path.join(comp_path, file_name_H))
-
-                else:
-                    raise ValueError(f"Inference mode {inference_mode} not recognized.")
+                            path_H = os.path.join(comp_path, file_name_H)
+                            if not os.path.exists(path_H):
+                                save_image_retry(img_H_slice, path_H)
 
 
 if __name__ == "__main__":
