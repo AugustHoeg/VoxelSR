@@ -63,7 +63,7 @@ def main(opt: DictConfig):
     print("Experiment ID:", experiment_id)
 
     # REMOVE THIS LINE
-    experiment_id = "RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000035"
+    experiment_id = "RMSVQVAE3D_VoDaSuRe2_64_VoDaSuRe_OME_ID000055"
 
     opt_path = load_options_from_experiment_id(experiment_id, root_dir=config.ROOT_DIR, file_type="yaml")
     opt = OmegaConf.load(opt_path)
