@@ -70,7 +70,7 @@ def main(opt: DictConfig):
     wandb_path = opt_path.rsplit("files", 1)[0]
 
     # REMOVE THIS LINE
-    opt['dataset_opt']['datasets'] = ["VoDaSuRe"]
+    # opt['dataset_opt']['datasets'] = ["VoDaSuRe"]
 
     # Override datasets if specified
     if datasets_flag:
@@ -220,7 +220,7 @@ def main(opt: DictConfig):
                 comp_path = os.path.join(image_path, "scale_depth_comparisons")
                 axis = 0
 
-                scales = [4, 5, 6] # opt['model_opt']['netG']['v_patch_nums'] = [1, 2, 3, 4, 5, 6, 8]
+                scales = [3, 4, 5, 6] # opt['model_opt']['netG']['v_patch_nums'] = [1, 2, 3, 4, 5, 6, 8]
                 depths = opt["model_opt"]["netG"]['n_rq_depth']
                 for scale_idx in scales:
                     for code_idx in range(depths):
