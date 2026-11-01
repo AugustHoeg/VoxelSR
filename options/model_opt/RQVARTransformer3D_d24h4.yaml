@@ -12,6 +12,7 @@ netG:
   n_rq_depth: 4                  # RQ depth; must match the HR VQ model
   c_vae: 512                     # latent channel dim of the frozen RMSVQVAE3D encoder
 
+  vae_down_factor: 8             # downsampling factor of the frozen RMSVQVAE3D encoder
   lr_input_len: 4096             # LR latent spatial token count: 16^3 = 4096
   lr_input_dim: 1                # channel dim of LR VQ encoder output (quant_embed_dim)
   lr_down_factor: 2              # downsampling factor for LR input before projection to embed_dim

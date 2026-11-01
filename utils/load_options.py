@@ -121,7 +121,8 @@ def init_options(opt, opt_path):
         if opt['model_opt']['model_architecture'] == 'MTVNet':
             opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['context_sizes'][-1] * opt['up_factor'])
         elif opt['model_opt']['model_architecture'] == 'RQVARTransformer3D':
-            opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['patch_nums'][-1] * 8)
+            vae_down_factor = opt['model_opt']['netG'].get('vae_down_factor', 8)
+            opt['dataset_opt']['patch_size_hr'] = int(opt['model_opt']['netG']['patch_nums'][-1] * vae_down_factor)
         else:
             opt['dataset_opt']['patch_size_hr'] = opt['dataset_opt']['patch_size'] * opt['up_factor']
     elif opt['task'] == 'degradation':
