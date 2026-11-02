@@ -87,6 +87,20 @@ class Dataset_VoDaSuRe_OME():
                            os.path.join(self.data_path, "VoDaSuRe/ome/train/Oak_A_bin1x1_ome_1.zarr"),
                            os.path.join(self.data_path, "VoDaSuRe/ome/train/Ox_bone_A_bin1x1_ome_1.zarr"),
                            *glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/train/*.zarr"))]
+
+            if "ablation_only_VoDaSuRe" in opt:
+                train_paths_ = [os.path.join(self.data_path, "VoDaSuRe/ome/train/Bamboo_A_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Cardboard_A_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Cypress_A_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Elm_A_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_15_80kV_ome.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_21_80kV_ome.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Femur_74_80kV_ome.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Larch_B_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/MDF_A_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Oak_A_bin1x1_ome_1.zarr"),
+                               os.path.join(self.data_path, "VoDaSuRe/ome/train/Ox_bone_A_bin1x1_ome_1.zarr")]
+
             train_paths["VoDaSuRe2"] = train_paths_
 
             test_paths_ = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Bamboo_A_bin1x1_ome_0.zarr"),
@@ -99,6 +113,18 @@ class Dataset_VoDaSuRe_OME():
                           os.path.join(self.data_path, "VoDaSuRe/ome/test/Oak_A_bin1x1_ome_0.zarr"),
                           os.path.join(self.data_path, "VoDaSuRe/ome/test/Ox_bone_A_bin1x1_ome_0.zarr"),
                           *glob.glob(os.path.join(self.data_path, "VoDaSuRe2/ome/test/*.zarr"))]
+
+            if "ablation_only_VoDaSuRe" in opt:
+                test_paths_ = [os.path.join(self.data_path, "VoDaSuRe/ome/test/Bamboo_A_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Cardboard_A_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Cypress_A_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Elm_A_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Femur_01_80kV_ome.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Larch_B_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/MDF_A_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Oak_A_bin1x1_ome_0.zarr"),
+                              os.path.join(self.data_path, "VoDaSuRe/ome/test/Ox_bone_A_bin1x1_ome_0.zarr")]
+
             test_paths["VoDaSuRe2"] = test_paths_
 
             if self.synthetic:
