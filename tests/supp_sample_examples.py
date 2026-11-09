@@ -97,7 +97,7 @@ if __name__ == '__main__':
     row, col = 1, 9
     show_HR_as_large_img = False
 
-    red_box_size = 256
+    red_box_size = 512
     red_box_coords = (1920//2 - red_box_size//2, 1920//2 - red_box_size//2)
     #red_box_coords = (1920 // 2 - red_box_size // 2 +300, 1920 // 2 - red_box_size // 2 -350)
     #red_box_coords = (1600 // 2 - red_box_size // 2 + 250, 1440 // 2 - red_box_size // 2 + 290)
@@ -141,7 +141,7 @@ if __name__ == '__main__':
         for i in range(3):
             img = np.array(Image.open(paths[key][i][img_idx])).astype(np.float32)
             # normalize to +- 3 std
-            #img_rescale = clip_percentile(img, lower=1.0, upper=99.0, vmin=0, vmax=65535)
+            img_rescale = clip_percentile(img, lower=1.0, upper=99.0, vmin=0, vmax=65535)
 
             ax = fig.add_subplot(gs[0, c])
             if key == "LR":
