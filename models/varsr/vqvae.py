@@ -12,6 +12,7 @@ import torch.nn as nn
 from models.varsr.basic_vae import Decoder, Encoder
 from models.varsr.quant import VectorQuantizer2
 
+from utils import utils_3D_image
 
 class VQVAE(nn.Module):
     def __init__(
@@ -19,7 +20,7 @@ class VQVAE(nn.Module):
         in_channels=3,
         vocab_size=4096,
         z_channels=32,
-        ch=128,
+        ch=160,
         ch_mult=(1, 1, 2, 2, 4),
         num_res_blocks=2,
         dropout=0.0,
@@ -121,4 +122,8 @@ if __name__ == "__main__":
     x = torch.randn((B, C, H, W))
     model = VQVAE()
     out = model(x)
+
+    # number of trainable parameters:
+    print("Number of trainable parameters, G", utils_3D_image.numel(model, only_trainable=True))
+
     print("Done")

@@ -443,7 +443,7 @@ if __name__ == '__main__':
 
     patch_size = 64
     latent_dim = 768
-    quant_embed_dim = 768
+    quant_embed_dim = 32
     channels_enc = [64, 64, 256, 512, 512]   # down_factor = 8 -> latent 8^3
     channels_dec = [512, 512, 256, 64, 64]
 
@@ -457,16 +457,16 @@ if __name__ == '__main__':
         resolution=patch_size,
         num_res_blocks_enc=2,
         num_res_blocks_dec=4,
-        v_patch_nums=(1, 2, 3, 4, 6, 8),           # -> 828 tokens per volume
+        v_patch_nums=[1, 2, 3, 4, 5, 6, 8],           # -> 828 tokens per volume
         quant_resi=0.5,
         share_quant_resi=4,
-        using_znorm=True,
-        skip_attn=True,
+        using_znorm=False,
+        skip_attn=False,
         use_checkpoint=True,
     ).to(device)
 
-    print('Number of parameters, G', numel(model, only_trainable=True))
     model.train()
+    print('Number of parameters, G', numel(model, only_trainable=True))
 
     x = torch.randn(1, 1, patch_size, patch_size, patch_size, device=device)
     x_hat, loss, codes, z_e, frac_unique = model(x)
